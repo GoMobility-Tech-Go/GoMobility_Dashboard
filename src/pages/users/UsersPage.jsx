@@ -1,15 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast, ToastProvider, PageWrapper, TableCard, FilterBar, SearchBox, Pagination, Badge, AvatarCell, Modal, FormGroup, MiniStatRow, AlertBox, Card, GlobalStyles } from "../../components/ui/index.jsx";
-import { genUsers, genRides, genTransactions } from "../../data/mockData.js";
+import { api } from "../../services/api.js";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { GoldTooltip } from "../../components/ui/index.jsx";
 
-const USERS = genUsers(15);
 const ACT = [{m:"Nov",r:8},{m:"Dec",r:14},{m:"Jan",r:11},{m:"Feb",r:19},{m:"Mar",r:22},{m:"Apr",r:17}];
+
+function normalizeUser(u) {
+  return {
+    id: u.id || u.user_id,
+    name: u.full_name || u.name || 'Unknown',
+    email: u.email || '',
+    phone: u.phone || u.phone_number || '',
+    rides: u.total_rides ?? u.rides ?? 0,
+    wallet: u.wallet_balance ?? u.wallet ?? 0,
+    rating: u.rating ? parseFloat(u.rating).toFixed(1) : '0.0',
+    status: u.status === 'active' ? 'Active' : u.status === 'blocked' ? 'Blocked' : u.status || 'Active',
+    joined: u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+    referrals: u.total_referrals ?? u.referrals ?? 0,
+  };
+}
 
 function ProfileModal({ user, onClose }) {
   const [tab, setTab] = useState("info");
-  const rides = genRides(5), txns = genTransactions(5);
   if (!user) return null;
   const init = user.name.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2);
   return (
@@ -52,18 +65,29 @@ function ProfileModal({ user, onClose }) {
           <span style={{color:"rgba(255,255,255,0.4)"}}>{l}</span><span style={{color:"rgba(255,255,255,0.85)",fontWeight:500}}>{String(v)}</span>
         </div>
       ))}
-      {tab==="rides" && <div style={{overflowX:"auto"}}><table className="gm-table"><thead><tr><th>Ride ID</th><th>Route</th><th>Fare</th><th>Status</th><th>Date</th></tr></thead><tbody>{rides.map((r,i)=><tr key={i}><td style={{fontFamily:"monospace",color:"#D4AF37",fontSize:11}}>{r.id}</td><td style={{fontSize:11}}>{r.from} to {r.to}</td><td style={{color:"#D4AF37",fontFamily:"monospace"}}>Rs{r.fare}</td><td><Badge status={r.status}/></td><td style={{fontSize:11}}>{r.date}</td></tr>)}</tbody></table></div>}
-      {tab==="txns" && <div style={{overflowX:"auto"}}><table className="gm-table"><thead><tr><th>Txn ID</th><th>Type</th><th>Amount</th><th>Status</th></tr></thead><tbody>{txns.map((t,i)=><tr key={i}><td style={{fontFamily:"monospace",color:"#D4AF37",fontSize:11}}>{t.id}</td><td><span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:100,fontSize:10.5,fontWeight:600,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.24)",color:"#60A5FA"}}>{t.type}</span></td><td style={{color:"#D4AF37",fontFamily:"monospace"}}>Rs{t.amount}</td><td><Badge status={t.status}/></td></tr>)}</tbody></table></div>}
+      {tab==="rides" && <div style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}><div style={{fontSize:32,marginBottom:10}}>🚕</div>Ride history not available via API</div>}
+      {tab==="txns" && <div style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}><div style={{fontSize:32,marginBottom:10}}>💳</div>Transaction history not available via API</div>}
     </Modal>
   );
 }
 
 function Content() {
   const toast = useToast();
-  const [users, setUsers] = useState(USERS);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(""), [sf, setSf] = useState(""), [sort, setSort] = useState("newest");
   const [walletModal, setWalletModal] = useState(false), [profileUser, setProfileUser] = useState(null);
   const [selUser, setSelUser] = useState(null), [wAmt, setWAmt] = useState(""), [wAction, setWAction] = useState("Add Balance");
+
+  useEffect(() => {
+    api.getUsers({ limit: 50 })
+      .then(res => {
+        const raw = res?.data?.users || res?.users || res?.data || [];
+        setUsers(Array.isArray(raw) ? raw.map(normalizeUser) : []);
+      })
+      .catch(() => toast("Failed to load users", "error"))
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = users.filter(u => {
     const q = search.toLowerCase();
@@ -71,22 +95,33 @@ function Content() {
   }).sort((a,b) => sort==="rides"?b.rides-a.rides:sort==="rating"?parseFloat(b.rating)-parseFloat(a.rating):sort==="wallet"?b.wallet-a.wallet:0);
 
   const toggle = (i) => {
-    const ns = users[i].status==="Blocked"?"Active":"Blocked";
-    setUsers(users.map((u,j) => j===i?{...u,status:ns}:u));
-    toast(`User ${ns==="Blocked"?"blocked":"unblocked"} successfully`, ns==="Blocked"?"error":"success");
+    const u = users[i];
+    const ns = u.status === "Blocked" ? "Active" : "Blocked";
+    api.updateUserStatus(u.id, ns.toLowerCase())
+      .catch(() => {})
+      .finally(() => {});
+    setUsers(users.map((x, j) => j === i ? { ...x, status: ns } : x));
+    toast(`User ${ns === "Blocked" ? "blocked" : "unblocked"} successfully`, ns === "Blocked" ? "error" : "success");
   };
 
+  if (loading) return (
+    <PageWrapper title="User Management" subtitle="Loading...">
+      <GlobalStyles/>
+      <div style={{ textAlign: 'center', padding: 60, color: 'rgba(255,255,255,0.35)', fontFamily: 'Outfit,sans-serif' }}>Loading users...</div>
+    </PageWrapper>
+  );
+
   return (
-    <PageWrapper title="User Management" subtitle="14,820 registered passengers — click any row to view full profile"
+    <PageWrapper title="User Management" subtitle={`${users.length.toLocaleString()} registered passengers — click any row to view full profile`}
       actions={<button className="btn-outline btn-sm" onClick={()=>toast("Exporting users CSV...","success")}>Export CSV</button>}>
       <GlobalStyles/>
-      <MiniStatRow items={[{label:"Total Users",value:"14,820",icon:"👥"},{label:"Active",value:"13,240",icon:"✅",color:"#34D399"},{label:"Blocked",value:"180",icon:"🚫",color:"#F87171"},{label:"New This Month",value:"324",icon:"🆕",color:"#D4AF37"}]}/>
+      <MiniStatRow items={[{label:"Total Users",value:String(users.length),icon:"👥"},{label:"Active",value:String(users.filter(u=>u.status==="Active").length),icon:"✅",color:"#34D399"},{label:"Blocked",value:String(users.filter(u=>u.status==="Blocked").length),icon:"🚫",color:"#F87171"},{label:"New This Month",value:"—",icon:"🆕",color:"#D4AF37"}]}/>
       <TableCard title="All Users" icon="👥"
         actions={<>
-          <select className="gm-input btn-sm" style={{width:130}} value={sf} onChange={e=>setSf(e.target.value)}><option value="">All Status</option><option>Active</option><option>Blocked</option><option>New</option></select>
+          <select className="gm-input btn-sm" style={{width:130}} value={sf} onChange={e=>setSf(e.target.value)}><option value="">All Status</option><option value="Active">Active</option><option value="Blocked">Blocked</option></select>
           <select className="gm-input btn-sm" style={{width:150}} value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Sort: Newest</option><option value="rides">Sort: Most Rides</option><option value="rating">Sort: Rating</option><option value="wallet">Sort: Wallet</option></select>
         </>}
-        footer={<Pagination total="14,820" showing="Showing 1-15 of 14,820"/>}>
+        footer={<Pagination total={String(users.length)} showing={`Showing 1-${Math.min(15,users.length)} of ${users.length}`}/>}>
         <FilterBar><SearchBox placeholder="Search by name, email, phone..." value={search} onChange={setSearch}/></FilterBar>
         <table className="gm-table">
           <thead><tr><th>User</th><th>Phone</th><th>Rides</th><th>Wallet</th><th>Rating</th><th>Referrals</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { api } from "../services/api";
 
 const AuthContext = createContext(null);
 
@@ -20,13 +21,36 @@ const ALLOWED_USERS = [
 ];
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const storedUser = localStorage.getItem("goMobilityUser");
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch (e) {
+      return null;
+    }
+  });
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("goMobilityUser");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    // If access token exists but no stored user, fetch profile from API and restore session.
+    const access = localStorage.getItem('goMobilityAccessToken');
+    const storedUser = localStorage.getItem('goMobilityUser');
+    let mounted = true;
+    if (access && !storedUser) {
+      api.getProfile()
+        .then((res) => {
+          if (!mounted) return;
+          const data = res?.data || res || {};
+          const apiUser = data.user || data;
+          if (!apiUser) return;
+          // Preserve existing tokens from storage when restoring
+          const refresh = localStorage.getItem('goMobilityRefreshToken');
+          loginWithToken({ accessToken: access, refreshToken: refresh, user: apiUser });
+        })
+        .catch(() => {
+          // ignore profile fetch errors; user stays logged out
+        });
     }
+    return () => { mounted = false; };
   }, []);
 
   const signup = ({ fullName, email, password, role }) => {
@@ -83,9 +107,36 @@ export const AuthProvider = ({ children }) => {
     return { success: true, user: nextUser };
   };
 
+  // Accepts API response tokens and user object
+  const loginWithToken = ({ accessToken, refreshToken, user: apiUser }) => {
+    if (!accessToken || !apiUser) {
+      return { success: false, message: 'Missing token or user' };
+    }
+    try {
+      localStorage.setItem('goMobilityAccessToken', accessToken);
+      if (refreshToken) localStorage.setItem('goMobilityRefreshToken', refreshToken);
+      const nextUser = {
+        id: apiUser.id,
+        fullName: apiUser.fullName || apiUser.name || apiUser.full_name,
+        email: apiUser.email,
+        phone: apiUser.phone,
+        role: apiUser.role,
+        isActive: apiUser.isActive,
+        isVerified: apiUser.isVerified,
+      };
+      setUser(nextUser);
+      localStorage.setItem('goMobilityUser', JSON.stringify(nextUser));
+      return { success: true, user: nextUser };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem("goMobilityUser");
+    localStorage.removeItem('goMobilityAccessToken');
+    localStorage.removeItem('goMobilityRefreshToken');
   };
 
   const value = useMemo(
@@ -94,6 +145,7 @@ export const AuthProvider = ({ children }) => {
       isAuthenticated: !!user,
       signup,
       login,
+      loginWithToken,
       logout,
     }),
     [user]

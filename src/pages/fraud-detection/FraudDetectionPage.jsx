@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   AlertTriangle,
   ShieldCheck,
@@ -8,101 +9,19 @@ import {
   Activity,
   Radar,
 } from "lucide-react";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  Tooltip,
-  BarChart,
-  Bar,
-  Cell,
-} from "recharts";
+import { api } from "../../services/api.js";
 
-const summaryCards = [
-  {
-    id: 1,
-    title: "Active Alerts",
-    value: "23",
-    note: "+5 from yesterday",
-    icon: AlertTriangle,
-    color: "#F87171",
-  },
-  {
-    id: 2,
-    title: "Under Investigation",
-    value: "12",
-    note: "Being reviewed",
-    icon: TrendingUp,
-    color: "#F59E0B",
-  },
-  {
-    id: 3,
-    title: "Resolved (7 Days)",
-    value: "45",
-    note: "Cases closed",
-    icon: ShieldCheck,
-    color: "#34D399",
-  },
-  {
-    id: 4,
-    title: "Drivers Blocked",
-    value: "8",
-    note: "This week",
-    icon: UserX,
-    color: "#A78BFA",
-  },
-];
-
-const weeklyFraudIncidents = [
-  { day: "Mon", value: 12 },
-  { day: "Tue", value: 8 },
-  { day: "Wed", value: 15 },
-  { day: "Thu", value: 10 },
-  { day: "Fri", value: 18 },
-  { day: "Sat", value: 14 },
-  { day: "Sun", value: 11 },
-];
-
-const recentFraudAlerts = [
-  {
-    id: "F1023",
-    type: "GPS Spoofing",
-    rideId: "R2845",
-    driver: "Suspicious Driver 1",
-    riskScore: 92,
-    status: "flagged",
-    details: "GPS location jumping detected during ride",
-  },
-  {
-    id: "F1024",
-    type: "Driver Collusion",
-    rideId: "R2846",
-    driver: "Suspicious Driver 2",
-    riskScore: 78,
-    status: "investigating",
-    details: "Multiple ride cancellations with same rider pattern",
-  },
-  {
-    id: "F1025",
-    type: "Fake Trip Pattern",
-    rideId: "R2847",
-    driver: "Suspicious Driver 3",
-    riskScore: 88,
-    status: "flagged",
-    details: "Unusual trip completion behavior detected",
-  },
-  {
-    id: "F1026",
-    type: "Payment Abuse",
-    rideId: "R2848",
-    driver: "Suspicious Driver 4",
-    riskScore: 64,
-    status: "reviewing",
-    details: "Repeated fare manipulation on short rides",
-  },
-];
+function normalizeAlert(a) {
+  return {
+    id: a.alert_number || a.id || '',
+    type: a.alert_type || a.type || 'Unknown',
+    rideId: a.ride_id || a.rideId || '—',
+    driver: a.driver?.full_name || a.driver_name || '—',
+    riskScore: a.risk_score ?? a.riskScore ?? 0,
+    status: a.status || 'flagged',
+    details: a.description || a.details || '',
+  };
+}
 
 function getStatusStyle(status) {
   switch (status) {
@@ -155,15 +74,6 @@ function getRiskStyle(score) {
   };
 }
 
-const chartBars = weeklyFraudIncidents.map((item, index) => ({
-  ...item,
-  color:
-    index === 4
-      ? "#F87171"
-      : index === 2
-      ? "#F59E0B"
-      : "rgba(212,175,55,0.88)",
-}));
 
 const GlobalStyles = () => (
   <style>{`
@@ -472,6 +382,31 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function FraudDetectionPage() {
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getFraudAlerts()
+      .then(res => {
+        const raw = res?.data?.alerts || res?.alerts || res?.data || [];
+        setAlerts(Array.isArray(raw) ? raw.map(normalizeAlert) : []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const flaggedCount = alerts.filter(a => a.status === 'flagged').length;
+  const investigatingCount = alerts.filter(a => a.status === 'investigating').length;
+  const reviewingCount = alerts.filter(a => a.status === 'reviewing').length;
+  const highRiskCount = alerts.filter(a => a.riskScore >= 85).length;
+
+  const summaryCards = [
+    { id: 1, title: "Flagged Alerts", value: loading ? "—" : String(flaggedCount), note: "Pending review", color: "#F87171", icon: AlertTriangle },
+    { id: 2, title: "Investigating", value: loading ? "—" : String(investigatingCount), note: "Active cases", color: "#F59E0B", icon: ShieldCheck },
+    { id: 3, title: "Reviewing", value: loading ? "—" : String(reviewingCount), note: "Under assessment", color: "#60A5FA", icon: UserX },
+    { id: 4, title: "High Risk (85+)", value: loading ? "—" : String(highRiskCount), note: "Critical risk score", color: "#F87171", icon: TrendingUp },
+  ];
+
   return (
     <>
       <GlobalStyles />
@@ -608,66 +543,14 @@ export default function FraudDetectionPage() {
               borderRadius: 16,
               background: "rgba(255,255,255,0.03)",
               border: "1px solid rgba(212,175,55,0.1)",
-              padding: "14px 14px",
+              padding: "40px 14px",
+              textAlign: "center",
+              color: "rgba(255,255,255,0.3)",
+              fontFamily: "'Outfit',sans-serif",
+              fontSize: 13,
             }}
           >
-            <div style={{ width: "100%", height: 250 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={weeklyFraudIncidents} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="fraudAreaFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#F87171" stopOpacity={0.32} />
-                      <stop offset="100%" stopColor="#F87171" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-
-                  <CartesianGrid stroke="rgba(212,175,55,0.07)" strokeDasharray="4 6" vertical={false} />
-                  <XAxis
-                    dataKey="day"
-                    tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 10 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    name="Fraud Incidents"
-                    stroke="#F87171"
-                    strokeWidth={2.4}
-                    fill="url(#fraudAreaFill)"
-                    dot={{ r: 3, fill: "#F87171", strokeWidth: 0 }}
-                    activeDot={{ r: 5, fill: "#F87171" }}
-                    isAnimationActive
-                    animationDuration={1600}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div
-              style={{
-                marginTop: 8,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                fontSize: 12,
-                fontWeight: 600,
-                color: "#F87171",
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 22,
-                  height: 3,
-                  borderRadius: 999,
-                  background: "#F87171",
-                }}
-              />
-              <span>Fraud Incidents</span>
-            </div>
+            Weekly time-series data not available via API
           </div>
         </section>
 
@@ -716,7 +599,12 @@ export default function FraudDetectionPage() {
           </div>
 
           <div className="desktopRows">
-            {recentFraudAlerts.map((item) => {
+            {loading ? (
+              <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif" }}>Loading alerts...</div>
+            ) : alerts.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif" }}>No fraud alerts found</div>
+            ) : null}
+            {alerts.map((item) => {
               const riskStyle = getRiskStyle(item.riskScore);
               const statusStyle = getStatusStyle(item.status);
 
@@ -820,7 +708,12 @@ export default function FraudDetectionPage() {
 
           {/* Mobile Cards */}
           <div className="mobileCards">
-            {recentFraudAlerts.map((item) => {
+            {loading ? (
+              <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif" }}>Loading alerts...</div>
+            ) : alerts.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif" }}>No fraud alerts found</div>
+            ) : null}
+            {alerts.map((item) => {
               const riskStyle = getRiskStyle(item.riskScore);
               const statusStyle = getStatusStyle(item.status);
 
@@ -1021,34 +914,14 @@ export default function FraudDetectionPage() {
                 borderRadius: 16,
                 background: "rgba(255,255,255,0.03)",
                 border: "1px solid rgba(212,175,55,0.1)",
-                padding: "14px 14px",
+                padding: "40px 14px",
+                textAlign: "center",
+                color: "rgba(255,255,255,0.3)",
+                fontFamily: "'Outfit',sans-serif",
+                fontSize: 13,
               }}
             >
-              <div style={{ width: "100%", height: 220 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartBars} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-                    <CartesianGrid stroke="rgba(212,175,55,0.07)" strokeDasharray="4 6" vertical={false} />
-                    <XAxis
-                      dataKey="day"
-                      tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar
-                      dataKey="value"
-                      name="Incident Count"
-                      radius={[8, 8, 0, 0]}
-                      isAnimationActive
-                      animationDuration={1500}
-                    >
-                      {chartBars.map((item) => (
-                        <Cell key={item.day} fill={item.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              Incident volume time-series not available via API
             </div>
           </div>
         </section>

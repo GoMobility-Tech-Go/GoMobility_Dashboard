@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   Check,
   Eye,
@@ -22,103 +23,24 @@ import {
   Tooltip,
   Cell,
 } from "recharts";
+import { api } from "../../services/api.js";
 
-const applications = [
-  {
-    id: "#1",
-    name: "Rajesh Kumar",
-    phone: "+91 98765 43210",
-    vehicleType: "Sedan",
-    status: "pending approval",
-    rowHighlight: true,
-    actions: ["approve", "reject", "view"],
-  },
-  {
-    id: "#2",
-    name: "Amit Sharma",
-    phone: "+91 98765 43211",
-    vehicleType: "Hatchback",
-    status: "pending approval",
+function normalizeApplication(d) {
+  const statusMap = {
+    'manual_review': 'pending approval',
+    'approved': 'ready to approve',
+    'rejected': 'rejected',
+  };
+  return {
+    id: d.id || d.user_id || '',
+    name: d.full_name || 'Unknown',
+    phone: d.phone_number || '—',
+    vehicleType: d.document_type || '—',
+    status: statusMap[d.status] || 'documents pending',
     rowHighlight: false,
-    actions: ["approve", "reject", "view"],
-  },
-  {
-    id: "#3",
-    name: "Suresh Patel",
-    phone: "+91 98765 43212",
-    vehicleType: "SUV",
-    status: "ready to approve",
-    rowHighlight: false,
-    actions: ["approve", "reject", "view"],
-  },
-  {
-    id: "#4",
-    name: "Mohammed Ali",
-    phone: "+91 98765 43213",
-    vehicleType: "Sedan",
-    status: "documents pending",
-    rowHighlight: false,
-    actions: ["view"],
-  },
-  {
-    id: "#5",
-    name: "Vikram Singh",
-    phone: "+91 98765 43214",
-    vehicleType: "Hatchback",
-    status: "ready to approve",
-    rowHighlight: false,
-    actions: ["approve", "reject", "view"],
-  },
-];
-
-const documents = [
-  {
-    id: 1,
-    title: "Driving License",
-    type: "document",
-    status: "verified",
-    preview: "DL Document Preview",
-    large: true,
-  },
-  {
-    id: 2,
-    title: "RC (Registration)",
-    type: "document",
-    status: "verified",
-    preview: "RC Document Preview",
-    large: true,
-  },
-  {
-    id: 3,
-    title: "Insurance",
-    type: "document",
-    status: "pending",
-    preview: "Insurance Document Preview",
-    large: true,
-  },
-  {
-    id: 4,
-    title: "Permit",
-    type: "document",
-    status: "verified",
-    preview: "",
-    large: false,
-  },
-  {
-    id: 5,
-    title: "Bank Details",
-    type: "bank",
-    status: "verified",
-    preview: "",
-    large: false,
-  },
-];
-
-const statusChartData = [
-  { name: "Pending", value: 2, color: "#D4AF37" },
-  { name: "Ready", value: 2, color: "#60A5FA" },
-  { name: "Docs", value: 1, color: "#F59E0B" },
-];
+    actions: ['approve', 'reject', 'view'],
+  };
+}
 
 /* ══════════════════════════════════
    GLOBAL STYLES
@@ -438,13 +360,14 @@ function getStatusStyle(status) {
   }
 }
 
-function ActionButtons({ actions }) {
+function ActionButtons({ actions, onApprove, onReject }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 14 }}>
       {actions.includes("approve") && (
         <button
           type="button"
           aria-label="Approve application"
+          onClick={onApprove}
           style={{
             width: 34,
             height: 34,
@@ -466,6 +389,7 @@ function ActionButtons({ actions }) {
         <button
           type="button"
           aria-label="Reject application"
+          onClick={onReject}
           style={{
             width: 34,
             height: 34,
@@ -605,10 +529,32 @@ function DocumentCard({ item }) {
    MAIN COMPONENT
 ══════════════════════════════════ */
 export default function DriverOnboardingPage() {
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getKycQueue()
+      .then(res => {
+        const raw = res?.data?.items || res?.items || res?.data || [];
+        setApplications(Array.isArray(raw) ? raw.map(normalizeApplication) : []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const approve = (id) => {
+    api.approveDocument(id, 'kyc').catch(() => {});
+    setApplications(prev => prev.map(a => a.id === id ? { ...a, status: 'ready to approve' } : a));
+  };
+  const reject = (id) => {
+    api.rejectDocument(id, 'kyc', 'Rejected by admin').catch(() => {});
+    setApplications(prev => prev.filter(a => a.id !== id));
+  };
+
   const pendingCount = applications.length;
   const readyCount = applications.filter((a) => a.status === "ready to approve").length;
   const docsPendingCount = applications.filter((a) => a.status === "documents pending").length;
-  const verifiedDocs = documents.filter((d) => d.status === "verified").length;
+  const verifiedDocs = 0;
 
   return (
     <>
@@ -709,30 +655,10 @@ export default function DriverOnboardingPage() {
 
         {/* STATS */}
         <div className="statGrid fup" style={{ animationDelay: "80ms" }}>
-          <StatCard
-            icon={UserCheck}
-            label="Pending Applications"
-            value={pendingCount}
-            color="#D4AF37"
-          />
-          <StatCard
-            icon={ShieldCheck}
-            label="Ready To Approve"
-            value={readyCount}
-            color="#60A5FA"
-          />
-          <StatCard
-            icon={Clock3}
-            label="Documents Pending"
-            value={docsPendingCount}
-            color="#F59E0B"
-          />
-          <StatCard
-            icon={FileBadge2}
-            label="Verified Docs"
-            value={`${verifiedDocs}/${documents.length}`}
-            color="#34D399"
-          />
+          <StatCard icon={UserCheck} label="Pending Applications" value={loading ? "—" : pendingCount} color="#D4AF37" />
+          <StatCard icon={ShieldCheck} label="Ready To Approve" value={loading ? "—" : readyCount} color="#60A5FA" />
+          <StatCard icon={Clock3} label="Documents Pending" value={loading ? "—" : docsPendingCount} color="#F59E0B" />
+          <StatCard icon={FileBadge2} label="Verified Docs" value="—" color="#34D399" />
         </div>
 
         {/* MAIN */}
@@ -777,6 +703,11 @@ export default function DriverOnboardingPage() {
                 <div style={{ textAlign: "right" }}>Actions</div>
               </div>
 
+              {loading ? (
+                <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif" }}>Loading applications...</div>
+              ) : applications.length === 0 ? (
+                <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif" }}>No pending applications</div>
+              ) : null}
               {applications.map((item) => {
                 const statusStyle = getStatusStyle(item.status);
 
@@ -789,7 +720,7 @@ export default function DriverOnboardingPage() {
                       alignItems: "center",
                       padding: "16px 20px",
                       borderBottom: "1px solid rgba(212,175,55,0.08)",
-                      background: item.rowHighlight ? "rgba(212,175,55,0.06)" : "transparent",
+                      background: "transparent",
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
@@ -844,7 +775,7 @@ export default function DriverOnboardingPage() {
                       </span>
                     </div>
 
-                    <ActionButtons actions={item.actions} />
+                    <ActionButtons actions={item.actions} onApprove={() => approve(item.id)} onReject={() => reject(item.id)} />
                   </div>
                 );
               })}
@@ -852,6 +783,8 @@ export default function DriverOnboardingPage() {
 
             {/* Mobile Cards */}
             <div className="mobileCards" style={{ display: "grid", gap: 14, padding: 14 }}>
+              {loading && <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif" }}>Loading applications...</div>}
+              {!loading && applications.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif" }}>No pending applications</div>}
               {applications.map((item) => {
                 const statusStyle = getStatusStyle(item.status);
 
@@ -951,7 +884,7 @@ export default function DriverOnboardingPage() {
                       </div>
                     </div>
 
-                    <ActionButtons actions={item.actions} />
+                    <ActionButtons actions={item.actions} onApprove={() => approve(item.id)} onReject={() => reject(item.id)} />
                   </div>
                 );
               })}
@@ -972,62 +905,11 @@ export default function DriverOnboardingPage() {
                 }}
               >
                 <ST sub="Document Review" main="Verification Panel" />
-                <span className="bup">Rajesh Kumar</span>
               </div>
 
-              <div style={{ display: "grid", gap: 12 }}>
-                {documents.map((item) => (
-                  <DocumentCard key={item.id} item={item} />
-                ))}
-              </div>
-
-              <div style={{ paddingTop: 14 }}>
-                <button
-                  type="button"
-                  style={{
-                    width: "100%",
-                    height: 44,
-                    borderRadius: 12,
-                    border: "1px solid rgba(52,211,153,0.24)",
-                    background: "linear-gradient(135deg,rgba(52,211,153,0.2),rgba(52,211,153,0.08))",
-                    color: "#34D399",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    fontFamily: "'Outfit',sans-serif",
-                    cursor: "pointer",
-                  }}
-                >
-                  <Check size={16} strokeWidth={2.3} />
-                  <span>Approve Driver</span>
-                </button>
-
-                <button
-                  type="button"
-                  style={{
-                    width: "100%",
-                    height: 44,
-                    marginTop: 10,
-                    borderRadius: 12,
-                    border: "1px solid rgba(248,113,113,0.24)",
-                    background: "linear-gradient(135deg,rgba(248,113,113,0.2),rgba(248,113,113,0.08))",
-                    color: "#F87171",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    fontFamily: "'Outfit',sans-serif",
-                    cursor: "pointer",
-                  }}
-                >
-                  <X size={16} strokeWidth={2.3} />
-                  <span>Reject Application</span>
-                </button>
+              <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
+                Select a driver from the list to view their documents
               </div>
             </div>
 
@@ -1036,123 +918,25 @@ export default function DriverOnboardingPage() {
                 <ST sub="Queue Analytics" main="Application Distribution" />
               </div>
 
-              <div
-                style={{
-                  borderRadius: 16,
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(212,175,55,0.1)",
-                  padding: "14px 14px",
-                }}
-              >
-                <div style={{ width: "100%", height: 180 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={statusChartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-                      <CartesianGrid stroke="rgba(212,175,55,0.07)" strokeDasharray="4 6" vertical={false} />
-                      <XAxis
-                        dataKey="name"
-                        tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 10 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar
-                        dataKey="value"
-                        name="Applications"
-                        radius={[8, 8, 0, 0]}
-                        isAnimationActive
-                        animationDuration={1500}
-                      >
-                        {statusChartData.map((item) => (
-                          <Cell key={item.name} fill={item.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-                  {[
-                    {
-                      label: "Review Queue",
-                      value: `${pendingCount} applications`,
-                      icon: UserCheck,
-                      color: "#D4AF37",
-                    },
-                    {
-                      label: "Documents Verified",
-                      value: `${verifiedDocs}/${documents.length}`,
-                      icon: ShieldCheck,
-                      color: "#34D399",
-                    },
-                    {
-                      label: "Selected Applicant",
-                      value: "Rajesh Kumar",
-                      icon: Phone,
-                      color: "#60A5FA",
-                    },
-                    {
-                      label: "Preferred Vehicle",
-                      value: "Sedan",
-                      icon: CarFront,
-                      color: "#A78BFA",
-                    },
-                  ].map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <div
-                        key={item.label}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          borderRadius: 14,
-                          background: "rgba(255,255,255,0.03)",
-                          border: "1px solid rgba(212,175,55,0.1)",
-                          padding: "12px 13px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: 10,
-                            background: `${item.color}18`,
-                            border: `1px solid ${item.color}28`,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <Icon size={14} color={item.color} />
-                        </div>
-
-                        <div>
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: 10.5,
-                              color: "rgba(255,255,255,0.34)",
-                            }}
-                          >
-                            {item.label}
-                          </p>
-                          <p
-                            style={{
-                              margin: "5px 0 0",
-                              fontFamily: "'Cinzel',serif",
-                              fontSize: 14,
-                              fontWeight: 700,
-                              color: item.color,
-                            }}
-                          >
-                            {item.value}
-                          </p>
-                        </div>
+              <div style={{ display: "grid", gap: 10 }}>
+                {[
+                  { label: "In Review Queue", value: loading ? "—" : `${pendingCount} applications`, icon: UserCheck, color: "#D4AF37" },
+                  { label: "Ready To Approve", value: loading ? "—" : `${readyCount}`, icon: ShieldCheck, color: "#34D399" },
+                  { label: "Documents Pending", value: loading ? "—" : `${docsPendingCount}`, icon: Clock3, color: "#F59E0B" },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 10, borderRadius: 14, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(212,175,55,0.1)", padding: "12px 13px" }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 10, background: `${item.color}18`, border: `1px solid ${item.color}28`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Icon size={14} color={item.color} />
                       </div>
-                    );
-                  })}
-                </div>
+                      <div>
+                        <p style={{ margin: 0, fontSize: 10.5, color: "rgba(255,255,255,0.34)" }}>{item.label}</p>
+                        <p style={{ margin: "5px 0 0", fontFamily: "'Cinzel',serif", fontSize: 14, fontWeight: 700, color: item.color }}>{item.value}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

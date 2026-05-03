@@ -1,25 +1,69 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast, ToastProvider, PageWrapper, TableCard, Badge, AvatarCell, MiniStatRow, Modal, FormGroup, AlertBox, GlobalStyles, Card } from "../../components/ui/index.jsx";
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
 import { GoldTooltip } from "../../components/ui/index.jsx";
+import { api } from "../../services/api.js";
 
-const PLANS=[{name:"GO Daily",price:49,days:1,rides:3,color:"#60A5FA",emoji:"🚗",subs:420,rev:20580,active:true},{name:"GO Monthly",price:299,days:30,rides:25,color:"#D4AF37",emoji:"🌟",subs:1840,rev:550160,active:true},{name:"GO Premium",price:599,days:30,rides:60,color:"#A78BFA",emoji:"👑",subs:580,rev:347420,active:true},{name:"GO Annual",price:2499,days:365,rides:300,color:"#34D399",emoji:"♾️",subs:180,rev:449820,active:false}];
-const SUBS=[{name:"Rahul Sharma",plan:"GO Monthly",start:"Apr 1, 2026",expiry:"May 1, 2026",rides:12,status:"Active"},{name:"Priya Singh",plan:"GO Premium",start:"Apr 5, 2026",expiry:"May 5, 2026",rides:48,status:"Active"},{name:"Amit Kumar",plan:"GO Daily",start:"Apr 23, 2026",expiry:"Apr 24, 2026",rides:2,status:"Active"},{name:"Neha Gupta",plan:"GO Monthly",start:"Mar 15, 2026",expiry:"Apr 15, 2026",rides:25,status:"Active"}];
-const EXPIRED=[{name:"Vikram Yadav",plan:"GO Monthly",expiredOn:"Apr 10, 2026",lastRide:"Apr 9, 2026",rides:24},{name:"Kavita Mishra",plan:"GO Daily",expiredOn:"Apr 20, 2026",lastRide:"Apr 20, 2026",rides:3},{name:"Deepak Soni",plan:"GO Monthly",expiredOn:"Apr 5, 2026",lastRide:"Apr 4, 2026",rides:21},{name:"Manish Dubey",plan:"GO Premium",expiredOn:"Mar 30, 2026",lastRide:"Mar 28, 2026",rides:52}];
+const PLAN_COLORS = ["#60A5FA", "#D4AF37", "#A78BFA", "#34D399", "#F87171", "#F59E0B"];
+const PLAN_EMOJIS = ["🚗", "🌟", "👑", "♾️", "🎫", "⭐"];
+
+function normalizePlan(p, i) {
+  return {
+    id: p.id || i,
+    name: p.name || p.plan_name || 'Plan',
+    price: p.price || p.amount || 0,
+    days: p.duration_days || p.days || 30,
+    rides: p.ride_limit || p.rides || 0,
+    color: PLAN_COLORS[i % PLAN_COLORS.length],
+    emoji: PLAN_EMOJIS[i % PLAN_EMOJIS.length],
+    subs: p.subscriber_count || 0,
+    rev: p.total_revenue || 0,
+    active: p.is_active !== false,
+  };
+}
 
 function Content() {
-  const toast=useToast(),[plans,setPlans]=useState(PLANS),[tab,setTab]=useState("plans"),[cm,setCm]=useState(false);
-  const [np,setNp]=useState({name:"",price:"",days:"",rides:""});
-  const togglePlan=(i)=>{setPlans(p=>p.map((x,j)=>j===i?{...x,active:!x.active}:x));toast(`Plan ${plans[i].active?"deactivated":"activated"}`,plans[i].active?"error":"success");};
-  const createPlan=()=>{if(!np.name||!np.price){toast("Fill required fields","error");return;}setPlans(p=>[...p,{...np,price:+np.price,days:+np.days||30,rides:+np.rides||10,color:"#22D3EE",emoji:"🎫",subs:0,rev:0,active:true}]);toast("Plan created!","success");setCm(false);setNp({name:"",price:"",days:"",rides:""});};
+  const toast=useToast();
+  const [plans, setPlans] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("plans");
+  const [cm, setCm] = useState(false);
+  const [np, setNp] = useState({name:"",price:"",days:"",rides:""});
+
+  useEffect(() => {
+    api.getSubscriptionPlans()
+      .then(res => {
+        const raw = res?.data?.plans || res?.plans || res?.data || [];
+        setPlans(Array.isArray(raw) ? raw.map(normalizePlan) : []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const togglePlan=(i)=>{
+    const plan = plans[i];
+    api.togglePlanStatus(plan.id, !plan.active).catch(() => {});
+    setPlans(p=>p.map((x,j)=>j===i?{...x,active:!x.active}:x));
+    toast(`Plan ${plan.active?"deactivated":"activated"}`, plan.active?"error":"success");
+  };
+  const createPlan=()=>{
+    if(!np.name||!np.price){toast("Fill required fields","error");return;}
+    api.createSubscriptionPlan({ name: np.name, price: +np.price, duration_days: +np.days||30, ride_limit: +np.rides||10 }).catch(() => {});
+    setPlans(p=>[...p,normalizePlan({name:np.name,price:+np.price,days:+np.days||30,rides:+np.rides||10,is_active:true}, p.length)]);
+    toast("Plan created!","success");
+    setCm(false);
+    setNp({name:"",price:"",days:"",rides:""});
+  };
   const revData=plans.filter(p=>p.active).map(p=>({name:p.name.replace("GO ",""),revenue:p.rev,color:p.color}));
   const totalRev=plans.reduce((a,b)=>a+b.rev,0);
   return (
     <PageWrapper title="Subscription Plans" subtitle="GO Mobility Pass — manage plans, revenue and subscribers" actions={<button className="btn-gold btn-sm" onClick={()=>setCm(true)}>+ New Plan</button>}>
       <GlobalStyles/>
-      <MiniStatRow items={[{label:"Active Plans",value:String(plans.filter(p=>p.active).length),icon:"🎫",color:"#D4AF37"},{label:"Total Subscribers",value:plans.filter(p=>p.active).reduce((a,b)=>a+b.subs,0).toLocaleString(),icon:"👥"},{label:"Revenue (Month)",value:`Rs${(totalRev/1000).toFixed(0)}K`,icon:"💰",color:"#34D399"},{label:"Renewals Due",value:"142",icon:"🔄",color:"#F59E0B"}]}/>
+      <MiniStatRow items={[{label:"Active Plans",value:loading?"—":String(plans.filter(p=>p.active).length),icon:"🎫",color:"#D4AF37"},{label:"Total Subscribers",value:loading?"—":plans.filter(p=>p.active).reduce((a,b)=>a+b.subs,0).toLocaleString(),icon:"👥"},{label:"Revenue (Month)",value:loading?"—":`Rs${(totalRev/1000).toFixed(0)}K`,icon:"💰",color:"#34D399"},{label:"Renewals Due",value:"—",icon:"🔄",color:"#F59E0B"}]}/>
       <div className="tab-nav">{[{id:"plans",l:"Plans"},{id:"revenue",l:"Revenue Breakdown"},{id:"subs",l:"Active Subscribers"},{id:"expired",l:"Expired Subscribers"}].map(t=><button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}>{t.l}</button>)}</div>
       {tab==="plans"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:14}}>
+        {loading&&<div style={{gridColumn:"1/-1",padding:50,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}>Loading plans...</div>}
+        {!loading&&plans.length===0&&<div style={{gridColumn:"1/-1",padding:50,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}><div style={{fontSize:36,marginBottom:10}}>🎫</div>No subscription plans found</div>}
         {plans.map((p,i)=><Card key={i} style={{padding:20,textAlign:"center",borderColor:`${p.color}22`,opacity:p.active?1:0.6}}>
           <div style={{fontSize:32,marginBottom:8}}>{p.emoji}</div>
           <div style={{fontSize:15,fontWeight:800,fontFamily:"Cinzel,serif",color:"rgba(255,255,255,0.88)",marginBottom:4}}>{p.name}</div>
@@ -43,18 +87,12 @@ function Content() {
           </BarChart>
         </ResponsiveContainer>
       </Card>}
-      {tab==="subs"&&<TableCard title="Active Subscribers" icon="👥" actions={<span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"3px 9px",borderRadius:100,fontSize:10.5,fontWeight:600,background:"rgba(52,211,153,0.1)",border:"1px solid rgba(52,211,153,0.25)",color:"#34D399"}}><span style={{width:6,height:6,borderRadius:"50%",background:"#34D399"}}/>{plans.filter(p=>p.active).reduce((a,b)=>a+b.subs,0)} active</span>}>
-        <table className="gm-table"><thead><tr><th>User</th><th>Plan</th><th>Subscribed</th><th>Expires</th><th>Rides Used</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>{SUBS.map((s,i)=>{const plan=PLANS.find(p=>p.name===s.plan)||PLANS[0];return <tr key={i}><td><AvatarCell name={s.name}/></td><td><span style={{display:"inline-flex",padding:"3px 8px",borderRadius:100,fontSize:10.5,fontWeight:600,background:`${plan.color}15`,border:`1px solid ${plan.color}30`,color:plan.color}}>{s.plan}</span></td><td style={{fontSize:12}}>{s.start}</td><td style={{fontSize:12}}>{s.expiry}</td><td>{s.rides}</td><td><Badge status={s.status}/></td><td><button className="btn-outline btn-xs" onClick={()=>toast("Renewal reminder sent!","success")}>Remind</button></td></tr>;})}</tbody>
-        </table>
+      {tab==="subs"&&<TableCard title="Active Subscribers" icon="👥">
+        <div style={{padding:50,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}><div style={{fontSize:36,marginBottom:10}}>👥</div>Subscriber list not available via API</div>
       </TableCard>}
-      {tab==="expired"&&<>
-        <AlertBox type="warning">Re-engagement opportunity — {EXPIRED.length} subscribers expired this month!</AlertBox>
-        <TableCard title="Expired Subscribers" icon="⏰" actions={<button className="btn-gold btn-sm" onClick={()=>toast("Bulk renewal offer sent!","success")}>Send Renewal Offer to All</button>}>
-          <table className="gm-table"><thead><tr><th>User</th><th>Plan</th><th>Expired On</th><th>Last Ride</th><th>Total Rides</th><th>Actions</th></tr></thead>
-          <tbody>{EXPIRED.map((s,i)=>{const plan=PLANS.find(p=>p.name===s.plan)||PLANS[0];return <tr key={i}><td><AvatarCell name={s.name}/></td><td><span style={{display:"inline-flex",padding:"3px 8px",borderRadius:100,fontSize:10.5,fontWeight:600,background:`${plan.color}15`,border:`1px solid ${plan.color}30`,color:plan.color}}>{s.plan}</span></td><td style={{fontSize:12,color:"#F87171"}}>{s.expiredOn}</td><td style={{fontSize:12}}>{s.lastRide}</td><td>{s.rides}</td><td><div style={{display:"flex",gap:5}}><button className="btn-gold btn-xs" onClick={()=>toast("Renewal offer sent!","success")}>Send Offer</button></div></td></tr>;})}</tbody>
-        </table>
-      </TableCard></>}
+      {tab==="expired"&&<TableCard title="Expired Subscribers" icon="⏰">
+        <div style={{padding:50,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}><div style={{fontSize:36,marginBottom:10}}>⏰</div>Expired subscriber list not available via API</div>
+      </TableCard>}
       <Modal open={cm} onClose={()=>setCm(false)} title="Create New Plan">
         <FormGroup label="Plan Name"><input className="gm-input" placeholder="e.g. GO Monthly Pass" value={np.name} onChange={e=>setNp({...np,name:e.target.value})}/></FormGroup>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}><FormGroup label="Price (Rs)"><input type="number" className="gm-input" placeholder="299" value={np.price} onChange={e=>setNp({...np,price:e.target.value})}/></FormGroup><FormGroup label="Duration (Days)"><input type="number" className="gm-input" placeholder="30" value={np.days} onChange={e=>setNp({...np,days:e.target.value})}/></FormGroup></div>

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { api } from "../../services/api.js";
 import {
   IndianRupee,
   Gauge,
@@ -534,6 +535,22 @@ export default function PricingEnginePage() {
   const [surgeCap, setSurgeCap] = useState(3.0);
   const [nightSurge, setNightSurge] = useState(1.5);
   const [peakHourSurge, setPeakHourSurge] = useState(2.0);
+
+  useEffect(() => {
+    api.getPricingSettings()
+      .then(res => {
+        const s = res?.data?.settings || res?.settings || res?.data || res || null;
+        if (!s) return;
+        if (s.base_fare != null) setBaseFare(Number(s.base_fare));
+        if (s.price_per_km != null) setPricePerKm(Number(s.price_per_km));
+        if (s.price_per_minute != null) setPricePerMinute(Number(s.price_per_minute));
+        if (s.convenience_fee != null) setConvenienceFee(Number(s.convenience_fee));
+        if (s.surge_cap != null) setSurgeCap(Number(s.surge_cap));
+        if (s.night_surge != null) setNightSurge(Number(s.night_surge));
+        if (s.peak_surge != null) setPeakHourSurge(Number(s.peak_surge));
+      })
+      .catch(() => {});
+  }, []);
 
   const [distance, setDistance] = useState(10);
   const [time, setTime] = useState(25);
@@ -1112,6 +1129,7 @@ export default function PricingEnginePage() {
 
             <button
               type="button"
+              onClick={() => api.getPricingSettings && api.updateVehiclePricing('default', { base_fare: baseFare, price_per_km: pricePerKm, price_per_minute: pricePerMinute, convenience_fee: convenienceFee, surge_cap: surgeCap, night_surge: nightSurge, peak_surge: peakHourSurge }).catch(() => {})}
               style={{
                 width: "100%",
                 height: 44,

@@ -3,7 +3,8 @@
 
 
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { api } from "../../services/api.js";
 import {
   Activity,
   AlertTriangle,
@@ -11,33 +12,18 @@ import {
   ArrowUpRight,
   Car,
   CheckCircle2,
-  Clock3,
   Gauge,
-  MapPinned,
   ShieldCheck,
-  Star,
-  TimerReset,
   TrendingUp,
   Users,
   Wallet,
   XCircle,
-  Zap,
 } from "lucide-react";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
-  XAxis,
-  YAxis,
 } from "recharts";
 
 /* ══════════════════════════════════
@@ -299,83 +285,20 @@ const GS = () => (
 );
 
 /* ══════════════════════════════════
-   DATA
+   METRIC DEFINITIONS (icons/colors only — values from API)
 ══════════════════════════════════ */
-const QS = [
-  { label: "Cities Live", value: "18", icon: MapPinned, color: "#D4AF37" },
-  { label: "Total Drivers", value: "12.4K", icon: Car, color: "#34D399" },
-  { label: "Payout Cycle", value: "24 hrs", icon: Wallet, color: "#60A5FA" },
-  { label: "Alerts Resolved", value: "96.4%", icon: TimerReset, color: "#A78BFA" },
+const METRIC_DEFS = [
+  { title: "Online Drivers",     sub: "Right now",    icon: Car,          c: "#D4AF37", getValue: d => d?.drivers?.online },
+  { title: "Active Users",       sub: "Total active", icon: Users,        c: "#34D399", getValue: d => d?.users?.active },
+  { title: "Rides Today",        sub: "New trips",    icon: Activity,     c: "#60A5FA", getValue: d => d?.rides?.today },
+  { title: "Ongoing Rides",      sub: "In progress",  icon: Gauge,        c: "#A78BFA", getValue: d => d?.rides?.ongoing },
+  { title: "Completed Rides",    sub: "All time",     icon: CheckCircle2, c: "#34D399", getValue: d => d?.rides?.completed },
+  { title: "Cancelled Rides",    sub: "Total",        icon: XCircle,      c: "#F87171", getValue: d => d?.rides?.cancelled },
+  { title: "Revenue Today",      sub: "Platform",     icon: TrendingUp,   c: "#D4AF37", getValue: d => d?.revenue?.today != null ? `Rs${d.revenue.today}` : null },
+  { title: "Revenue This Month", sub: "Platform",     icon: Wallet,       c: "#F59E0B", getValue: d => d?.revenue?.month != null ? `Rs${d.revenue.month}` : null },
 ];
 
-const METRICS = [
-  { title: "Active Drivers", value: "2,847", ch: "+12.5%", tr: "up", sub: "Online now", icon: Car, pts: [38, 42, 46, 44, 49, 52, 54, 58, 64, 71], c: "#D4AF37" },
-  { title: "Active Riders", value: "8,342", ch: "+8.3%", tr: "up", sub: "Requesting", icon: Users, pts: [46, 49, 52, 55, 59, 59, 61, 61, 63, 67], c: "#34D399" },
-  { title: "Ride Requests/Hr", value: "1,247", ch: "+15.2%", tr: "up", sub: "Peak hour", icon: Activity, pts: [35, 37, 39, 41, 46, 50, 52, 54, 56, 58], c: "#60A5FA" },
-  { title: "Driver Utilization", value: "78.4%", ch: "+5.1%", tr: "up", sub: "Efficiency", icon: Gauge, pts: [55, 56, 57, 58, 58, 59, 59, 60, 60, 61], c: "#A78BFA" },
-  { title: "Ride Acceptance", value: "92.1%", ch: "+2.3%", tr: "up", sub: "Platform avg", icon: CheckCircle2, pts: [61, 61.5, 61.7, 62, 62.1, 62.2, 62.3, 62.4, 62.5, 62.6], c: "#34D399" },
-  { title: "Cancellation Rate", value: "4.2%", ch: "-1.8%", tr: "down", sub: "Improving", icon: XCircle, pts: [58, 57.2, 56.4, 55.7, 55, 54.6, 54.2, 53.6, 53.1, 52.8], c: "#F87171" },
-  { title: "Platform Revenue", value: "₹24.8L", ch: "+18.7%", tr: "up", sub: "Today", icon: TrendingUp, pts: [28, 31, 34, 37, 40, 43, 47, 52, 55, 59], c: "#D4AF37" },
-  { title: "Avg. Wait Time", value: "3.2 min", ch: "-0.5%", tr: "down", sub: "Faster", icon: Clock3, pts: [64, 63, 61, 58, 56, 55, 54, 53, 52.5, 52], c: "#F59E0B" },
-];
-
-const HOURLY = [
-  { time: "6AM", rides: 240 },
-  { time: "8AM", rides: 560 },
-  { time: "10AM", rides: 430 },
-  { time: "12PM", rides: 690 },
-  { time: "2PM", rides: 540 },
-  { time: "4PM", rides: 780 },
-  { time: "6PM", rides: 920 },
-  { time: "8PM", rides: 660 },
-];
-
-const CITIES = [
-  { city: "Mumbai", rides: 4200, color: "#D4AF37" },
-  { city: "Delhi", rides: 3850, color: "#60A5FA" },
-  { city: "Bangalore", rides: 3500, color: "#34D399" },
-  { city: "Chennai", rides: 2100, color: "#A78BFA" },
-  { city: "Hyderabad", rides: 1850, color: "#F59E0B" },
-];
-
-const WEEKLY = [
-  { day: "Mon", rides: 3200 },
-  { day: "Tue", rides: 4100 },
-  { day: "Wed", rides: 3700 },
-  { day: "Thu", rides: 4800 },
-  { day: "Fri", rides: 5200 },
-  { day: "Sat", rides: 6100 },
-  { day: "Sun", rides: 4900 },
-];
-
-const ALERTS = [
-  { id: 1, icon: AlertTriangle, type: "warn", title: "High demand surge in Andheri West — Activate surge pricing", time: "2 min ago", tag: "Surge" },
-  { id: 2, icon: Star, type: "info", title: "12 drivers completed onboarding successfully today", time: "15 min ago", tag: "Onboarding" },
-  { id: 3, icon: XCircle, type: "error", title: "3 fraud cases detected — Immediate review required", time: "28 min ago", tag: "Fraud" },
-  { id: 4, icon: CheckCircle2, type: "success", title: "Peak hour revenue targets exceeded by 15%", time: "1 hr ago", tag: "Revenue" },
-  { id: 5, icon: Zap, type: "warn", title: "Driver shortage detected in Koramangala zone", time: "1.5 hrs ago", tag: "Dispatch" },
-];
-
-const AST = {
-  warn: { bg: "rgba(212,175,55,0.07)", br: "rgba(212,175,55,0.24)", c: "#D4AF37", tbg: "rgba(212,175,55,0.14)" },
-  info: { bg: "rgba(96,165,250,0.07)", br: "rgba(96,165,250,0.22)", c: "#60A5FA", tbg: "rgba(96,165,250,0.12)" },
-  error: { bg: "rgba(248,113,113,0.07)", br: "rgba(248,113,113,0.2)", c: "#F87171", tbg: "rgba(248,113,113,0.12)" },
-  success: { bg: "rgba(52,211,153,0.07)", br: "rgba(52,211,153,0.2)", c: "#34D399", tbg: "rgba(52,211,153,0.12)" },
-};
-
-const HEALTH = [
-  { label: "Uptime SLA", value: "99.98%", sub: "Last 30 days", color: "#34D399", bar: 99.9 },
-  { label: "Peak City", value: "Mumbai", sub: "4,200 rides", color: "#D4AF37", bar: 84 },
-  { label: "Driver Rating", value: "4.82 ★", sub: "Platform avg", color: "#A78BFA", bar: 96.4 },
-  { label: "Surge Zones", value: "7 Active", sub: "Pricing live", color: "#F59E0B", bar: 58 },
-  { label: "Refund Rate", value: "1.4%", sub: "Below target", color: "#34D399", bar: 86 },
-];
-
-const DONUT = [
-  { name: "Completed", value: 78, color: "#D4AF37" },
-  { name: "In Progress", value: 13, color: "#60A5FA" },
-  { name: "Cancelled", value: 9, color: "#F87171" },
-];
+const FLAT_PTS = [50, 50, 50, 50, 50, 50, 50, 50, 50, 50];
 
 /* ══════════════════════════════════
    HELPERS
@@ -465,220 +388,12 @@ function Sparkline({ pts, color }) {
 }
 
 /* ══════════════════════════════════
-   HOURLY CHART
+   CHART EMPTY STATE
 ══════════════════════════════════ */
-function HourlyChart() {
+function ChartEmpty({ label = "No data available" }) {
   return (
-    <div style={{ width: "100%", height: 220 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={HOURLY} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
-          <defs>
-            <linearGradient id="hourlyFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#D4AF37" stopOpacity={0.3} />
-              <stop offset="100%" stopColor="#D4AF37" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-
-          <CartesianGrid stroke="rgba(212,175,55,0.08)" strokeDasharray="4 6" vertical={false} />
-          <XAxis
-            dataKey="time"
-            tick={{ fill: "rgba(212,175,55,0.48)", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fill: "rgba(212,175,55,0.38)", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            width={34}
-          />
-          <Tooltip content={<CustomTooltip suffix="" />} />
-          <Area
-            type="monotone"
-            dataKey="rides"
-            name="Rides"
-            stroke="#D4AF37"
-            strokeWidth={2.5}
-            fill="url(#hourlyFill)"
-            dot={{ r: 3, strokeWidth: 0, fill: "#D4AF37" }}
-            activeDot={{ r: 5, fill: "#D4AF37" }}
-            isAnimationActive
-            animationDuration={1800}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════
-   CITY BAR CHART
-══════════════════════════════════ */
-function CityChart() {
-  return (
-    <div style={{ width: "100%", height: 230 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={CITIES} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
-          <CartesianGrid stroke="rgba(212,175,55,0.07)" strokeDasharray="4 6" vertical={false} />
-          <XAxis
-            dataKey="city"
-            tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fill: "rgba(212,175,55,0.36)", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            width={34}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Bar
-            dataKey="rides"
-            name="Rides"
-            radius={[8, 8, 0, 0]}
-            isAnimationActive
-            animationDuration={1700}
-          >
-            {CITIES.map((entry) => (
-              <Cell key={entry.city} fill={entry.color} fillOpacity={0.9} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════
-   WEEKLY CHART
-══════════════════════════════════ */
-function WeeklyChart() {
-  return (
-    <div style={{ width: "100%", height: 170 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={WEEKLY} margin={{ top: 12, right: 0, left: 0, bottom: 4 }}>
-          <XAxis
-            dataKey="day"
-            tick={{ fill: "rgba(255,255,255,0.34)", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Bar
-            dataKey="rides"
-            name="Rides"
-            radius={[6, 6, 0, 0]}
-            isAnimationActive
-            animationDuration={1600}
-          >
-            {WEEKLY.map((item) => (
-              <Cell
-                key={item.day}
-                fill={item.rides === Math.max(...WEEKLY.map((d) => d.rides)) ? "#D4AF37" : "rgba(255,255,255,0.18)"}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════
-   DONUT CHART
-══════════════════════════════════ */
-function DonutChart() {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-      <div style={{ width: 120, height: 120, position: "relative", flexShrink: 0 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={DONUT}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={36}
-              outerRadius={54}
-              paddingAngle={3}
-              stroke="transparent"
-              isAnimationActive
-              animationDuration={1600}
-            >
-              {DONUT.map((item) => (
-                <Cell key={item.name} fill={item.color} />
-              ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip suffix="%" />} />
-          </PieChart>
-        </ResponsiveContainer>
-
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
-            pointerEvents: "none",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "'Cinzel',serif",
-              fontSize: 18,
-              fontWeight: 700,
-              color: "#D4AF37",
-              lineHeight: 1,
-            }}
-          >
-            78%
-          </span>
-          <span
-            style={{
-              marginTop: 4,
-              fontFamily: "'Outfit',sans-serif",
-              fontSize: 8,
-              letterSpacing: 1,
-              color: "rgba(212,175,55,0.48)",
-            }}
-          >
-            DONE
-          </span>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minWidth: 90 }}>
-        {DONUT.map((s) => (
-          <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
-            <div>
-              <p
-                style={{
-                  fontFamily: "'Outfit',sans-serif",
-                  fontSize: 10.5,
-                  color: "rgba(255,255,255,0.46)",
-                  margin: 0,
-                }}
-              >
-                {s.name}
-              </p>
-              <p
-                style={{
-                  fontFamily: "'Cinzel',serif",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: s.color,
-                  margin: 0,
-                }}
-              >
-                {s.value}%
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, color: "rgba(255,255,255,0.25)", fontFamily: "'Outfit',sans-serif", fontSize: 12 }}>
+      {label}
     </div>
   );
 }
@@ -761,26 +476,37 @@ export default function DashboardPage() {
   const P = isMob ? "12px 14px" : "20px 22px";
   const anim = useAnim(1500);
 
+  const [dashboard, setDashboard] = useState(null);
+  const [dashLoading, setDashLoading] = useState(true);
+
+  useEffect(() => {
+    api.getDashboard()
+      .then(res => setDashboard(res?.data || res || null))
+      .catch(() => {})
+      .finally(() => setDashLoading(false));
+  }, []);
+
+  const QS = [
+    { label: "Total Users",       value: dashLoading ? "—" : String(dashboard?.users?.total    ?? "—"), icon: Users,      color: "#34D399" },
+    { label: "Total Drivers",     value: dashLoading ? "—" : String(dashboard?.drivers?.total  ?? "—"), icon: Car,        color: "#D4AF37" },
+    { label: "Total Rides",       value: dashLoading ? "—" : String(dashboard?.rides?.total    ?? "—"), icon: Activity,   color: "#60A5FA" },
+    { label: "Verified Drivers",  value: dashLoading ? "—" : String(dashboard?.drivers?.verified ?? "—"), icon: ShieldCheck, color: "#A78BFA" },
+  ];
+
+  const METRICS = useMemo(() => METRIC_DEFS.map(def => {
+    const raw = def.getValue(dashboard);
+    return {
+      ...def,
+      value: dashLoading ? "—" : (raw != null ? String(raw) : "—"),
+      ch: "",
+      tr: "up",
+      pts: FLAT_PTS,
+    };
+  }), [dashboard, dashLoading]);
+
   const animatedMetrics = useMemo(() => {
-    return METRICS.map((m) => {
-      const numeric = parseFloat(String(m.value).replace(/[^\d.]/g, ""));
-      if (Number.isNaN(numeric)) return m;
-
-      let display = numeric * anim;
-
-      if (String(m.value).includes("%")) {
-        return { ...m, displayValue: `${display.toFixed(1)}%` };
-      }
-      if (String(m.value).includes("₹")) {
-        return { ...m, displayValue: `₹${display.toFixed(1)}L` };
-      }
-      if (String(m.value).includes("min")) {
-        return { ...m, displayValue: `${display.toFixed(1)} min` };
-      }
-
-      return { ...m, displayValue: Math.round(display).toLocaleString("en-IN") };
-    });
-  }, [anim]);
+    return METRICS.map((m) => ({ ...m, displayValue: m.value }));
+  }, [METRICS]);
 
   return (
     <>
@@ -992,10 +718,12 @@ export default function DashboardPage() {
                     <Icon size={15} color={m.c} strokeWidth={2} />
                   </div>
 
-                  <span className={isUp ? "bup" : "bdn"}>
-                    {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-                    {m.ch}
-                  </span>
+                  {m.ch && (
+                    <span className={isUp ? "bup" : "bdn"}>
+                      {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                      {m.ch}
+                    </span>
+                  )}
                 </div>
 
                 <p
@@ -1086,7 +814,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <HourlyChart />
+            <ChartEmpty label="Hourly ride data not available via API" />
           </div>
 
           <div className="rcol">
@@ -1094,7 +822,7 @@ export default function DashboardPage() {
               <div style={{ marginBottom: 14 }}>
                 <ST sub="Ride Status" main="Completion Rate" />
               </div>
-              <DonutChart />
+              <ChartEmpty label="Ride status breakdown not available via API" />
             </div>
 
             <div className="dbc" style={{ padding: P }}>
@@ -1114,7 +842,7 @@ export default function DashboardPage() {
                   +22%
                 </span>
               </div>
-              <WeeklyChart />
+              <ChartEmpty label="Weekly trend data not available via API" />
             </div>
           </div>
         </div>
@@ -1132,25 +860,10 @@ export default function DashboardPage() {
             }}
           >
             <ST sub="Regional Data" main="City Performance Overview" />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {CITIES.map((d) => (
-                <div key={d.city} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: 2, background: d.color, flexShrink: 0 }} />
-                  <span
-                    style={{
-                      fontFamily: "'Outfit',sans-serif",
-                      fontSize: isMob ? 9.5 : 10.5,
-                      color: "rgba(255,255,255,0.42)",
-                    }}
-                  >
-                    {isMob ? d.city.slice(0, 3) : d.city}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'Outfit',sans-serif" }}>City data not available via API</div>
           </div>
 
-          <CityChart />
+          <ChartEmpty label="City performance data not available via API" />
         </div>
 
         {/* BOTTOM ROW */}
@@ -1169,87 +882,8 @@ export default function DashboardPage() {
               <ST sub="System Notifications" main="Recent Alerts" />
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {ALERTS.map((a) => {
-                const Icon = a.icon;
-                const s = AST[a.type];
-
-                return (
-                  <div key={a.id} className="dbal" style={{ background: s.bg, borderColor: s.br }}>
-                    <div
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        flexShrink: 0,
-                        background: "rgba(0,0,0,0.2)",
-                        border: `1px solid ${s.br}`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Icon size={15} color={s.c} strokeWidth={2} />
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p
-                        className="wrap-anywhere"
-                        style={{
-                          fontFamily: "'Outfit',sans-serif",
-                          fontSize: isMob ? 11.5 : 12.5,
-                          color: "rgba(255,255,255,0.82)",
-                          fontWeight: 500,
-                          lineHeight: 1.42,
-                          margin: 0,
-                        }}
-                      >
-                        {a.title}
-                      </p>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
-                        <p
-                          style={{
-                            fontFamily: "'Cinzel',serif",
-                            fontSize: 8.5,
-                            color: s.c,
-                            letterSpacing: 0.8,
-                            margin: 0,
-                            opacity: 0.78,
-                          }}
-                        >
-                          {a.time}
-                        </p>
-                        <span
-                          style={{
-                            fontFamily: "'Outfit',sans-serif",
-                            fontSize: 9.5,
-                            fontWeight: 600,
-                            color: s.c,
-                            background: s.tbg,
-                            borderRadius: 5,
-                            padding: "1px 6px",
-                          }}
-                        >
-                          {a.tag}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: "50%",
-                        background: s.c,
-                        flexShrink: 0,
-                        marginTop: 6,
-                        boxShadow: `0 0 7px ${s.c}`,
-                      }}
-                    />
-                  </div>
-                );
-              })}
+            <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.25)", fontFamily: "'Outfit',sans-serif", fontSize: 12 }}>
+              System notifications not available via API
             </div>
           </div>
 
@@ -1259,56 +893,8 @@ export default function DashboardPage() {
               <ST sub="At A Glance" main="Platform Health" />
             </div>
 
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
-              {HEALTH.map((h) => (
-                <div key={h.label}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontFamily: "'Outfit',sans-serif",
-                        fontSize: 11.5,
-                        color: "rgba(255,255,255,0.44)",
-                        margin: 0,
-                      }}
-                    >
-                      {h.label}
-                    </p>
-
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <p
-                        style={{
-                          fontFamily: "'Cinzel',serif",
-                          fontSize: 12.5,
-                          fontWeight: 700,
-                          color: h.color,
-                          margin: 0,
-                        }}
-                      >
-                        {h.value}
-                      </p>
-                      <p
-                        style={{
-                          fontFamily: "'Outfit',sans-serif",
-                          fontSize: 9.5,
-                          color: "rgba(255,255,255,0.24)",
-                          margin: 0,
-                        }}
-                      >
-                        {h.sub}
-                      </p>
-                    </div>
-                  </div>
-                  <AnimBar value={h.bar} color={h.color} />
-                </div>
-              ))}
+            <div style={{ padding: 30, textAlign: "center", color: "rgba(255,255,255,0.25)", fontFamily: "'Outfit',sans-serif", fontSize: 12 }}>
+              Platform health metrics not available via API
             </div>
 
             <div
@@ -1350,24 +936,8 @@ export default function DashboardPage() {
                   letterSpacing: -1,
                 }}
               >
-                ₹24.8L
+                {dashLoading ? "—" : (dashboard?.revenue_today ? `₹${dashboard.revenue_today}` : "—")}
               </p>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                <span className="bup">
-                  <ArrowUpRight size={10} />
-                  +18.7%
-                </span>
-                <span
-                  style={{
-                    fontFamily: "'Outfit',sans-serif",
-                    fontSize: 10.5,
-                    color: "rgba(255,255,255,0.28)",
-                  }}
-                >
-                  vs yesterday
-                </span>
-              </div>
             </div>
           </div>
         </div>

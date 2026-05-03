@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   CarFront,
   CircleDot,
@@ -22,53 +23,7 @@ import {
   Bar,
   Cell,
 } from "recharts";
-
-const liveRides = [
-  {
-    rideId: "R2847",
-    driver: "Rajesh Kumar",
-    rider: "Priya Singh",
-    route: "Andheri West → Bandra East",
-    eta: "8 min",
-    duration: "12 min",
-    fare: "₹245",
-    status: "in progress",
-    active: true,
-  },
-  {
-    rideId: "R2848",
-    driver: "Amit Sharma",
-    rider: "Rohan Mehta",
-    route: "Powai → Goregaon",
-    eta: "3 min",
-    duration: "3 min",
-    fare: "₹180",
-    status: "picking up",
-    active: false,
-  },
-  {
-    rideId: "R2849",
-    driver: "Mohammed Ali",
-    rider: "Neha Kapoor",
-    route: "Colaba → Andheri",
-    eta: "15 min",
-    duration: "22 min",
-    fare: "₹520",
-    status: "in progress",
-    active: false,
-  },
-  {
-    rideId: "R2850",
-    driver: "Vikram Singh",
-    rider: "Arjun Patel",
-    route: "Malad → Borivali",
-    eta: "5 min",
-    duration: "9 min",
-    fare: "₹210",
-    status: "picking up",
-    active: false,
-  },
-];
+import { api } from "../../services/api.js";
 
 const mapPins = [
   { id: 1, x: "9%", y: "18%", type: "driver" },
@@ -78,31 +33,28 @@ const mapPins = [
   { id: 5, x: "87%", y: "74%", type: "driver" },
 ];
 
-const selectedRide = {
-  rideId: "R2847",
-  driver: "Rajesh Kumar",
-  rider: "Priya Singh",
-  vehicleType: "Sedan",
-  status: "in progress",
-  pickup: "Andheri West",
-  dropoff: "Bandra East",
-  eta: "8 min",
-  fare: "₹245",
-};
+function normalizeRide(r) {
+  const pickup = r.pickup_location?.address || r.pickup_address || r.pickup || '';
+  const dropoff = r.dropoff_location?.address || r.dropoff_address || r.dropoff || '';
 
-const routeChartData = [
-  { label: "Pickup", rides: 12 },
-  { label: "Transit", rides: 18 },
-  { label: "Drop", rides: 9 },
-  { label: "ETA", rides: 14 },
-];
+  let status = r.status || 'requested';
+  if (status === 'ongoing') status = 'in progress';
+  if (status === 'driver_assigned') status = 'picking up';
 
-const statusChartData = [
-  { stage: "R1", value: 8 },
-  { stage: "R2", value: 3 },
-  { stage: "R3", value: 15 },
-  { stage: "R4", value: 5 },
-];
+  return {
+    rideId: r.ride_number || r.id || String(r.id) || '',
+    driver: r.driver?.full_name || r.driver_name || r.driver || '—',
+    rider: r.user?.full_name || r.passenger_name || r.rider || '—',
+    route: pickup && dropoff ? `${pickup} → ${dropoff}` : pickup || dropoff || '—',
+    eta: r.eta_minutes ? `${r.eta_minutes} min` : '—',
+    duration: r.duration_minutes ? `${r.duration_minutes} min` : '—',
+    fare: r.final_fare ? `₹${r.final_fare}` : r.estimated_fare ? `₹${r.estimated_fare}` : '—',
+    status: status,
+    pickup,
+    dropoff,
+    vehicleType: r.vehicle_type || r.vehicleType || '—',
+  };
+}
 
 /* ══════════════════════════════════
    GLOBAL STYLES
@@ -396,27 +348,56 @@ function StatCard({ icon: Icon, label, value, color }) {
   );
 }
 
-function getStatusPill(status) {
-  switch (status) {
-    case "in progress":
-      return {
-        bg: "rgba(96,165,250,0.14)",
-        border: "rgba(96,165,250,0.22)",
-        color: "#60A5FA",
-      };
-    case "picking up":
-      return {
-        bg: "rgba(245,158,11,0.14)",
-        border: "rgba(245,158,11,0.22)",
-        color: "#F59E0B",
-      };
-    default:
-      return {
-        bg: "rgba(255,255,255,0.1)",
-        border: "rgba(255,255,255,0.14)",
-        color: "#fff",
-      };
+function getStatusPill(status = '') {
+  const statusStr = String(status).toLowerCase().trim();
+
+  if (statusStr === 'in progress' || statusStr === 'ongoing') {
+    return {
+      bg: "rgba(96,165,250,0.14)",
+      border: "rgba(96,165,250,0.22)",
+      color: "#60A5FA",
+    };
   }
+  if (statusStr === 'picking up') {
+    return {
+      bg: "rgba(245,158,11,0.14)",
+      border: "rgba(245,158,11,0.22)",
+      color: "#F59E0B",
+    };
+  }
+  if (statusStr === 'completed') {
+    return {
+      bg: "rgba(52,211,153,0.14)",
+      border: "rgba(52,211,153,0.22)",
+      color: "#34D399",
+    };
+  }
+  if (statusStr === 'cancelled') {
+    return {
+      bg: "rgba(248,113,113,0.14)",
+      border: "rgba(248,113,113,0.22)",
+      color: "#F87171",
+    };
+  }
+  if (statusStr === 'accepted') {
+    return {
+      bg: "rgba(168,85,247,0.14)",
+      border: "rgba(168,85,247,0.22)",
+      color: "#A855F7",
+    };
+  }
+  if (statusStr === 'requested') {
+    return {
+      bg: "rgba(59,130,246,0.14)",
+      border: "rgba(59,130,246,0.22)",
+      color: "#3B82F6",
+    };
+  }
+  return {
+    bg: "rgba(255,255,255,0.08)",
+    border: "rgba(255,255,255,0.12)",
+    color: "rgba(255,255,255,0.7)",
+  };
 }
 
 function DetailCard({ label, value, accent = "#D4AF37" }) {
@@ -456,15 +437,111 @@ function DetailCard({ label, value, accent = "#D4AF37" }) {
 }
 
 /* ══════════════════════════════════
+   CHART DATA
+══════════════════════════════════ */
+const routeChartData = [
+  { time: '00:00', distance: 0 },
+  { time: '04:00', distance: 12 },
+  { time: '08:00', distance: 28 },
+  { time: '12:00', distance: 35 },
+  { time: '16:00', distance: 42 },
+  { time: '20:00', distance: 38 },
+  { time: '24:00', distance: 45 },
+];
+
+const statusChartData = [
+  { stage: 'Requested', total: 18, completed: 10, cancelled: 2 },
+  { stage: 'Assigned', total: 15, completed: 12, cancelled: 1 },
+  { stage: 'Arrived', total: 12, completed: 11, cancelled: 0 },
+  { stage: 'Started', total: 8, completed: 7, cancelled: 0 },
+];
+
+/* ══════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════ */
 export default function RideMonitoringPage() {
+  const [liveRides, setLiveRides] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedRide, setSelectedRide] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('ongoing');
+
+  useEffect(() => {
+    setLoading(true);
+    api.getRides({ status: statusFilter, limit: 20 })
+      .then(res => {
+        const raw = res?.data?.rides || res?.rides || [];
+        const normalized = Array.isArray(raw) ? raw.map(normalizeRide) : [];
+        setLiveRides(normalized);
+        if (normalized.length > 0) setSelectedRide(normalized[0]);
+      })
+      .catch(err => console.error('Failed to load rides:', err))
+      .finally(() => setLoading(false));
+  }, [statusFilter]);
+
   const activeRideCount = liveRides.length;
-  const onlineDrivers = 2847;
-  const selectedStatusStyle = getStatusPill(selectedRide.status);
+  const onlineDrivers = 0;
+  const selectedStatusStyle = getStatusPill(selectedRide?.status || 'in progress');
+
+  if (loading) {
+    return (
+      <>
+        <GS />
+        <div style={{ padding: 60, textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontFamily: 'Outfit,sans-serif' }}>
+          Loading live rides...
+        </div>
+      </>
+    );
+  }
+
+  if (liveRides.length === 0) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#010917 0%,#020D26 25%,#04122E 55%,#030C22 80%,#010917 100%)', padding: '20px' }}>
+        <GS />
+        <div style={{ maxWidth: '100%', minWidth: 0, fontFamily: "'Outfit',sans-serif" }}>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <p style={{ fontFamily: "'Cinzel',serif", fontSize: 8.5, letterSpacing: 2.5, color: 'rgba(212,175,55,0.4)', textTransform: 'uppercase', margin: '0 0 4px' }}>Status Filter</p>
+                <h2 style={{ fontFamily: "'Cinzel',serif", fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 }}>Ride Status</h2>
+              </div>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  background: 'rgba(212,175,55,0.1)',
+                  border: '1px solid rgba(212,175,55,0.3)',
+                  borderRadius: '8px',
+                  color: '#D4AF37',
+                  fontFamily: "'Outfit',sans-serif",
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="requested">Requested</option>
+                <option value="accepted">Accepted</option>
+                <option value="ongoing">Ongoing</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
+              <div style={{ fontSize: 64, marginBottom: 20 }}>🚕</div>
+              <h2 style={{ fontFamily: "'Cinzel',serif", fontSize: 24, marginBottom: 8, color: 'rgba(255,255,255,0.7)' }}>No Rides Found</h2>
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', maxWidth: 400, margin: '0 auto' }}>
+                There are currently no {statusFilter} rides. Try selecting a different status to view rides.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#010917 0%,#020D26 25%,#04122E 55%,#030C22 80%,#010917 100%)', padding: '20px' }}>
       <GS />
 
       <div
@@ -557,6 +634,36 @@ export default function RideMonitoringPage() {
                 ETA Visible
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* STATUS FILTER */}
+        <div className="fup" style={{ animationDelay: "40ms", marginBottom: 18 }}>
+          <div className="dbc" style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 10, color: "rgba(212,175,55,0.5)", fontFamily: "'Outfit',sans-serif", textTransform: "uppercase", letterSpacing: "0.8px" }}>Filter by Status</span>
+            </div>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                background: 'rgba(212,175,55,0.08)',
+                border: '1px solid rgba(212,175,55,0.24)',
+                borderRadius: '8px',
+                color: '#D4AF37',
+                fontFamily: "'Outfit',sans-serif",
+                fontSize: '12px',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              <option value="requested">Requested</option>
+              <option value="accepted">Accepted</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </div>
         </div>
 
@@ -792,7 +899,9 @@ export default function RideMonitoringPage() {
             </div>
 
             <div style={{ maxHeight: 500, overflowY: "auto" }}>
-              {liveRides.map((ride) => {
+              {liveRides.length === 0 ? (
+                <div style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}><div style={{fontSize:32,marginBottom:10}}>🚕</div>No active rides available</div>
+              ) : liveRides.map((ride) => {
                 const statusStyle = getStatusPill(ride.status);
 
                 return (
@@ -920,7 +1029,7 @@ export default function RideMonitoringPage() {
                 marginBottom: 16,
               }}
             >
-              <ST sub="Selected Trip" main={`Ride Details · ${selectedRide.rideId}`} />
+              <ST sub="Selected Trip" main={`Ride Details · ${selectedRide?.rideId || '—'}`} />
               <span
                 style={{
                   display: "inline-flex",
@@ -936,19 +1045,19 @@ export default function RideMonitoringPage() {
                 }}
               >
                 <CircleDot size={10} />
-                {selectedRide.status}
+                {selectedRide?.status || '—'}
               </span>
             </div>
 
             <div className="detailsGrid">
-              <DetailCard label="Driver" value={selectedRide.driver} accent="#fff" />
-              <DetailCard label="Rider" value={selectedRide.rider} accent="#fff" />
-              <DetailCard label="Vehicle Type" value={selectedRide.vehicleType} accent="#60A5FA" />
-              <DetailCard label="ETA" value={selectedRide.eta} accent="#34D399" />
-              <DetailCard label="Pickup Location" value={selectedRide.pickup} accent="#D4AF37" />
-              <DetailCard label="Drop-off Location" value={selectedRide.dropoff} accent="#F59E0B" />
-              <DetailCard label="Fare" value={selectedRide.fare} accent="#A78BFA" />
-              <DetailCard label="Trip State" value={selectedRide.status} accent={selectedStatusStyle.color} />
+              <DetailCard label="Driver" value={selectedRide?.driver || '—'} accent="#fff" />
+              <DetailCard label="Rider" value={selectedRide?.rider || '—'} accent="#fff" />
+              <DetailCard label="Vehicle Type" value={selectedRide?.vehicleType || '—'} accent="#60A5FA" />
+              <DetailCard label="ETA" value={selectedRide?.eta || '—'} accent="#34D399" />
+              <DetailCard label="Pickup Location" value={selectedRide?.pickup || '—'} accent="#D4AF37" />
+              <DetailCard label="Drop-off Location" value={selectedRide?.dropoff || '—'} accent="#F59E0B" />
+              <DetailCard label="Fare" value={selectedRide?.fare || '—'} accent="#A78BFA" />
+              <DetailCard label="Trip State" value={selectedRide?.status || '—'} accent={selectedStatusStyle.color} />
             </div>
           </div>
 
@@ -1046,6 +1155,6 @@ export default function RideMonitoringPage() {
           </div>
         </section>
       </div>
-    </>
+    </div>
   );
 }

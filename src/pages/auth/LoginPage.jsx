@@ -4,8 +4,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShieldCheck, Eye, EyeOff, Zap } from "lucide-react";
+import { ShieldCheck, Zap } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { api } from "../../services/api";
 import logo from "../../assets/Logo.jpeg";
 
 /* ─── Particle canvas background ─── */
@@ -83,12 +84,14 @@ const ParticleCanvas = () => {
 /* ─── Main Component ─── */
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
-  const [formData, setFormData] = useState({ email: "", password: "" });
+  const { login, loginWithToken } = useAuth();
+  const [step, setStep] = useState("signin"); // "signin" or "verify-otp"
+  const [formData, setFormData] = useState({ phone: "", email: "", role: "passenger" });
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
-  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [tempAuth, setTempAuth] = useState(null); // Store temp auth data for OTP step
 
   useEffect(() => {
     setTimeout(() => setMounted(true), 80);
@@ -100,22 +103,104 @@ const LoginPage = () => {
     if (error) setError("");
   };
 
-  const handleSubmit = async (e) => {
+  const handleSigninSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!formData.email || !formData.password) {
-      setError("Please fill all fields.");
+    
+    // Validate phone or email
+    if (!formData.phone && !formData.email) {
+      setError("Please enter phone number or email.");
       return;
     }
+    
+    if (!formData.role) {
+      setError("Please select a role.");
+      return;
+    }
+
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 900));
-    const result = login(formData);
-    setLoading(false);
-    if (!result.success) {
-      setError(result.message);
+    try {
+      // Call API to send OTP
+      const payload = {
+        ...(formData.phone && { phone: formData.phone }),
+        ...(formData.email && { email: formData.email }),
+        role: formData.role
+      };
+      
+      const result = await api.signin(payload);
+      
+      // Store temp auth data for OTP verification
+      setTempAuth({
+        phone: formData.phone,
+        email: formData.email,
+        role: formData.role
+      });
+      
+      // Move to OTP verification step
+      setStep("verify-otp");
+      setOtp("");
+      setError("");
+    } catch (err) {
+      setError(err.message || "Failed to send OTP. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtpSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    
+    if (!otp) {
+      setError("Please enter OTP.");
       return;
     }
-    navigate("/");
+
+    if (otp.length !== 6) {
+      setError("OTP must be 6 digits.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Call API to verify OTP
+      const payload = {
+        ...(tempAuth.phone && { phone: tempAuth.phone }),
+        ...(tempAuth.email && { email: tempAuth.email }),
+        otp: otp,
+        role: tempAuth.role
+      };
+      
+      const result = await api.verifySignin(payload);
+
+      // support both result.data and top-level shape
+      const data = result.data || result;
+      const accessToken = data.accessToken || data.token || data.access_token;
+      const refreshToken = data.refreshToken || data.refresh_token;
+      const apiUser = data.user || data;
+
+      if (!accessToken || !apiUser) {
+        throw new Error('Invalid response from server');
+      }
+
+      const loginResult = loginWithToken({ accessToken, refreshToken, user: apiUser });
+      if (!loginResult.success) {
+        setError(loginResult.message || 'Login failed');
+        return;
+      }
+      navigate("/");
+    } catch (err) {
+      setError(err.message || "OTP verification failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBackToSignin = () => {
+    setStep("signin");
+    setOtp("");
+    setTempAuth(null);
+    setError("");
   };
 
   return (
@@ -479,25 +564,6 @@ const LoginPage = () => {
             0 4px 16px rgba(212,175,55,0.08);
         }
 
-        .pw-toggle {
-          position: absolute;
-          right: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: #9a8a6a;
-          padding: 0;
-          display: flex;
-          align-items: center;
-          transition: color 0.2s;
-        }
-
-        .pw-toggle:hover {
-          color: #D4AF37;
-        }
-
         .error-box {
           background: rgba(200,30,30,0.07);
           border: 1px solid rgba(200,30,30,0.2);
@@ -703,72 +769,163 @@ const LoginPage = () => {
 
             <div className="form-container">
               <div className="form-tagline">⬡ Admin Portal</div>
-              <h2 className="form-title">Welcome<br/>Back</h2>
-              <p className="form-subtitle">Sign in to your command centre</p>
+              
+              {step === "signin" ? (
+                <>
+                  <h2 className="form-title">Welcome<br/>Back</h2>
+                  <p className="form-subtitle">Sign in with phone or email</p>
 
-              <div className="form-divider">
-                <div className="form-divider-line" />
-                <Zap size={13} color="#D4AF37" />
-                <div className="form-divider-line" style={{ background: 'linear-gradient(270deg, rgba(212,175,55,0.5), rgba(212,175,55,0.1))' }} />
-              </div>
-
-              <form onSubmit={handleSubmit}>
-                <div className="field-group">
-                  <div>
-                    <label className="field-label">Email Address</label>
-                    <div className="input-wrap">
-                      <input
-                        type="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleChange}
-                        placeholder="official@gomobility.com"
-                        className="input-field"
-                      />
-                    </div>
+                  <div className="form-divider">
+                    <div className="form-divider-line" />
+                    <Zap size={13} color="#D4AF37" />
+                    <div className="form-divider-line" style={{ background: 'linear-gradient(270deg, rgba(212,175,55,0.5), rgba(212,175,55,0.1))' }} />
                   </div>
 
-                  <div>
-                    <label className="field-label">Password</label>
-                    <div className="input-wrap">
-                      <input
-                        type={showPw ? "text" : "password"}
-                        name="password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        placeholder="Enter your password"
-                        className="input-field"
-                      />
+                  <form onSubmit={handleSigninSubmit}>
+                    <div className="field-group">
+                      <div>
+                        <label className="field-label">Phone Number</label>
+                        <div className="input-wrap">
+                          <input
+                            type="tel"
+                            name="phone"
+                            value={formData.phone}
+                            onChange={handleChange}
+                            placeholder="+91 9876543210"
+                            className="input-field"
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ textAlign: 'center', color: '#8a7a5a', fontSize: '12px', letterSpacing: '1px' }}>
+                        — OR —
+                      </div>
+
+                      <div>
+                        <label className="field-label">Email Address</label>
+                        <div className="input-wrap">
+                          <input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            placeholder="official@gomobility.com"
+                            className="input-field"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="field-label">Role</label>
+                        <div className="input-wrap">
+                          <select
+                            name="role"
+                            value={formData.role}
+                            onChange={handleChange}
+                            className="input-field"
+                            style={{ cursor: 'pointer', appearance: 'none', paddingRight: '40px' }}
+                          >
+                            <option value="passenger">Passenger</option>
+                            <option value="driver">Driver</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                          <div style={{
+                            position: 'absolute',
+                            right: '14px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            pointerEvents: 'none',
+                            color: '#D4AF37',
+                            fontSize: '12px'
+                          }}>▼</div>
+                        </div>
+                      </div>
+
+                      {error && <div className="error-box">{error}</div>}
+
                       <button
-                        type="button"
-                        className="pw-toggle"
-                        onClick={() => setShowPw((p) => !p)}
+                        type="submit"
+                        className="submit-btn"
+                        disabled={loading}
                       >
-                        {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {loading ? (
+                          <><span className="spinner" />Sending OTP…</>
+                        ) : (
+                          "Send OTP"
+                        )}
                       </button>
                     </div>
+                  </form>
+
+                  <p className="signup-link">
+                    Need access?{" "}
+                    <Link to="/signup">Request Access</Link>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="form-title">Verify<br/>OTP</h2>
+                  <p className="form-subtitle">Enter the code sent to {tempAuth?.phone || tempAuth?.email}</p>
+
+                  <div className="form-divider">
+                    <div className="form-divider-line" />
+                    <Zap size={13} color="#D4AF37" />
+                    <div className="form-divider-line" style={{ background: 'linear-gradient(270deg, rgba(212,175,55,0.5), rgba(212,175,55,0.1))' }} />
                   </div>
 
-                  {error && <div className="error-box">{error}</div>}
+                  <form onSubmit={handleVerifyOtpSubmit}>
+                    <div className="field-group">
+                      <div>
+                        <label className="field-label">6-Digit OTP</label>
+                        <div className="input-wrap">
+                          <input
+                            type="text"
+                            value={otp}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                              setOtp(val);
+                              if (error) setError("");
+                            }}
+                            placeholder="000000"
+                            maxLength="6"
+                            className="input-field"
+                            style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '8px' }}
+                          />
+                        </div>
+                      </div>
 
-                  <button
-                    type="submit"
-                    className="submit-btn"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <><span className="spinner" />Authenticating…</>
-                    ) : (
-                      "Enter Dashboard"
-                    )}
-                  </button>
-                </div>
-              </form>
+                      {error && <div className="error-box">{error}</div>}
 
-              <p className="signup-link">
-                Need access?{" "}
-                <Link to="/signup">Request Access</Link>
-              </p>
+                      <button
+                        type="submit"
+                        className="submit-btn"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <><span className="spinner" />Verifying…</>
+                        ) : (
+                          "Verify & Login"
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleBackToSignin}
+                        className="submit-btn"
+                        style={{
+                          marginTop: '8px',
+                          background: 'rgba(212,175,55,0.1)',
+                          color: '#D4AF37',
+                          border: '1px solid rgba(212,175,55,0.3)'
+                        }}
+                        disabled={loading}
+                      >
+                        Back to Sign In
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
             </div>
           </div>
         </div>

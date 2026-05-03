@@ -11,10 +11,9 @@ import {
   MiniStatRow,
   GlobalStyles,
 } from "../../components/ui/index.jsx";
-import { genActivityLogs } from "../../data/mockData.js";
 import { useAuth } from "../../context/AuthContext";
 
-const LOGS = genActivityLogs(20);
+const LOGS = [];
 
 const AC = {
   User_Blocked: "red",
@@ -103,29 +102,10 @@ function Content() {
 
       <MiniStatRow
         items={[
-          {
-            label: "Total Logs (Today)",
-            value: "4,821",
-            icon: "📋",
-          },
-          {
-            label: "Admin Actions",
-            value: "38",
-            icon: "⚡",
-            color: "#D4AF37",
-          },
-          {
-            label: "Security Events",
-            value: "2",
-            icon: "🔐",
-            color: "#F87171",
-          },
-          {
-            label: "Config Changes",
-            value: "7",
-            icon: "⚙️",
-            color: "#60A5FA",
-          },
+          { label: "Total Logs (Today)", value: "—", icon: "📋" },
+          { label: "Admin Actions", value: "—", icon: "⚡", color: "#D4AF37" },
+          { label: "Security Events", value: "—", icon: "🔐", color: "#F87171" },
+          { label: "Config Changes", value: "—", icon: "⚙️", color: "#60A5FA" },
         ]}
       />
 

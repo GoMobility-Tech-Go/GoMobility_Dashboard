@@ -1,23 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast, ToastProvider, PageWrapper, Card, TableCard, MiniStatRow, GlobalStyles, FormGroup, AlertBox, Modal } from "../../components/ui/index.jsx";
+import { api } from "../../services/api.js";
 
-const ACTIVE_SOS = [
-  { id:"#GM84921", passenger:"Priya Singh", driver:"Vikram Yadav", location:"Gandhi Maidan, Patna", vehicle:"🛺 Auto", time:"3 min ago", phone:"+91 9876543210", lat:25.6020, lng:85.1228, status:"Active" },
-  { id:"#GM91234", passenger:"Rahul Sharma", driver:"Suresh Reddy", location:"Bailey Road, Patna", vehicle:"🚖 Cab", time:"8 min ago", phone:"+91 9123456780", lat:25.6290, lng:85.0960, status:"Active" },
-];
+function normalizeSos(s) {
+  return {
+    id: s.alert_number || s.id || '',
+    passenger: s.user?.full_name || s.passenger_name || '—',
+    driver: s.driver?.full_name || s.driver_name || '—',
+    location: s.location || s.address || '—',
+    vehicle: s.vehicle_type || '—',
+    time: s.created_at ? new Date(s.created_at).toLocaleString('en-IN') : '—',
+    phone: s.user?.phone || '—',
+    status: s.status || 'Active',
+  };
+}
 
-const INCIDENT_LOG = [
-  { id:"#INC001", date:"Apr 23, 2026", type:"SOS Emergency", user:"Neha Gupta", driver:"Manish Dubey", location:"Boring Road", resolution:"Police contacted, user safe", status:"Resolved" },
-  { id:"#INC002", date:"Apr 21, 2026", type:"Route Deviation", user:"Amit Kumar", driver:"Sanjay Malhotra", location:"Kankarbagh", resolution:"Driver warned, ride cancelled", status:"Resolved" },
-  { id:"#INC003", date:"Apr 19, 2026", type:"SOS Emergency", user:"Kavita Mishra", driver:"Arjun Nair", location:"AIIMS Area", resolution:"Ride stopped, ambulance called", status:"Resolved" },
-  { id:"#INC004", date:"Apr 18, 2026", type:"Aggressive Driver", user:"Raj Patel", driver:"Deepak Soni", location:"Rajendra Nagar", resolution:"Driver suspended for 7 days", status:"Resolved" },
-];
-
-const BLACKLIST = [
-  { name:"Ramesh Kumar", type:"Driver", reason:"Assault complaint", date:"Apr 15, 2026", permanent:true },
-  { name:"Sunil Verma", type:"User", reason:"Fraud — multiple chargebacks", date:"Apr 10, 2026", permanent:false },
-  { name:"Pankaj Singh", type:"Driver", reason:"DUI — drunk driving report", date:"Apr 5, 2026", permanent:true },
-];
+const BLACKLIST = [];
 
 const EMERGENCY_CONTACTS = [
   { name:"Patna Police Control Room", number:"0612-2200100", type:"police" },
@@ -61,8 +59,20 @@ function SOSCard({ sos, onForceStop, onContact }) {
 
 function Content() {
   const toast = useToast();
-  const [sosList, setSosList] = useState(ACTIVE_SOS);
+  const [sosList, setSosList] = useState([]);
+  const [sosHistory, setSosHistory] = useState([]);
   const [blacklist, setBlacklist] = useState(BLACKLIST);
+
+  useEffect(() => {
+    api.getSosHistory()
+      .then(res => {
+        const raw = res?.data?.alerts || res?.alerts || res?.data || [];
+        const all = Array.isArray(raw) ? raw.map(normalizeSos) : [];
+        setSosList(all.filter(s => s.status === 'Active' || s.status === 'active'));
+        setSosHistory(all.filter(s => s.status !== 'Active' && s.status !== 'active'));
+      })
+      .catch(() => {});
+  }, []);
   const [tab, setTab] = useState("sos");
   const [reportModal, setReportModal] = useState(false);
   const [blModal, setBlModal] = useState(false);
@@ -99,11 +109,11 @@ function Content() {
 
       <MiniStatRow items={[
         { label:"Active SOS",        value:String(sosList.length),          icon:"🚨", color:"#F87171" },
-        { label:"Resolved Today",    value:"3",                             icon:"✅", color:"#34D399" },
-        { label:"Total Incidents",   value:String(INCIDENT_LOG.length),    icon:"📋", color:"#F59E0B" },
+        { label:"Resolved",          value:String(sosHistory.length),       icon:"✅", color:"#34D399" },
+        { label:"Total Alerts",      value:String(sosList.length + sosHistory.length), icon:"📋", color:"#F59E0B" },
         { label:"Blacklisted",       value:String(blacklist.length),        icon:"🚫", color:"#F87171" },
         { label:"Emergency Contacts",value:String(EMERGENCY_CONTACTS.length),icon:"📞",color:"#60A5FA" },
-        { label:"Avg Response Time", value:"4.2 min",                      icon:"⏱️", color:"#D4AF37" },
+        { label:"Avg Response Time", value:"—",                            icon:"⏱️", color:"#D4AF37" },
       ]}/>
 
       {sosList.length > 0 && (
@@ -122,22 +132,28 @@ function Content() {
       </div>
 
       {tab==="incidents" && (
-        <TableCard title="Safety Incident Log" icon="📋"
-          actions={<button className="btn-outline btn-sm" onClick={()=>toast("Incident report exported!","success")}>↓ Export</button>}>
-          <table className="gm-table">
-            <thead><tr><th>Incident ID</th><th>Date</th><th>Type</th><th>User</th><th>Driver</th><th>Location</th><th>Resolution</th><th>Status</th></tr></thead>
-            <tbody>{INCIDENT_LOG.map((inc,i)=>(
-              <tr key={i}>
-                <td style={{fontFamily:"monospace",color:"#F87171",fontSize:12}}>{inc.id}</td>
-                <td style={{fontSize:12}}>{inc.date}</td>
-                <td><span style={{display:"inline-flex",padding:"3px 8px",borderRadius:100,fontSize:10.5,fontWeight:600,background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.25)",color:"#F87171"}}>{inc.type}</span></td>
-                <td>{inc.user}</td><td>{inc.driver}</td>
-                <td style={{fontSize:12,color:"rgba(255,255,255,0.5)"}}>{inc.location}</td>
-                <td style={{fontSize:12,maxWidth:200,color:"rgba(255,255,255,0.6)"}}>{inc.resolution}</td>
-                <td><span style={{display:"inline-flex",padding:"3px 9px",borderRadius:100,fontSize:10.5,fontWeight:600,background:"rgba(52,211,153,0.1)",border:"1px solid rgba(52,211,153,0.25)",color:"#34D399"}}>{inc.status}</span></td>
-              </tr>
-            ))}</tbody>
-          </table>
+        <TableCard title="SOS History Log" icon="📋"
+          actions={<button className="btn-outline btn-sm" onClick={()=>toast("Report exported!","success")}>↓ Export</button>}>
+          {sosHistory.length === 0 ? (
+            <div style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.35)",fontFamily:"Outfit,sans-serif"}}>
+              <div style={{fontSize:36,marginBottom:10}}>📋</div>No resolved SOS history
+            </div>
+          ) : (
+            <table className="gm-table">
+              <thead><tr><th>Alert ID</th><th>Passenger</th><th>Driver</th><th>Location</th><th>Vehicle</th><th>Time</th><th>Status</th></tr></thead>
+              <tbody>{sosHistory.map((s,i)=>(
+                <tr key={i}>
+                  <td style={{fontFamily:"monospace",color:"#F87171",fontSize:12}}>{s.id}</td>
+                  <td>{s.passenger}</td>
+                  <td>{s.driver}</td>
+                  <td style={{fontSize:12,color:"rgba(255,255,255,0.5)"}}>{s.location}</td>
+                  <td style={{fontSize:12}}>{s.vehicle}</td>
+                  <td style={{fontSize:12}}>{s.time}</td>
+                  <td><span style={{display:"inline-flex",padding:"3px 9px",borderRadius:100,fontSize:10.5,fontWeight:600,background:"rgba(52,211,153,0.1)",border:"1px solid rgba(52,211,153,0.25)",color:"#34D399"}}>{s.status}</span></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
         </TableCard>
       )}
 
@@ -188,7 +204,7 @@ function Content() {
         </Card>
       )}
 
-      {tab==="sos" && INCIDENT_LOG.length===0 && sosList.length===0 && (
+      {tab==="sos" && sosHistory.length===0 && sosList.length===0 && (
         <div style={{padding:50,textAlign:"center",color:"rgba(255,255,255,0.3)"}}>
           <div style={{fontSize:44,marginBottom:12}}>✅</div>
           <div>No active SOS alerts. Platform is safe.</div>
