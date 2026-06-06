@@ -1,5 +1,5 @@
 import { Navigate } from "react-router-dom";
-import ProtectedRoute from "../auth/ProtectedRoute";
+import ProtectedRoute, { RoleRoute } from "../auth/ProtectedRoute";
 import MainLayout from "../layouts/MainLayout";
 import SignupPage from "../pages/auth/SignupPage";
 import LoginPage from "../pages/auth/LoginPage";
@@ -42,6 +42,7 @@ const routes = [
     element:<ProtectedRoute/>,
     children:[{
       path:"/", element:<MainLayout/>, children:[
+        // ── Common routes (Admin + Super Admin) ──────────────────
         { index:true, element:<DashboardPage/> },
         { path:"users", element:<UsersPage/> },
         { path:"driver-onboarding", element:<DriverOnboardingPage/> },
@@ -59,20 +60,26 @@ const routes = [
         { path:"operational-metrics", element:<OperationalMetricsPage/> },
         { path:"notifications", element:<NotificationsPage/> },
         { path:"settings", element:<SettingsPage/> },
-        { path:"fraud-detection", element:<FraudDetectionPage/> },
-        { path:"promo-codes", element:<PromoCodesPage/> },
-        { path:"roles-access", element:<RolesAccessPage/> },
-        { path:"activity-logs", element:<ActivityLogsPage/> },
-        { path:"revenue-analytics", element:<RevenueAnalyticsPage/> },
-        { path:"tax-reports", element:<TaxReportsPage/> },
-        { path:"banners", element:<BannersPage/> },
-        { path:"emergency-safety", element:<EmergencySafetyPage/> },
-        { path:"app-config", element:<AppConfigPage/> },
-        { path:"driver-tiers", element:<DriverTiersPage/> },
-        { path:"broadcast-messaging", element:<BroadcastMessagingPage/> },
-        { path:"system-health", element:<SystemHealthPage/> },
-        { path:"campaigns", element:<CampaignsPage/> },
-        { path:"user-segments", element:<UserSegmentsPage/> },
+        // ── Super Admin only routes ───────────────────────────────
+        {
+          element:<RoleRoute allowedRoles={["Super Admin"]}/>,
+          children:[
+            { path:"revenue-analytics", element:<RevenueAnalyticsPage/> },
+            { path:"tax-reports", element:<TaxReportsPage/> },
+            { path:"banners", element:<BannersPage/> },
+            { path:"emergency-safety", element:<EmergencySafetyPage/> },
+            { path:"app-config", element:<AppConfigPage/> },
+            { path:"driver-tiers", element:<DriverTiersPage/> },
+            { path:"broadcast-messaging", element:<BroadcastMessagingPage/> },
+            { path:"system-health", element:<SystemHealthPage/> },
+            { path:"campaigns", element:<CampaignsPage/> },
+            { path:"user-segments", element:<UserSegmentsPage/> },
+            { path:"fraud-detection", element:<FraudDetectionPage/> },
+            { path:"promo-codes", element:<PromoCodesPage/> },
+            { path:"roles-access", element:<RolesAccessPage/> },
+            { path:"activity-logs", element:<ActivityLogsPage/> },
+          ]
+        },
       ]
     }]
   },

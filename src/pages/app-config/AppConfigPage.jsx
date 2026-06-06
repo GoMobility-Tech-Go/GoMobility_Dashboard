@@ -1,612 +1,243 @@
-import { useState } from "react";
-import {
-  useToast,
-  ToastProvider,
-  PageWrapper,
-  Card,
-  MiniStatRow,
-  GlobalStyles,
-  FormGroup,
-  Toggle,
-  AlertBox,
-} from "../../components/ui/index.jsx";
+import { useState, useEffect } from "react";
+import { Settings, Edit2, Save, X, RefreshCw, RotateCcw } from "lucide-react";
+import { getPricingSettings, updatePricingSetting, reloadPricingCache } from "../../api/admin";
 
-const FEATURE_FLAGS = [
-  {
-    key: "ride_scheduling",
-    label: "Ride Scheduling",
-    desc: "Allow users to schedule rides in advance",
-    enabled: true,
-  },
-  {
-    key: "cab_sharing",
-    label: "Cab Sharing / Pool",
-    desc: "Enable cab-sharing feature for cost splitting",
-    enabled: false,
-  },
-  {
-    key: "wallet_pay",
-    label: "Wallet Payments",
-    desc: "Allow wallet balance as payment method",
-    enabled: true,
-  },
-  {
-    key: "surge_pricing",
-    label: "Surge Pricing",
-    desc: "Dynamic fare multiplier during high demand",
-    enabled: true,
-  },
-  {
-    key: "sos_button",
-    label: "SOS Emergency Button",
-    desc: "In-app SOS button for passenger safety",
-    enabled: true,
-  },
-  {
-    key: "driver_chat",
-    label: "Driver-User In-App Chat",
-    desc: "Allow messaging between driver and passenger",
-    enabled: false,
-  },
-  {
-    key: "ride_later",
-    label: "Ride Later Feature",
-    desc: "Schedule rides up to 24 hours in advance",
-    enabled: true,
-  },
-  {
-    key: "referral_system",
-    label: "Referral System",
-    desc: "User referral bonus program",
-    enabled: true,
-  },
-  {
-    key: "ai_route",
-    label: "AI Route Optimization",
-    desc: "Smart routing using ML model",
-    enabled: false,
-  },
-  {
-    key: "subscription",
-    label: "GO Pass Subscriptions",
-    desc: "Monthly and annual ride passes",
-    enabled: true,
-  },
-  {
-    key: "driver_rating",
-    label: "Driver Rating System",
-    desc: "Post-ride rating and review feature",
-    enabled: true,
-  },
-  {
-    key: "promo_codes",
-    label: "Promo Codes",
-    desc: "Discount promo code entry at checkout",
-    enabled: true,
-  },
-];
+const Toast = ({ msg, type, onClose }) => (
+  <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background:type==="error"?"#7f1d1d":"#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", maxWidth:400 }}>
+  <span style={{ flex:1 }}>{msg}</span>
+  <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer" }}><X size={14}/></button>
+  </div>
+);
 
-function Content() {
-  const toast = useToast();
+const PREFIX_LABELS = {
+  surge:    "Surge Pricing",
+  peak:     "Peak Hours",
+  base:     "Base Fare",
+  per:      "Per Unit Rates",
+  min:      "Minimum Fare",
+  max:      "Maximum / Limits",
+  cancel:   "Cancellation",
+  wait:     "Waiting Charges",
+  gst:      "GST / Tax",
+  driver:   "Driver Settings",
+  booking:  "Booking Config",
+  other:    "Other Settings",
+};
 
-  const [flags, setFlags] = useState(FEATURE_FLAGS);
-  const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [forceUpdate, setForceUpdate] = useState(false);
-  const [minVersion, setMinVersion] = useState("2.4.1");
-  const [currentVersion, setCurrentVersion] = useState("2.8.0");
-  const [maintenanceMsg, setMaintenanceMsg] = useState(
-    "We are performing scheduled maintenance. Back in 30 minutes!"
-  );
-  const [rateLimit, setRateLimit] = useState("100");
-  const [sessionTimeout, setSessionTimeout] = useState("30");
+const getPrefix = (key) => {
+  const part = (key || "").split("_")[0].toLowerCase();
+  return PREFIX_LABELS[part] || "Other Settings";
+};
 
-  const toggleFlag = (key) => {
-    const flag = flags.find((f) => f.key === key);
+const groupSettings = (list) => {
+  const groups = {};
+  list.forEach((s) => {
+    const grp = getPrefix(s.key);
+    if (!groups[grp]) groups[grp] = [];
+    groups[grp].push(s);
+  });
+  return groups;
+};
 
-    setFlags(
-      flags.map((f) =>
-        f.key === key ? { ...f, enabled: !f.enabled } : f
-      )
-    );
+const TYPE_BADGE = {
+  float:   { color:"#60a5fa", bg:"rgba(59,130,246,0.12)"  },
+  integer: { color:"#a78bfa", bg:"rgba(167,139,250,0.12)" },
+  boolean: { color:"#4ade80", bg:"rgba(34,197,94,0.12)"   },
+  string:  { color:"#f59e0b", bg:"rgba(245,158,11,0.12)"  },
+};
 
-    toast(
-      `Feature "${flag?.label}" ${flag?.enabled ? "disabled" : "enabled"}!`,
-      flag?.enabled ? "error" : "success"
-    );
+const typeBadge = (t) => TYPE_BADGE[t] || { color:"rgba(255,255,255,0.5)", bg:"rgba(255,255,255,0.06)" };
+
+const inputStyle = { height:38, background:"rgba(255,255,255,0.08)", border:"1px solid rgba(212,175,55,0.3)", borderRadius:8, padding:"0 12px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box", minWidth:120 };
+
+export default function AppConfigPage() {
+  const [settings, setSettings]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [editKey, setEditKey]       = useState(null);
+  const [editVal, setEditVal]       = useState("");
+  const [saving, setSaving]         = useState(false);
+  const [reloading, setReloading]   = useState(false);
+  const [toast, setToast]           = useState(null);
+
+  const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
+
+  const load = () => {
+    setLoading(true);
+    getPricingSettings()
+      .then((res) => {
+        const d = res.data?.data || res.data || [];
+        setSettings(Array.isArray(d) ? d : []);
+      })
+      .catch(() => showToast("Failed to load pricing settings.", "error"))
+      .finally(() => setLoading(false));
   };
 
-  const saveConfig = (section) => {
-    if (maintenanceMode) {
-      toast(
-        "⚠️ MAINTENANCE MODE ACTIVATED — App is now unreachable for users!",
-        "warning"
-      );
-    } else {
-      toast(`${section} configuration saved successfully!`, "success");
+  useEffect(() => { load(); }, []);
+
+  const startEdit = (s) => {
+    setEditKey(s.key);
+    setEditVal(String(s.value));
+  };
+
+  const cancelEdit = () => { setEditKey(null); setEditVal(""); };
+
+  const handleSave = async (s) => {
+    setSaving(true);
+    try {
+      await updatePricingSetting(s.key, editVal, s.value_type || "float");
+      setSettings((prev) => prev.map((x) => x.key === s.key ? { ...x, value: editVal } : x));
+      showToast(`"${s.key}" updated successfully.`);
+      cancelEdit();
+    } catch (err) {
+      showToast(err.response?.data?.message || `Failed to update "${s.key}".`, "error");
+    } finally {
+      setSaving(false);
     }
   };
 
+  const handleReloadCache = async () => {
+    setReloading(true);
+    try {
+      await reloadPricingCache();
+      showToast("Pricing cache reloaded successfully.");
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to reload cache.", "error");
+    } finally {
+      setReloading(false);
+    }
+  };
+
+  const groups = groupSettings(settings);
+
   return (
-    <PageWrapper
-      title="App Version & Config Management"
-      subtitle="Force updates, feature flags, maintenance mode and API settings — Super Admin only"
-      actions={
-        <button
-          className="btn-gold btn-sm"
-          onClick={() => saveConfig("All")}
-        >
-          💾 Save All Changes
-        </button>
-      }
-    >
-      <GlobalStyles />
+    <div style={{ fontFamily:"Outfit,sans-serif" }}>
+      <style>{`@keyframes gmPulse{0%,100%{opacity:1}50%{opacity:0.45}} @keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      {toast && <Toast msg={toast.msg} type={toast.type} onClose={()=>setToast(null)} />}
 
-      <MiniStatRow
-        items={[
-          {
-            label: "Current Version",
-            value: currentVersion,
-            icon: "📱",
-            color: "#34D399",
-          },
-          {
-            label: "Min Required",
-            value: minVersion,
-            icon: "⚡",
-            color: "#D4AF37",
-          },
-          {
-            label: "Active Features",
-            value:
-              String(flags.filter((f) => f.enabled).length) +
-              "/" +
-              flags.length,
-            icon: "🚩",
-            color: "#60A5FA",
-          },
-          {
-            label: "Maintenance Mode",
-            value: maintenanceMode ? "ON" : "OFF",
-            icon: "🔧",
-            color: maintenanceMode ? "#F87171" : "#34D399",
-          },
-          {
-            label: "Force Update",
-            value: forceUpdate ? "Active" : "Off",
-            icon: "🔄",
-            color: forceUpdate ? "#F59E0B" : "rgba(255,255,255,0.5)",
-          },
-          {
-            label: "API Rate Limit",
-            value: `${rateLimit}/min`,
-            icon: "⚙️",
-            color: "#A78BFA",
-          },
-        ]}
-      />
-
-      {maintenanceMode && (
-        <AlertBox type="error">
-          🔴 MAINTENANCE MODE IS ACTIVE — App is currently showing maintenance
-          screen to all users!
-        </AlertBox>
-      )}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 16,
-          marginBottom: 18,
-        }}
-      >
-        {/* Version Control */}
-        <Card style={{ padding: 22 }}>
-          <div
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "rgba(255,255,255,0.85)",
-              marginBottom: 4,
-            }}
-          >
-            📱 Version Control
-          </div>
-
-          <div
-            style={{
-              fontSize: 11,
-              color: "rgba(255,255,255,0.38)",
-              marginBottom: 18,
-            }}
-          >
-            Manage app version requirements
-          </div>
-
-          <FormGroup label="Current Live Version">
-            <input
-              className="gm-input"
-              value={currentVersion}
-              onChange={(e) => setCurrentVersion(e.target.value)}
-            />
-          </FormGroup>
-
-          <FormGroup
-            label="Minimum Required Version"
-            hint="Users below this version get force update screen"
-          >
-            <input
-              className="gm-input"
-              value={minVersion}
-              onChange={(e) => setMinVersion(e.target.value)}
-            />
-          </FormGroup>
-
-          <FormGroup label="Force Update">
-            <div style={{ paddingTop: 6 }}>
-              <Toggle
-                checked={forceUpdate}
-                onChange={(v) => {
-                  setForceUpdate(v);
-                  toast(
-                    v
-                      ? "Force update enabled — old users will be blocked!"
-                      : "Force update disabled",
-                    v ? "warning" : "success"
-                  );
-                }}
-                label="Force users to update (block old versions)"
-              />
-            </div>
-          </FormGroup>
-
-          <FormGroup label="Update Message">
-            <textarea
-              className="gm-input"
-              rows="2"
-              defaultValue="A new version is available. Please update the app to continue."
-              style={{ resize: "none" }}
-            />
-          </FormGroup>
-
-          <button
-            className="btn-gold btn-sm"
-            onClick={() => saveConfig("Version")}
-          >
-            Save Version Config
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:28, flexWrap:"wrap", gap:12 }}>
+        <div>
+          <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>App Configuration</h1>
+          <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Live pricing settings via /admin/pricing/settings</p>
+        </div>
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={handleReloadCache} disabled={reloading} style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 16px", background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.3)", borderRadius:10, color:"#a78bfa", fontSize:13, fontFamily:"Outfit,sans-serif", cursor:"pointer", opacity:reloading?0.6:1 }}>
+            <RotateCcw size={13} style={{ animation:reloading?"spin 1s linear infinite":undefined }} />
+            {reloading ? "Reloading…" : "Reload Cache"}
           </button>
-        </Card>
-
-        {/* Maintenance Mode */}
-        <Card
-          style={{
-            padding: 22,
-            border: maintenanceMode
-              ? "1px solid rgba(248,113,113,0.4)"
-              : "undefined",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: maintenanceMode
-                ? "#F87171"
-                : "rgba(255,255,255,0.85)",
-              marginBottom: 4,
-            }}
-          >
-            🔧 Maintenance Mode
-          </div>
-
-          <div
-            style={{
-              fontSize: 11,
-              color: "rgba(255,255,255,0.38)",
-              marginBottom: 18,
-            }}
-          >
-            Temporarily shut down the app for all users
-          </div>
-
-          <FormGroup label="Maintenance Status">
-            <div style={{ paddingTop: 6 }}>
-              <Toggle
-                checked={maintenanceMode}
-                onChange={(v) => {
-                  setMaintenanceMode(v);
-
-                  if (v) {
-                    toast(
-                      "MAINTENANCE MODE ON — App offline for users!",
-                      "error"
-                    );
-                  } else {
-                    toast("Maintenance mode OFF — App is live!", "success");
-                  }
-                }}
-                label={
-                  maintenanceMode
-                    ? "🔴 App is OFFLINE"
-                    : "🟢 App is LIVE"
-                }
-              />
-            </div>
-          </FormGroup>
-
-          <FormGroup label="Maintenance Message">
-            <textarea
-              className="gm-input"
-              rows="3"
-              value={maintenanceMsg}
-              onChange={(e) => setMaintenanceMsg(e.target.value)}
-              style={{ resize: "vertical" }}
-            />
-          </FormGroup>
-
-          <FormGroup label="Expected Duration">
-            <input
-              className="gm-input"
-              placeholder="e.g. 30 minutes"
-              defaultValue="30 minutes"
-            />
-          </FormGroup>
-
-          <FormGroup label="Schedule Maintenance">
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-              }}
-            >
-              <input type="date" className="gm-input" />
-              <input
-                type="time"
-                className="gm-input"
-                defaultValue="02:00"
-              />
-            </div>
-          </FormGroup>
-
-          <button
-            className={maintenanceMode ? "btn-success btn-sm" : "btn-danger btn-sm"}
-            onClick={() => setMaintenanceMode(!maintenanceMode)}
-            style={{
-              width: "100%",
-              justifyContent: "center",
-            }}
-          >
-            {maintenanceMode
-              ? "✅ Disable Maintenance Mode"
-              : "🔧 Enable Maintenance Mode"}
+          <button onClick={load} disabled={loading} style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 16px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.3)", borderRadius:10, color:"#D4AF37", fontSize:13, fontFamily:"Outfit,sans-serif", cursor:"pointer", opacity:loading?0.6:1 }}>
+            <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":undefined }} />
+            Refresh
           </button>
-        </Card>
+        </div>
       </div>
 
-      {/* API Rate Limit */}
-      <Card style={{ padding: 22, marginBottom: 18 }}>
-        <div
-          style={{
-            fontSize: 14,
-            fontWeight: 700,
-            color: "rgba(255,255,255,0.85)",
-            marginBottom: 4,
-          }}
-        >
-          ⚙️ API & System Settings
-        </div>
-
-        <div
-          style={{
-            fontSize: 11,
-            color: "rgba(255,255,255,0.38)",
-            marginBottom: 18,
-          }}
-        >
-          Rate limiting, timeout and security settings
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))",
-            gap: 16,
-          }}
-        >
-          <FormGroup
-            label="API Rate Limit (req/min)"
-            hint="Max API calls per user per minute"
-          >
-            <input
-              type="number"
-              className="gm-input"
-              value={rateLimit}
-              onChange={(e) => setRateLimit(e.target.value)}
-            />
-          </FormGroup>
-
-          <FormGroup
-            label="Admin Session Timeout (min)"
-            hint="Auto logout after inactivity"
-          >
-            <input
-              type="number"
-              className="gm-input"
-              value={sessionTimeout}
-              onChange={(e) => setSessionTimeout(e.target.value)}
-            />
-          </FormGroup>
-
-          <FormGroup
-            label="Max Ride Radius (km)"
-            hint="Maximum distance user can book for"
-          >
-            <input
-              type="number"
-              className="gm-input"
-              defaultValue="80"
-            />
-          </FormGroup>
-
-          <FormGroup
-            label="Driver Search Radius (km)"
-            hint="Radius to search for available drivers"
-          >
-            <input
-              type="number"
-              className="gm-input"
-              defaultValue="5"
-            />
-          </FormGroup>
-
-          <FormGroup
-            label="Ride Matching Timeout (sec)"
-            hint="Cancel matching if no driver found"
-          >
-            <input
-              type="number"
-              className="gm-input"
-              defaultValue="120"
-            />
-          </FormGroup>
-
-          <FormGroup
-            label="Max Cancellations Per Day"
-            hint="Auto-block user after N cancellations"
-          >
-            <input
-              type="number"
-              className="gm-input"
-              defaultValue="3"
-            />
-          </FormGroup>
-        </div>
-
-        <button
-          className="btn-gold btn-sm"
-          style={{ marginTop: 8 }}
-          onClick={() => saveConfig("API Settings")}
-        >
-          Save API Settings
-        </button>
-      </Card>
-
-      {/* Feature Flags */}
-      <Card style={{ padding: 22 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 18,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 700,
-                color: "rgba(255,255,255,0.85)",
-              }}
-            >
-              🚩 Feature Flags
-            </div>
-
-            <div
-              style={{
-                fontSize: 11,
-                color: "rgba(255,255,255,0.38)",
-                marginTop: 2,
-              }}
-            >
-              Toggle features ON/OFF without code deployment —{" "}
-              {flags.filter((f) => f.enabled).length}/{flags.length} active
-            </div>
-          </div>
-
-          <button
-            className="btn-outline btn-sm"
-            onClick={() => toast("Feature flags saved!", "success")}
-          >
-            Save Flags
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))",
-            gap: 10,
-          }}
-        >
-          {flags.map((f, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                background: f.enabled
-                  ? "rgba(212,175,55,0.04)"
-                  : "rgba(255,255,255,0.025)",
-                border: `1px solid ${
-                  f.enabled
-                    ? "rgba(212,175,55,0.18)"
-                    : "rgba(255,255,255,0.08)"
-                }`,
-                borderRadius: 12,
-                padding: "12px 16px",
-                transition: "all .2s",
-              }}
-            >
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  marginRight: 12,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: f.enabled
-                      ? "rgba(255,255,255,0.88)"
-                      : "rgba(255,255,255,0.5)",
-                    marginBottom: 2,
-                  }}
-                >
-                  {f.label}
-                </div>
-
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "rgba(255,255,255,0.35)",
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {f.desc}
-                </div>
-              </div>
-
-              <Toggle
-                checked={f.enabled}
-                onChange={() => toggleFlag(f.key)}
-              />
+      {loading ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
+          {Array(3).fill(0).map((_,i) => (
+            <div key={i} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
+              <div style={{ height:48, background:"rgba(212,175,55,0.05)", borderBottom:"1px solid rgba(212,175,55,0.08)" }} />
+              {Array(3).fill(0).map((_,j) => (
+                <div key={j} style={{ height:52, background:"rgba(255,255,255,0.02)", margin:"6px 16px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }} />
+              ))}
             </div>
           ))}
         </div>
-      </Card>
-    </PageWrapper>
-  );
-}
+      ) : settings.length === 0 ? (
+        <div style={{ textAlign:"center", padding:60 }}>
+          <div style={{ fontSize:32, marginBottom:12 }}>⚙️</div>
+          <div style={{ fontSize:14, color:"rgba(255,255,255,0.4)", fontWeight:600, marginBottom:6 }}>No settings returned from API</div>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.2)" }}>GET /admin/pricing/settings returned an empty list</div>
+        </div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
+          {Object.entries(groups).map(([groupName, items]) => (
+            <div key={groupName} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
 
-export default function AppConfigPage() {
-  return (
-    <ToastProvider>
-      <Content />
-    </ToastProvider>
+              {/* Group header */}
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 20px", background:"rgba(212,175,55,0.05)", borderBottom:"1px solid rgba(212,175,55,0.08)" }}>
+                <Settings size={14} color="rgba(212,175,55,0.7)" />
+                <span style={{ fontFamily:"Cinzel,serif", fontSize:14, fontWeight:600, color:"#fff" }}>{groupName}</span>
+                <span style={{ marginLeft:"auto", fontSize:11, color:"rgba(255,255,255,0.3)" }}>{items.length} setting{items.length!==1?"s":""}</span>
+              </div>
+
+              {/* Settings table */}
+              <div style={{ overflowX:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead>
+                    <tr>
+                      {["Key", "Value", "Type", "Description", "Action"].map((h) => (
+                        <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", borderBottom:"1px solid rgba(212,175,55,0.08)", whiteSpace:"nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((s) => {
+                      const isEditing = editKey === s.key;
+                      const tb = typeBadge(s.value_type);
+                      return (
+                        <tr key={s.key} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
+
+                          {/* Key */}
+                          <td style={{ padding:"14px 16px", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+                            <span style={{ fontFamily:"monospace", fontSize:12, color:"rgba(212,175,55,0.8)", background:"rgba(212,175,55,0.08)", padding:"3px 8px", borderRadius:6 }}>{s.key}</span>
+                          </td>
+
+                          {/* Value */}
+                          <td style={{ padding:"14px 16px", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+                            {isEditing ? (
+                              <input
+                                type={s.value_type === "integer" || s.value_type === "float" ? "number" : "text"}
+                                value={editVal}
+                                onChange={(e) => setEditVal(e.target.value)}
+                                step={s.value_type === "float" ? "0.01" : "1"}
+                                style={{ ...inputStyle }}
+                                autoFocus
+                                onFocus={(e) => e.target.style.borderColor="#D4AF37"}
+                                onBlur={(e) => e.target.style.borderColor="rgba(212,175,55,0.3)"}
+                              />
+                            ) : (
+                              <span style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.88)" }}>{s.value}</span>
+                            )}
+                          </td>
+
+                          {/* Type */}
+                          <td style={{ padding:"14px 16px", borderBottom:"1px solid rgba(255,255,255,0.03)" }}>
+                            <span style={{ padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:tb.bg, color:tb.color }}>{s.value_type || "—"}</span>
+                          </td>
+
+                          {/* Description */}
+                          <td style={{ padding:"14px 16px", borderBottom:"1px solid rgba(255,255,255,0.03)", fontSize:12, color:"rgba(255,255,255,0.45)", maxWidth:300 }}>
+                            {s.description || "—"}
+                          </td>
+
+                          {/* Action */}
+                          <td style={{ padding:"14px 16px", borderBottom:"1px solid rgba(255,255,255,0.03)", whiteSpace:"nowrap" }}>
+                            {isEditing ? (
+                              <div style={{ display:"flex", gap:8 }}>
+                                <button onClick={() => handleSave(s)} disabled={saving} style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", background:"rgba(34,197,94,0.12)", border:"1px solid rgba(34,197,94,0.3)", borderRadius:8, color:"#4ade80", fontSize:12, cursor:"pointer", opacity:saving?0.5:1 }}>
+                                  <Save size={12} />{saving?"Saving…":"Save"}
+                                </button>
+                                <button onClick={cancelEdit} disabled={saving} style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.5)", fontSize:12, cursor:"pointer" }}>
+                                  <X size={12} />Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={() => startEdit(s)} style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", background:"rgba(212,175,55,0.08)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:8, color:"#D4AF37", fontSize:12, cursor:"pointer" }}>
+                                <Edit2 size={12} />Edit
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

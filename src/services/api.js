@@ -1,7 +1,7 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
 
 function getToken() {
-  return localStorage.getItem('goMobilityAccessToken') || '';
+  return localStorage.getItem('access_token') || localStorage.getItem('goMobilityAccessToken') || '';
 }
 
 async function request(path, options = {}) {
@@ -27,8 +27,11 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    }).then(res => {
-      if (!res.ok) throw new Error('Signin failed');
+    }).then(async res => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || err.error || `OTP send failed (${res.status})`);
+      }
       return res.json();
     }),
 
@@ -37,13 +40,18 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    }).then(res => {
-      if (!res.ok) throw new Error('OTP verification failed');
+    }).then(async res => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || err.error || `OTP verification failed (${res.status})`);
+      }
       return res.json();
     }),
 
   // fetch current user using access token
   getProfile: () => request('/auth/me'),
+
+  logout: () => request('/auth/logout', { method: 'POST' }),
 
   // ── Admin ──────────────────────────────────────────────────────
   getDashboard: () => request('/admin/dashboard'),

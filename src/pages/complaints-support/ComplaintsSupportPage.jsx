@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, Filter, CircleDot, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, Cell } from "recharts";
-import { api } from "../../services/api.js";
+import { getSupportTickets, replyToTicket } from "../../api/admin";
 
 function normalizeTicket(t) {
   return {
@@ -49,7 +49,7 @@ export default function ComplaintsSupportPage() {
   const [reply, setReply] = useState("");
 
   useEffect(() => {
-    api.getTickets()
+    getSupportTickets()
       .then(res => {
         const raw = res?.data?.tickets || res?.tickets || res?.data || [];
         const normalized = Array.isArray(raw) ? raw.map(normalizeTicket) : [];
@@ -84,7 +84,7 @@ export default function ComplaintsSupportPage() {
 
   const sendReply = () => {
     if (!selected || !reply.trim()) return;
-    api.replyToTicket(selected.ticketId, reply).catch(() => {});
+    replyToTicket(selected.ticketId, reply).catch(() => {});
     setReply("");
   };
 

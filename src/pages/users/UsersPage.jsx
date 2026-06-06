@@ -1,167 +1,211 @@
-import { useState, useEffect } from "react";
-import { useToast, ToastProvider, PageWrapper, TableCard, FilterBar, SearchBox, Pagination, Badge, AvatarCell, Modal, FormGroup, MiniStatRow, AlertBox, Card, GlobalStyles } from "../../components/ui/index.jsx";
-import { api } from "../../services/api.js";
-import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { GoldTooltip } from "../../components/ui/index.jsx";
+import { useState, useEffect, useCallback } from "react";
+import { Search, ChevronLeft, ChevronRight, UserCheck, UserX, Eye, X, Wallet } from "lucide-react";
+import { getUsers, updateUserStatus, getUserById } from "../../api/admin";
 
-const ACT = [{m:"Nov",r:8},{m:"Dec",r:14},{m:"Jan",r:11},{m:"Feb",r:19},{m:"Mar",r:22},{m:"Apr",r:17}];
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+const fmtDateTime = (d) => d ? new Date(d).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "—";
+const fmtRupee = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").format(n) : "—";
 
-function normalizeUser(u) {
-  return {
-    id: u.id || u.user_id,
-    name: u.full_name || u.name || 'Unknown',
-    email: u.email || '',
-    phone: u.phone || u.phone_number || '',
-    rides: u.total_rides ?? u.rides ?? 0,
-    wallet: u.wallet_balance ?? u.wallet ?? 0,
-    rating: u.rating ? parseFloat(u.rating).toFixed(1) : '0.0',
-    status: u.status === 'active' ? 'Active' : u.status === 'blocked' ? 'Blocked' : u.status || 'Active',
-    joined: u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
-    referrals: u.total_referrals ?? u.referrals ?? 0,
-  };
-}
+const Badge = ({ active }) => (
+  <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600,
+    background: active ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.12)",
+    color: active ? "#4ade80" : "#f87171",
+    border: `1px solid ${active ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.25)"}` }}>
+    {active ? "Active" : "Inactive"}
+  </span>
+);
 
-function ProfileModal({ user, onClose }) {
-  const [tab, setTab] = useState("info");
+const Skeleton = () => (
+  <tr><td colSpan={7}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }} /></td></tr>
+);
+
+const Toast = ({ msg, type, onClose }) => (
+  <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background: type==="error" ? "#7f1d1d" : "#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", maxWidth:360 }}>
+    <span style={{ flex:1 }}>{msg}</span>
+    <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer", padding:0 }}><X size={14}/></button>
+  </div>
+);
+
+const UserModal = ({ user, onClose }) => {
   if (!user) return null;
-  const init = user.name.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2);
+  const name = user.full_name || user.name || "—";
   return (
-    <Modal open={!!user} onClose={onClose} title="User Profile" maxWidth={600}>
-      <div style={{display:"flex",alignItems:"center",gap:14,padding:"0 0 18px",borderBottom:"1px solid rgba(212,175,55,0.12)",marginBottom:16}}>
-        <div style={{width:52,height:52,borderRadius:"50%",background:"linear-gradient(135deg,#D4AF37,#b8920f)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:"#04081A",flexShrink:0}}>{init}</div>
-        <div style={{flex:1}}>
-          <div style={{fontSize:16,fontWeight:700,color:"rgba(255,255,255,0.9)",fontFamily:"Cinzel,serif"}}>{user.name}</div>
-          <div style={{fontSize:12,color:"rgba(255,255,255,0.38)",marginTop:2}}>{user.email}</div>
-          <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}><Badge status={user.status}/><span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:100,fontSize:10.5,fontWeight:600,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.24)",color:"#60A5FA"}}>+91 {user.phone}</span></div>
+    <div style={{ position:"fixed", inset:0, zIndex:999, background:"rgba(0,0,0,0.7)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
+      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:32, width:440, maxWidth:"90vw" }} onClick={(e)=>e.stopPropagation()}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+          <h3 style={{ fontFamily:"Cinzel,serif", color:"#fff", fontSize:16, margin:0 }}>User Details</h3>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.06)", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}><X size={14}/></button>
         </div>
-        <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:10,color:"rgba(255,255,255,0.35)"}}>Wallet</div><div style={{fontSize:22,fontWeight:800,color:"#D4AF37",fontFamily:"monospace"}}>Rs{user.wallet.toLocaleString()}</div></div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
-        {[{l:"Rides",v:user.rides,c:"#D4AF37"},{l:"Referrals",v:user.referrals,c:"#60A5FA"},{l:"Rating",v:user.rating+"★",c:"#34D399"},{l:"Wallet",v:"Rs"+user.wallet,c:"#A78BFA"}].map((s,i)=>(
-          <div key={i} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(212,175,55,0.1)",borderRadius:10,padding:"10px",textAlign:"center"}}>
-            <div style={{fontSize:16,fontWeight:800,color:s.c,fontFamily:"monospace"}}>{s.v}</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:3,fontFamily:"Outfit,sans-serif"}}>{s.l}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{marginBottom:12}}>
-        <div style={{fontSize:10,color:"rgba(212,175,55,0.5)",marginBottom:6,fontFamily:"Outfit,sans-serif",textTransform:"uppercase",letterSpacing:"0.8px"}}>Ride Activity (6 Months)</div>
-        <ResponsiveContainer width="100%" height={70}>
-          <AreaChart data={ACT} margin={{top:4,right:4,left:0,bottom:0}}>
-            <defs><linearGradient id="uAF" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#D4AF37" stopOpacity={0.3}/><stop offset="100%" stopColor="#D4AF37" stopOpacity={0}/></linearGradient></defs>
-            <XAxis dataKey="m" tick={{fill:"rgba(255,255,255,0.3)",fontSize:9}} axisLine={false} tickLine={false}/>
-            <Tooltip content={<GoldTooltip/>}/>
-            <Area type="monotone" dataKey="r" name="Rides" stroke="#D4AF37" strokeWidth={2} fill="url(#uAF)" dot={{r:2,fill:"#D4AF37",strokeWidth:0}}/>
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="tab-nav" style={{marginBottom:12}}>
-        {[{id:"info",l:"Info"},{id:"rides",l:"Ride History"},{id:"txns",l:"Transactions"}].map(t=>(
-          <button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}>{t.l}</button>
-        ))}
-      </div>
-      {tab==="info" && [["Phone","+91 "+user.phone],["Email",user.email],["Status",user.status],["Total Rides",user.rides],["Wallet","Rs"+user.wallet.toLocaleString()],["Rating",user.rating+" ★"],["Referrals",user.referrals],["Joined",user.joined]].map(([l,v],i)=>(
-        <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:"1px solid rgba(212,175,55,0.07)",fontSize:13,fontFamily:"Outfit,sans-serif"}}>
-          <span style={{color:"rgba(255,255,255,0.4)"}}>{l}</span><span style={{color:"rgba(255,255,255,0.85)",fontWeight:500}}>{String(v)}</span>
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          {[
+            ["ID",      user.id || "—"],
+            ["Name",    name],
+            ["Phone",   user.phone_number || "—"],
+            ["Email",   user.email || "—"],
+            ["Wallet",  fmtRupee(user.wallet_balance)],
+            ["Status",  user.is_active ? "Active" : "Inactive"],
+            ["Joined",  fmtDateTime(user.created_at)],
+          ].map(([l,v]) => (
+            <div key={l} style={{ display:"flex", gap:12 }}>
+              <span style={{ width:80, fontSize:12, color:"rgba(255,255,255,0.4)", flexShrink:0 }}>{l}</span>
+              <span style={{ fontSize:13, color:"rgba(255,255,255,0.85)", fontWeight:500 }}>{String(v)}</span>
+            </div>
+          ))}
         </div>
-      ))}
-      {tab==="rides" && <div style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}><div style={{fontSize:32,marginBottom:10}}>🚕</div>Ride history not available via API</div>}
-      {tab==="txns" && <div style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}><div style={{fontSize:32,marginBottom:10}}>💳</div>Transaction history not available via API</div>}
-    </Modal>
+      </div>
+    </div>
   );
-}
+};
 
-function Content() {
-  const toast = useToast();
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState(""), [sf, setSf] = useState(""), [sort, setSort] = useState("newest");
-  const [walletModal, setWalletModal] = useState(false), [profileUser, setProfileUser] = useState(null);
-  const [selUser, setSelUser] = useState(null), [wAmt, setWAmt] = useState(""), [wAction, setWAction] = useState("Add Balance");
+export default function UsersPage() {
+  const [users, setUsers]       = useState([]);
+  const [total, setTotal]       = useState(0);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState("");
+  const [status, setStatus]     = useState("");
+  const [offset, setOffset]     = useState(0);
+  const [toast, setToast]       = useState(null);
+  const [modal, setModal]       = useState(null);
+  const [toggling, setToggling] = useState({});
+  const LIMIT = 20;
 
-  useEffect(() => {
-    api.getUsers({ limit: 50 })
-      .then(res => {
-        const raw = res?.data?.users || res?.users || res?.data || [];
-        setUsers(Array.isArray(raw) ? raw.map(normalizeUser) : []);
-      })
-      .catch(() => toast("Failed to load users", "error"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const filtered = users.filter(u => {
-    const q = search.toLowerCase();
-    return (u.name.toLowerCase().includes(q)||u.email.includes(q)||u.phone.includes(q)) && (!sf||u.status===sf);
-  }).sort((a,b) => sort==="rides"?b.rides-a.rides:sort==="rating"?parseFloat(b.rating)-parseFloat(a.rating):sort==="wallet"?b.wallet-a.wallet:0);
-
-  const toggle = (i) => {
-    const u = users[i];
-    const ns = u.status === "Blocked" ? "Active" : "Blocked";
-    api.updateUserStatus(u.id, ns.toLowerCase())
-      .catch(() => {})
-      .finally(() => {});
-    setUsers(users.map((x, j) => j === i ? { ...x, status: ns } : x));
-    toast(`User ${ns === "Blocked" ? "blocked" : "unblocked"} successfully`, ns === "Blocked" ? "error" : "success");
+  const showToast = (msg, type="success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
   };
 
-  if (loading) return (
-    <PageWrapper title="User Management" subtitle="Loading...">
-      <GlobalStyles/>
-      <div style={{ textAlign: 'center', padding: 60, color: 'rgba(255,255,255,0.35)', fontFamily: 'Outfit,sans-serif' }}>Loading users...</div>
-    </PageWrapper>
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = { limit: LIMIT, offset };
+    if (search) params.search = search;
+    if (status) params.status = status;
+    getUsers(params)
+      .then((res) => {
+        const d = res.data?.data || res.data || {};
+        setUsers(d.users || d.items || d.data || []);
+        setTotal(d.pagination?.total || d.total || 0);
+      })
+      .catch(() => showToast("Failed to load users.", "error"))
+      .finally(() => setLoading(false));
+  }, [search, status, offset]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSearch = (e) => { setSearch(e.target.value); setOffset(0); };
+  const handleStatus = (e) => { setStatus(e.target.value); setOffset(0); };
+
+  const toggleStatus = async (user) => {
+    if (!window.confirm(`${user.is_active ? "Deactivate" : "Activate"} ${user.full_name || "this user"}?`)) return;
+    setToggling((p) => ({ ...p, [user.id]: true }));
+    try {
+      await updateUserStatus(user.id, !user.is_active);
+      showToast(`User ${!user.is_active ? "activated" : "deactivated"} successfully.`);
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, is_active: !u.is_active } : u));
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to update user.", "error");
+    } finally {
+      setToggling((p) => ({ ...p, [user.id]: false }));
+    }
+  };
+
+  const openModal = async (userId) => {
+    try {
+      const res = await getUserById(userId);
+      setModal(res.data?.data || res.data || {});
+    } catch {
+      showToast("Failed to load user details.", "error");
+    }
+  };
+
+  const totalPages = Math.ceil(total / LIMIT);
+  const currentPage = Math.floor(offset / LIMIT) + 1;
+
+  const TH = ({ children }) => (
+    <th style={{ padding:"12px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", borderBottom:"1px solid rgba(212,175,55,0.1)", whiteSpace:"nowrap" }}>{children}</th>
+  );
+  const TD = ({ children, style }) => (
+    <td style={{ padding:"14px 16px", fontSize:13, color:"rgba(255,255,255,0.8)", borderBottom:"1px solid rgba(255,255,255,0.04)", ...style }}>{children}</td>
   );
 
   return (
-    <PageWrapper title="User Management" subtitle={`${users.length.toLocaleString()} registered passengers — click any row to view full profile`}
-      actions={<button className="btn-outline btn-sm" onClick={()=>toast("Exporting users CSV...","success")}>Export CSV</button>}>
-      <GlobalStyles/>
-      <MiniStatRow items={[{label:"Total Users",value:String(users.length),icon:"👥"},{label:"Active",value:String(users.filter(u=>u.status==="Active").length),icon:"✅",color:"#34D399"},{label:"Blocked",value:String(users.filter(u=>u.status==="Blocked").length),icon:"🚫",color:"#F87171"},{label:"New This Month",value:"—",icon:"🆕",color:"#D4AF37"}]}/>
-      <TableCard title="All Users" icon="👥"
-        actions={<>
-          <select className="gm-input btn-sm" style={{width:130}} value={sf} onChange={e=>setSf(e.target.value)}><option value="">All Status</option><option value="Active">Active</option><option value="Blocked">Blocked</option></select>
-          <select className="gm-input btn-sm" style={{width:150}} value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Sort: Newest</option><option value="rides">Sort: Most Rides</option><option value="rating">Sort: Rating</option><option value="wallet">Sort: Wallet</option></select>
-        </>}
-        footer={<Pagination total={String(users.length)} showing={`Showing 1-${Math.min(15,users.length)} of ${users.length}`}/>}>
-        <FilterBar><SearchBox placeholder="Search by name, email, phone..." value={search} onChange={setSearch}/></FilterBar>
-        <table className="gm-table">
-          <thead><tr><th>User</th><th>Phone</th><th>Rides</th><th>Wallet</th><th>Rating</th><th>Referrals</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
-          <tbody>{filtered.map((u,i)=>(
-            <tr key={i} style={{cursor:"pointer"}} onClick={()=>setProfileUser(u)}>
-              <td><AvatarCell name={u.name} sub={u.email}/></td>
-              <td style={{fontFamily:"monospace",fontSize:12}}>+91 {u.phone}</td>
-              <td>{u.rides}</td>
-              <td style={{color:"#D4AF37",fontFamily:"monospace"}}>Rs{u.wallet.toLocaleString()}</td>
-              <td>★ {u.rating}</td>
-              <td style={{color:"#60A5FA"}}>{u.referrals}</td>
-              <td><Badge status={u.status}/></td>
-              <td style={{fontSize:12}}>{u.joined}</td>
-              <td onClick={e=>e.stopPropagation()}>
-                <div style={{display:"flex",gap:5}}>
-                  <button className="btn-outline btn-xs" onClick={()=>{setSelUser(u);setWalletModal(true);}}>Wallet</button>
-                  <button className={`${u.status==="Blocked"?"btn-success":"btn-danger"} btn-xs`} onClick={()=>toggle(i)}>{u.status==="Blocked"?"Unblock":"Block"}</button>
-                </div>
-              </td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </TableCard>
-      <ProfileModal user={profileUser} onClose={()=>setProfileUser(null)}/>
-      <Modal open={walletModal} onClose={()=>setWalletModal(false)} title="Wallet Credit / Debit">
-        {selUser&&<>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,padding:"12px",background:"rgba(212,175,55,0.05)",border:"1px solid rgba(212,175,55,0.15)",borderRadius:12}}>
-            <AvatarCell name={selUser.name} sub={selUser.email}/>
-            <div style={{marginLeft:"auto",textAlign:"right"}}><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Current Balance</div><div style={{fontSize:20,fontWeight:800,color:"#D4AF37",fontFamily:"monospace"}}>Rs{selUser.wallet.toLocaleString()}</div></div>
+    <div style={{ fontFamily:"Outfit,sans-serif" }}>
+      <style>{`@keyframes gmPulse{0%,100%{opacity:1}50%{opacity:0.45}}`}</style>
+
+      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+      <UserModal user={modal} onClose={() => setModal(null)} />
+
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Users</h1>
+        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Total: {total} users</p>
+      </div>
+
+      <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
+        <div style={{ position:"relative", flex:1, minWidth:200 }}>
+          <Search size={14} color="rgba(255,255,255,0.3)" style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)" }} />
+          <input value={search} onChange={handleSearch} placeholder="Search name or phone…" style={{ width:"100%", height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, paddingLeft:36, paddingRight:12, color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }} />
+        </div>
+        <select value={status} onChange={handleStatus} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr>
+              <TH>Name</TH><TH>Phone</TH><TH>Wallet</TH>
+              <TH>Status</TH><TH>Joined</TH><TH>Actions</TH>
+            </tr></thead>
+            <tbody>
+              {loading
+                ? Array(6).fill(0).map((_,i) => <Skeleton key={i} />)
+                : users.length === 0
+                  ? <tr><td colSpan={6} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No users found</td></tr>
+                  : users.map((u) => (
+                    <tr key={u.id} style={{ transition:"background .15s" }} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
+                      <TD><div style={{ fontWeight:600, color:"#fff" }}>{u.full_name || u.name || "—"}</div></TD>
+                      <TD>{u.phone_number || "—"}</TD>
+                      <TD>
+                        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                          <Wallet size={12} color="#D4AF37" />
+                          <span style={{ color:"#D4AF37", fontWeight:600 }}>{fmtRupee(u.wallet_balance)}</span>
+                        </div>
+                      </TD>
+                      <TD><Badge active={u.is_active} /></TD>
+                      <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDate(u.created_at)}</TD>
+                      <TD>
+                        <div style={{ display:"flex", gap:8 }}>
+                          <button onClick={() => openModal(u.id)} title="View Details" style={{ width:32, height:32, borderRadius:8, border:"1px solid rgba(212,175,55,0.2)", background:"transparent", cursor:"pointer", color:"#D4AF37", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                            <Eye size={14} />
+                          </button>
+                          <button onClick={() => toggleStatus(u)} disabled={toggling[u.id]} title={u.is_active ? "Deactivate" : "Activate"} style={{ width:32, height:32, borderRadius:8, border:"none", background: u.is_active ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)", cursor:"pointer", color: u.is_active ? "#f87171" : "#4ade80", display:"flex", alignItems:"center", justifyContent:"center", opacity:toggling[u.id]?0.5:1 }}>
+                            {u.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
+                          </button>
+                        </div>
+                      </TD>
+                    </tr>
+                  ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        {total > LIMIT && (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
+            <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>Page {currentPage} of {totalPages} · {total} total</span>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={() => setOffset(Math.max(0, offset - LIMIT))} disabled={offset===0} style={{ width:32, height:32, borderRadius:8, border:"1px solid rgba(212,175,55,0.2)", background:"transparent", cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center", opacity:offset===0?0.3:1 }}>
+                <ChevronLeft size={14} />
+              </button>
+              <button onClick={() => setOffset(offset + LIMIT)} disabled={offset + LIMIT >= total} style={{ width:32, height:32, borderRadius:8, border:"1px solid rgba(212,175,55,0.2)", background:"transparent", cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center", opacity:offset+LIMIT>=total?0.3:1 }}>
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
-          <FormGroup label="Action"><select className="gm-input" value={wAction} onChange={e=>setWAction(e.target.value)}><option>Add Balance</option><option>Deduct Balance</option></select></FormGroup>
-          <FormGroup label="Amount (Rs)"><input type="number" className="gm-input" placeholder="Enter amount" value={wAmt} onChange={e=>setWAmt(e.target.value)}/></FormGroup>
-          <FormGroup label="Reason"><textarea className="gm-input" rows="3" placeholder="Reason for this transaction..." style={{resize:"vertical"}}/></FormGroup>
-          <div style={{display:"flex",gap:8}}>
-            <button className="btn-outline" onClick={()=>setWalletModal(false)}>Cancel</button>
-            <button className="btn-gold" onClick={()=>{setWalletModal(false);toast("Wallet updated successfully!","success");setWAmt("");}}>Confirm</button>
-          </div>
-        </>}
-      </Modal>
-    </PageWrapper>
+        )}
+      </div>
+    </div>
   );
 }
-export default function UsersPage() { return <ToastProvider><Content/></ToastProvider>; }

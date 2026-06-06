@@ -1,68 +1,139 @@
-import { useState, useEffect } from "react";
-import { useToast, ToastProvider, PageWrapper, TableCard, FilterBar, SearchBox, Pagination, Badge, AvatarCell, MiniStatRow, Card, GlobalStyles, GoldTooltip } from "../../components/ui/index.jsx";
-import { api } from "../../services/api.js";
-import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, CartesianGrid } from "recharts";
+import { useState, useEffect, useCallback } from "react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { getTransactions } from "../../api/admin";
 
-function normalizeTxn(t) {
-  return {
-    id: t.transaction_number || t.id || t.txn_id || '',
-    user: t.user_name || t.user?.full_name || t.user || 'Unknown',
-    type: t.type || t.transaction_type || 'Payment',
-    amount: parseFloat(t.amount) || 0,
-    method: t.payment_method || t.method || 'N/A',
-    status: t.status ? (t.status.charAt(0).toUpperCase() + t.status.slice(1)) : 'Completed',
-    date: t.created_at ? new Date(t.created_at).toLocaleString('en-IN') : '',
-  };
-}
+const fmtDateTime = (d) => d ? new Date(d).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "—";
+const fmtRupee = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").format(n) : "—";
 
-function Content() {
-  const toast=useToast(), [tab,setTab]=useState("txns"), [search,setSearch]=useState(""), [tf,setTf]=useState("");
-  const [txns, setTxns] = useState([]);
+const BADGE = {
+  credit:  { color:"#4ade80", bg:"rgba(34,197,94,0.12)",   border:"rgba(34,197,94,0.3)"  },
+  debit:   { color:"#f87171", bg:"rgba(239,68,68,0.12)",   border:"rgba(239,68,68,0.3)"  },
+  success: { color:"#4ade80", bg:"rgba(34,197,94,0.12)",   border:"rgba(34,197,94,0.3)"  },
+  pending: { color:"#f59e0b", bg:"rgba(245,158,11,0.12)",  border:"rgba(245,158,11,0.3)" },
+  failed:  { color:"#f87171", bg:"rgba(239,68,68,0.12)",   border:"rgba(239,68,68,0.3)"  },
+  refunded:{ color:"#a78bfa", bg:"rgba(167,139,250,0.12)", border:"rgba(167,139,250,0.3)"},
+};
+
+const Badge = ({ label, bkey }) => {
+  const s = BADGE[bkey] || { color:"rgba(255,255,255,0.5)", bg:"rgba(255,255,255,0.06)", border:"rgba(255,255,255,0.1)" };
+  return <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:s.bg, color:s.color, border:`1px solid ${s.border}`, textTransform:"capitalize" }}>{label}</span>;
+};
+
+const Toast = ({ msg, type, onClose }) => (
+  <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background:type==="error"?"#7f1d1d":"#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)" }}>
+  <span style={{ flex:1 }}>{msg}</span>
+  <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer" }}><X size={14}/></button>
+  </div>
+);
+
+export default function FinancePage() {
+  const [txns, setTxns]       = useState([]);
+  const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
+  const [type, setType]       = useState("");
+  const [category, setCat]    = useState("");
+  const [status, setStatus]   = useState("");
+  const [startDate, setStart] = useState("");
+  const [endDate, setEnd]     = useState("");
+  const [offset, setOffset]   = useState(0);
+  const [toast, setToast]     = useState(null);
+  const LIMIT = 20;
 
-  useEffect(() => {
-    api.getTransactions({ limit: 50 })
-      .then(res => {
-        const raw = res?.data?.transactions || res?.transactions || res?.data || [];
-        setTxns(Array.isArray(raw) ? raw.map(normalizeTxn) : []);
+  const showToast = (msg, type="error") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = { limit:LIMIT, offset };
+    if (type)      params.type       = type;
+    if (category)  params.category   = category;
+    if (status)    params.status     = status;
+    if (startDate) params.start_date = startDate;
+    if (endDate)   params.end_date   = endDate;
+    getTransactions(params)
+      .then((res) => {
+        const d = res.data?.data || res.data || {};
+        setTxns(d.transactions || d.items || d.data || []);
+        setTotal(d.pagination?.total || d.total || 0);
       })
-      .catch(() => toast("Failed to load transactions", "error"))
+      .catch(() => showToast("Failed to load transactions."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [type, category, status, startDate, endDate, offset]);
 
-  const filtered=txns.filter(t=>{const q=search.toLowerCase();return(t.user.toLowerCase().includes(q)||t.id.includes(q))&&(!tf||t.type===tf);});
+  useEffect(() => { load(); }, [load]);
 
-  if (loading) return (
-    <PageWrapper title="Finance & Payments" subtitle="Loading...">
-      <GlobalStyles/>
-      <div style={{textAlign:'center',padding:60,color:'rgba(255,255,255,0.35)',fontFamily:'Outfit,sans-serif'}}>Loading transactions...</div>
-    </PageWrapper>
+  const totalPages = Math.ceil(total / LIMIT);
+  const currentPage = Math.floor(offset / LIMIT) + 1;
+
+  const TH = ({ c }) => <th style={{ padding:"12px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", borderBottom:"1px solid rgba(212,175,55,0.1)", whiteSpace:"nowrap" }}>{c}</th>;
+  const TD = ({ children, style }) => <td style={{ padding:"14px 16px", fontSize:13, color:"rgba(255,255,255,0.8)", borderBottom:"1px solid rgba(255,255,255,0.04)", ...style }}>{children}</td>;
+
+  const sel = (val, set, opts) => (
+    <select value={val} onChange={(e)=>{set(e.target.value);setOffset(0);}} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
+      {opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+    </select>
   );
 
   return (
-    <PageWrapper title="Finance & Payments" subtitle="All transactions, failed payments, revenue and platform fee log"
-      actions={<><button className="btn-outline btn-sm" onClick={()=>toast("Exporting CSV...","success")}>Export CSV</button><button className="btn-gold btn-sm" onClick={()=>toast("Tax report generated!","success")}>Tax Report</button></>}>
-      <GlobalStyles/>
-      <MiniStatRow items={[{label:"Today",value:"Rs18,450",icon:"📈",color:"#34D399"},{label:"This Week",value:"Rs1,98,750",icon:"💳",color:"#D4AF37"},{label:"This Month",value:"Rs8,42,200",icon:"💰",color:"#D4AF37"},{label:"Platform Fee",value:"Rs1,26,330",icon:"🏦",color:"#60A5FA"},{label:"Failed Today",value:"10",icon:"❌",color:"#F87171"},{label:"Pending Refunds",value:"5",icon:"↩",color:"#F59E0B"}]}/>
-      <div className="tab-nav">{[{id:"txns",l:"All Transactions"},{id:"failed",l:"Failed Payments"},{id:"platform",l:"Platform Fee Log"}].map(t=><button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}>{t.l}</button>)}</div>
-      {tab==="txns"&&<TableCard title="All Transactions" icon="💳" footer={<Pagination showing="Showing 1-15 of 8,420"/>}>
-        <FilterBar><SearchBox placeholder="Search..." value={search} onChange={setSearch}/><select className="gm-input" style={{width:160}} value={tf} onChange={e=>setTf(e.target.value)}><option value="">All Types</option><option>Ride Payment</option><option>Wallet Top-up</option><option>Refund</option><option>Platform Fee</option></select><input type="date" className="gm-input" style={{width:140}}/></FilterBar>
-        <table className="gm-table"><thead><tr><th>Txn ID</th><th>User</th><th>Type</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead>
-        <tbody>{filtered.map((t,i)=><tr key={i}><td style={{fontFamily:"monospace",color:"#D4AF37",fontSize:12}}>{t.id}</td><td>{t.user}</td><td><span style={{display:"inline-flex",padding:"3px 8px",borderRadius:100,fontSize:10.5,fontWeight:600,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.24)",color:"#60A5FA"}}>{t.type}</span></td><td style={{color:"#D4AF37",fontFamily:"monospace"}}>Rs{t.amount.toLocaleString()}</td><td>{t.method}</td><td><Badge status={t.status}/></td><td style={{fontSize:12}}>{t.date}</td></tr>)}</tbody></table>
-      </TableCard>}
-      {tab==="failed"&&<TableCard title="Failed Gateway Payments" icon="❌">
-        <div style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}>
-          <div style={{fontSize:32,marginBottom:10}}>❌</div>
-          Failed payments data not available via API
+    <div style={{ fontFamily:"Outfit,sans-serif" }}>
+      <style>{`@keyframes gmPulse{0%,100%{opacity:1}50%{opacity:0.45}}`}</style>
+      {toast && <Toast msg={toast.msg} type={toast.type} onClose={()=>setToast(null)} />}
+
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Transactions</h1>
+        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Total: {total} transactions</p>
+      </div>
+
+      <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
+        {sel(type, setType, [["","All Types"],["credit","Credit"],["debit","Debit"]])}
+        {sel(category, setCat, [["","All Categories"],["ride_payment","Ride Payment"],["ride_refund","Ride Refund"],["wallet_recharge","Wallet Recharge"],["referral_bonus","Referral Bonus"],["cancellation_fee","Cancellation Fee"],["withdrawal","Withdrawal"]])}
+        {sel(status, setStatus, [["","All Status"],["pending","Pending"],["success","Success"],["failed","Failed"],["refunded","Refunded"]])}
+        <input type="date" value={startDate} onChange={(e)=>{setStart(e.target.value);setOffset(0);}} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 12px", color:"rgba(255,255,255,0.7)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif" }} />
+        <input type="date" value={endDate} onChange={(e)=>{setEnd(e.target.value);setOffset(0);}} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 12px", color:"rgba(255,255,255,0.7)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif" }} />
+        {(type||category||status||startDate||endDate) && (
+          <button onClick={()=>{setType("");setCat("");setStatus("");setStart("");setEnd("");setOffset(0);}} style={{ height:40, padding:"0 14px", background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:10, color:"#f87171", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>Clear</button>
+        )}
+      </div>
+
+      <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr>
+              {["Txn Number","User","Phone","Amount","Type","Category","Status","Date"].map((c)=><TH key={c} c={c}/>)}
+            </tr></thead>
+            <tbody>
+              {loading
+                ? Array(6).fill(0).map((_,i)=>(
+                    <tr key={i}><td colSpan={8}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
+                  ))
+                : txns.length === 0
+                  ? <tr><td colSpan={8} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No transactions found</td></tr>
+                  : txns.map((t, idx) => (
+                    <tr key={t.transaction_number || t.id || idx} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
+                      <TD><span style={{ color:"rgba(212,175,55,0.7)", fontFamily:"monospace", fontSize:11 }}>{t.transaction_number || t.id || "—"}</span></TD>
+                      <TD><div style={{ fontWeight:500 }}>{t.user_name || t.user?.name || "—"}</div></TD>
+                      <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{t.user_phone || "—"}</TD>
+                      <TD><span style={{ fontWeight:700, color: t.type==="credit"?"#4ade80":"#f87171" }}>{fmtRupee(t.amount)}</span></TD>
+                      <TD><Badge label={t.type || "—"} bkey={t.type} /></TD>
+                      <TD><span style={{ color:"rgba(255,255,255,0.5)", fontSize:12, textTransform:"capitalize" }}>{(t.category||"—").replace(/_/g," ")}</span></TD>
+                      <TD><Badge label={t.status || "—"} bkey={t.status} /></TD>
+                      <TD style={{ fontSize:12, color:"rgba(255,255,255,0.45)" }}>{fmtDateTime(t.created_at)}</TD>
+                    </tr>
+                  ))
+              }
+            </tbody>
+          </table>
         </div>
-      </TableCard>}
-      {tab==="platform"&&<TableCard title="Platform Fee Log" icon="🏦">
-        <div style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}>
-          <div style={{fontSize:32,marginBottom:10}}>🏦</div>
-          Platform fee log not available via API
-        </div>
-      </TableCard>}
-    </PageWrapper>
+        {total > LIMIT && (
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
+            <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>Page {currentPage} of {totalPages} · {total} total</span>
+            <div style={{ display:"flex", gap:8 }}>
+              {[{icon:<ChevronLeft size={14}/>,dis:offset===0,fn:()=>setOffset(Math.max(0,offset-LIMIT))},{icon:<ChevronRight size={14}/>,dis:offset+LIMIT>=total,fn:()=>setOffset(offset+LIMIT)}].map((b,i)=>(
+                <button key={i} onClick={b.fn} disabled={b.dis} style={{ width:32, height:32, borderRadius:8, border:"1px solid rgba(212,175,55,0.2)", background:"transparent", cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center", opacity:b.dis?0.3:1 }}>{b.icon}</button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
-export default function FinancePage() { return <ToastProvider><Content/></ToastProvider>; }

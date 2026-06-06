@@ -1,1160 +1,420 @@
-import { useState, useEffect } from "react";
-import {
-  CarFront,
-  CircleDot,
-  Clock3,
-  MapPin,
-  Navigation,
-  User,
-  ArrowUpRight,
-  Activity,
-  Route,
-  ShieldCheck,
-  TimerReset,
-} from "lucide-react";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  Tooltip,
-  BarChart,
-  Bar,
-  Cell,
-} from "recharts";
-import { api } from "../../services/api.js";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Search, ChevronLeft, ChevronRight, X, MapPin, RefreshCw } from "lucide-react";
+import { getRides } from "../../api/admin";
 
-const mapPins = [
-  { id: 1, x: "9%", y: "18%", type: "driver" },
-  { id: 2, x: "24%", y: "31%", type: "car" },
-  { id: 3, x: "84%", y: "43%", type: "pickup" },
-  { id: 4, x: "16%", y: "83%", type: "pickup" },
-  { id: 5, x: "87%", y: "74%", type: "driver" },
+const GMAPS_KEY = "AIzaSyB7WjbHRXaKMVYdZBAQCw_JobM6mcXSZss";
+
+const DARK_MAP_STYLES = [
+  { elementType:"geometry", stylers:[{color:"#1d2c4d"}] },
+  { elementType:"labels.text.fill", stylers:[{color:"#8ec3b9"}] },
+  { elementType:"labels.text.stroke", stylers:[{color:"#1a3646"}] },
+  { featureType:"water", elementType:"geometry", stylers:[{color:"#0e1626"}] },
+  { featureType:"road", elementType:"geometry", stylers:[{color:"#304a7d"}] },
+  { featureType:"road", elementType:"labels.text.fill", stylers:[{color:"#98a5be"}] },
+  { featureType:"transit", stylers:[{visibility:"simplified"}] },
+  { featureType:"poi", stylers:[{visibility:"off"}] },
+  { featureType:"administrative", elementType:"geometry", stylers:[{color:"#4b6878"}] },
+  { featureType:"administrative.land_parcel", elementType:"labels.text.fill", stylers:[{color:"#64779e"}] },
 ];
 
-function normalizeRide(r) {
-  const pickup = r.pickup_location?.address || r.pickup_address || r.pickup || '';
-  const dropoff = r.dropoff_location?.address || r.dropoff_address || r.dropoff || '';
-
-  let status = r.status || 'requested';
-  if (status === 'ongoing') status = 'in progress';
-  if (status === 'driver_assigned') status = 'picking up';
-
-  return {
-    rideId: r.ride_number || r.id || String(r.id) || '',
-    driver: r.driver?.full_name || r.driver_name || r.driver || '—',
-    rider: r.user?.full_name || r.passenger_name || r.rider || '—',
-    route: pickup && dropoff ? `${pickup} → ${dropoff}` : pickup || dropoff || '—',
-    eta: r.eta_minutes ? `${r.eta_minutes} min` : '—',
-    duration: r.duration_minutes ? `${r.duration_minutes} min` : '—',
-    fare: r.final_fare ? `₹${r.final_fare}` : r.estimated_fare ? `₹${r.estimated_fare}` : '—',
-    status: status,
-    pickup,
-    dropoff,
-    vehicleType: r.vehicle_type || r.vehicleType || '—',
-  };
+// Module-level Google Maps loader (avoids duplicate script injection)
+let _gmState = "idle"; // "idle" | "loading" | "ready"
+let _gmResolvers = [];
+function loadGoogleMaps() {
+  return new Promise((resolve) => {
+    if (_gmState === "ready" && window.google?.maps) { resolve(); return; }
+    _gmResolvers.push(resolve);
+    if (_gmState === "loading") return;
+    _gmState = "loading";
+    window.__gmapsReady = () => {
+      _gmState = "ready";
+      _gmResolvers.forEach((r) => r());
+      _gmResolvers = [];
+    };
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&callback=__gmapsReady`;
+    s.async = true;
+    s.defer = true;
+    document.head.appendChild(s);
+  });
 }
 
-/* ══════════════════════════════════
-   GLOBAL STYLES
-══════════════════════════════════ */
-const GS = () => (
-  <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@1,400&family=Outfit:wght@300;400;500;600;700&display=swap');
+const fmtDateTime = (d) => d ? new Date(d).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "—";
+const fmtRupee = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").format(n) : "—";
 
-    *,*::before,*::after{box-sizing:border-box}
+const STATUS_COLORS = {
+  requested: { color:"#60a5fa", bg:"rgba(59,130,246,0.12)",  border:"rgba(59,130,246,0.3)"  },
+  accepted:  { color:"#a78bfa", bg:"rgba(139,92,246,0.12)",  border:"rgba(139,92,246,0.3)"  },
+  ongoing:   { color:"#fbbf24", bg:"rgba(245,158,11,0.12)",  border:"rgba(245,158,11,0.3)"  },
+  completed: { color:"#4ade80", bg:"rgba(34,197,94,0.12)",   border:"rgba(34,197,94,0.3)"   },
+  cancelled: { color:"#f87171", bg:"rgba(239,68,68,0.12)",   border:"rgba(239,68,68,0.3)"   },
+};
 
-    .dbc{
-      background:linear-gradient(145deg,rgba(255,255,255,0.048) 0%,rgba(255,255,255,0.012) 100%);
-      border:1px solid rgba(212,175,55,0.17);
-      border-radius:20px;
-      backdrop-filter:blur(14px);
-      position:relative;
-      overflow:hidden;
-      transition:transform .32s cubic-bezier(.22,1,.36,1),box-shadow .32s,border-color .32s;
-      min-width:0;
-    }
+const StatusBadge = ({ status }) => {
+  const s = STATUS_COLORS[status] || { color:"rgba(255,255,255,0.5)", bg:"rgba(255,255,255,0.06)", border:"rgba(255,255,255,0.1)" };
+  return <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:s.bg, color:s.color, border:`1px solid ${s.border}`, textTransform:"capitalize" }}>{status || "—"}</span>;
+};
 
-    .dbc::before{
-      content:'';
-      position:absolute;
-      top:0;left:0;right:0;height:1px;
-      background:linear-gradient(90deg,transparent,rgba(212,175,55,0.38),transparent);
-    }
-
-    .dbc:hover{
-      transform:translateY(-3px);
-      border-color:rgba(212,175,55,0.34);
-      box-shadow:0 24px 64px rgba(0,0,0,0.48);
-    }
-
-    .dbm{
-      background:linear-gradient(145deg,rgba(255,255,255,0.05) 0%,rgba(255,255,255,0.012) 100%);
-      border:1px solid rgba(212,175,55,0.16);
-      border-radius:20px;
-      backdrop-filter:blur(12px);
-      position:relative;
-      overflow:hidden;
-      transition:transform .32s cubic-bezier(.22,1,.36,1),box-shadow .32s,border-color .32s;
-      min-width:0;
-    }
-
-    .dbm::before{
-      content:'';
-      position:absolute;
-      top:0;left:0;right:0;height:1px;
-      background:linear-gradient(90deg,transparent,rgba(212,175,55,0.34),transparent);
-    }
-
-    .dbm:hover{
-      transform:translateY(-4px);
-      border-color:rgba(212,175,55,0.36);
-      box-shadow:0 28px 70px rgba(0,0,0,0.52);
-    }
-
-    .bup{
-      display:inline-flex;align-items:center;gap:4px;
-      background:rgba(212,175,55,0.12);
-      border:1px solid rgba(212,175,55,0.28);
-      color:#D4AF37;border-radius:999px;padding:4px 9px;
-      font-size:10px;font-weight:600;font-family:'Outfit',sans-serif;
-      white-space:nowrap;
-    }
-
-    .ldot{
-      display:inline-block;width:7px;height:7px;border-radius:50%;
-      background:#D4AF37;flex-shrink:0;
-      animation:pdot 2.4s ease-in-out infinite;
-    }
-
-    @keyframes pdot{
-      0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,.5)}
-      50%{box-shadow:0 0 0 7px rgba(212,175,55,0)}
-    }
-
-    @keyframes fup{
-      from{opacity:0;transform:translateY(22px)}
-      to{opacity:1;transform:translateY(0)}
-    }
-
-    .fup{animation:fup .65s cubic-bezier(.22,1,.36,1) both}
-
-    @keyframes shim{
-      0%{background-position:-200% center}
-      100%{background-position:200% center}
-    }
-
-    .shim{
-      background:linear-gradient(90deg,#D4AF37 0%,#f7dc6f 35%,#D4AF37 55%,#b8920f 100%);
-      background-size:200% auto;
-      -webkit-background-clip:text;
-      -webkit-text-fill-color:transparent;
-      background-clip:text;
-      animation:shim 5s linear infinite;
-    }
-
-    .topGrid{
-      display:grid;
-      grid-template-columns:1fr;
-      gap:18px;
-      margin-bottom:20px;
-    }
-
-    @media(min-width:1100px){
-      .topGrid{
-        grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);
-      }
-    }
-
-    .statGrid{
-      display:grid;
-      grid-template-columns:repeat(1,minmax(0,1fr));
-      gap:14px;
-      margin-bottom:20px;
-    }
-
-    @media(min-width:640px){
-      .statGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    }
-
-    @media(min-width:1100px){
-      .statGrid{grid-template-columns:repeat(4,minmax(0,1fr))}
-    }
-
-    .mainGrid{
-      display:grid;
-      grid-template-columns:1fr;
-      gap:18px;
-      margin-bottom:18px;
-    }
-
-    @media(min-width:1200px){
-      .mainGrid{
-        grid-template-columns:minmax(0,1.45fr) minmax(340px,.9fr);
-      }
-    }
-
-    .detailsGrid{
-      display:grid;
-      grid-template-columns:repeat(1,minmax(0,1fr));
-      gap:14px;
-    }
-
-    @media(min-width:700px){
-      .detailsGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    }
-
-    @media(min-width:1200px){
-      .detailsGrid{grid-template-columns:repeat(4,minmax(0,1fr))}
-    }
-
-    .rideRow{
-      border-bottom:1px solid rgba(212,175,55,0.08);
-      transition:background .2s ease,transform .2s ease;
-    }
-
-    .rideRow:hover{
-      background:rgba(255,255,255,0.03);
-    }
-
-    .recharts-cartesian-axis-tick-value{
-      font-family:'Outfit',sans-serif;
-    }
-  `}</style>
+const Toast = ({ msg, type, onClose }) => (
+  <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background:type==="error"?"#7f1d1d":"#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)" }}>
+  <span style={{ flex:1 }}>{msg}</span>
+  <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer" }}><X size={14}/></button>
+  </div>
 );
 
-/* ══════════════════════════════════
-   HELPERS
-══════════════════════════════════ */
-function ST({ sub, main }) {
+const RideDetailModal = ({ ride, onClose }) => {
+  if (!ride) return null;
   return (
-    <div style={{ minWidth: 0 }}>
-      <p
-        style={{
-          fontFamily: "'Cinzel',serif",
-          fontSize: 8.5,
-          letterSpacing: 2.5,
-          color: "rgba(212,175,55,0.4)",
-          textTransform: "uppercase",
-          margin: "0 0 4px",
-        }}
-      >
-        {sub}
-      </p>
-      <h2
-        style={{
-          fontFamily: "'Cinzel',serif",
-          fontSize: "clamp(14px,1.8vw,18px)",
-          fontWeight: 700,
-          color: "#fff",
-          letterSpacing: -0.3,
-          margin: 0,
-        }}
-      >
-        {main}
-      </h2>
-    </div>
-  );
-}
-
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null;
-
-  return (
-    <div
-      style={{
-        background: "rgba(4,18,46,0.96)",
-        border: "1px solid rgba(212,175,55,0.22)",
-        borderRadius: 12,
-        padding: "10px 12px",
-        backdropFilter: "blur(12px)",
-        boxShadow: "0 14px 28px rgba(0,0,0,0.35)",
-      }}
-    >
-      {label ? (
-        <p
-          style={{
-            margin: "0 0 6px",
-            fontSize: 10,
-            color: "rgba(212,175,55,0.62)",
-            fontFamily: "'Outfit',sans-serif",
-          }}
-        >
-          {label}
-        </p>
-      ) : null}
-
-      {payload.map((item, idx) => (
-        <p
-          key={idx}
-          style={{
-            margin: 0,
-            fontSize: 11,
-            color: item.color || "#fff",
-            fontWeight: 600,
-            fontFamily: "'Outfit',sans-serif",
-          }}
-        >
-          {item.name}: {item.value}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value, color }) {
-  return (
-    <div className="dbm fup" style={{ padding: "18px 18px 14px" }}>
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 12,
-          background: `${color}18`,
-          border: `1px solid ${color}28`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: 10,
-        }}
-      >
-        <Icon size={16} color={color} />
+    <div style={{ position:"fixed", inset:0, zIndex:999, background:"rgba(0,0,0,0.7)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
+      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:32, width:480, maxWidth:"90vw" }} onClick={(e)=>e.stopPropagation()}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+          <h3 style={{ fontFamily:"Cinzel,serif", color:"#fff", fontSize:16, margin:0 }}>Ride #{ride.id}</h3>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.06)", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}><X size={14}/></button>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          {[
+            ["Passenger", ride.passenger_name || "—"],
+            ["Driver",    ride.driver_name || "—"],
+            ["Vehicle",   ride.vehicle_type || "—"],
+            ["Status",    ride.status || "—"],
+            ["Pickup",    ride.pickup_address || "—"],
+            ["Drop",      ride.drop_address || "—"],
+            ["Distance",  ride.distance_km ? `${ride.distance_km} km` : "—"],
+            ["Duration",  ride.duration_minutes ? `${ride.duration_minutes} min` : "—"],
+            ["Fare",      fmtRupee(ride.final_fare)],
+            ["Payment",   ride.payment_method || "—"],
+            ["Started",   fmtDateTime(ride.created_at)],
+            ["Completed", fmtDateTime(ride.completed_at)],
+          ].map(([l,v]) => (
+            <div key={l}>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{l}</div>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.85)", fontWeight:500 }}>{String(v)}</div>
+            </div>
+          ))}
+        </div>
       </div>
-
-      <p
-        style={{
-          margin: "0 0 4px",
-          fontFamily: "'Cinzel',serif",
-          fontSize: "clamp(20px,2vw,28px)",
-          fontWeight: 800,
-          color: "#fff",
-        }}
-      >
-        {value}
-      </p>
-
-      <p
-        style={{
-          margin: 0,
-          fontSize: 11,
-          color: "rgba(255,255,255,0.38)",
-          fontFamily: "'Outfit',sans-serif",
-        }}
-      >
-        {label}
-      </p>
     </div>
   );
-}
+};
 
-function getStatusPill(status = '') {
-  const statusStr = String(status).toLowerCase().trim();
-
-  if (statusStr === 'in progress' || statusStr === 'ongoing') {
-    return {
-      bg: "rgba(96,165,250,0.14)",
-      border: "rgba(96,165,250,0.22)",
-      color: "#60A5FA",
-    };
-  }
-  if (statusStr === 'picking up') {
-    return {
-      bg: "rgba(245,158,11,0.14)",
-      border: "rgba(245,158,11,0.22)",
-      color: "#F59E0B",
-    };
-  }
-  if (statusStr === 'completed') {
-    return {
-      bg: "rgba(52,211,153,0.14)",
-      border: "rgba(52,211,153,0.22)",
-      color: "#34D399",
-    };
-  }
-  if (statusStr === 'cancelled') {
-    return {
-      bg: "rgba(248,113,113,0.14)",
-      border: "rgba(248,113,113,0.22)",
-      color: "#F87171",
-    };
-  }
-  if (statusStr === 'accepted') {
-    return {
-      bg: "rgba(168,85,247,0.14)",
-      border: "rgba(168,85,247,0.22)",
-      color: "#A855F7",
-    };
-  }
-  if (statusStr === 'requested') {
-    return {
-      bg: "rgba(59,130,246,0.14)",
-      border: "rgba(59,130,246,0.22)",
-      color: "#3B82F6",
-    };
-  }
-  return {
-    bg: "rgba(255,255,255,0.08)",
-    border: "rgba(255,255,255,0.12)",
-    color: "rgba(255,255,255,0.7)",
-  };
-}
-
-function DetailCard({ label, value, accent = "#D4AF37" }) {
-  return (
-    <div
-      style={{
-        borderRadius: 16,
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(212,175,55,0.1)",
-        padding: "14px 14px",
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: 10.5,
-          color: "rgba(255,255,255,0.34)",
-          fontFamily: "'Outfit',sans-serif",
-        }}
-      >
-        {label}
-      </p>
-      <p
-        style={{
-          margin: "7px 0 0",
-          fontFamily: "'Cinzel',serif",
-          fontSize: 16,
-          fontWeight: 700,
-          color: accent,
-          lineHeight: 1.35,
-        }}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════
-   CHART DATA
-══════════════════════════════════ */
-const routeChartData = [
-  { time: '00:00', distance: 0 },
-  { time: '04:00', distance: 12 },
-  { time: '08:00', distance: 28 },
-  { time: '12:00', distance: 35 },
-  { time: '16:00', distance: 42 },
-  { time: '20:00', distance: 38 },
-  { time: '24:00', distance: 45 },
-];
-
-const statusChartData = [
-  { stage: 'Requested', total: 18, completed: 10, cancelled: 2 },
-  { stage: 'Assigned', total: 15, completed: 12, cancelled: 1 },
-  { stage: 'Arrived', total: 12, completed: 11, cancelled: 0 },
-  { stage: 'Started', total: 8, completed: 7, cancelled: 0 },
-];
-
-/* ══════════════════════════════════
-   MAIN COMPONENT
-══════════════════════════════════ */
-export default function RideMonitoringPage() {
-  const [liveRides, setLiveRides] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedRide, setSelectedRide] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('ongoing');
+const MapPanel = ({ rides, selectedId, onRideClick }) => {
+  const containerRef  = useRef(null);
+  const gMapRef       = useRef(null);
+  const markersRef    = useRef([]);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    api.getRides({ status: statusFilter, limit: 20 })
-      .then(res => {
-        const raw = res?.data?.rides || res?.rides || [];
-        const normalized = Array.isArray(raw) ? raw.map(normalizeRide) : [];
-        setLiveRides(normalized);
-        if (normalized.length > 0) setSelectedRide(normalized[0]);
+    loadGoogleMaps()
+      .then(() => {
+        if (!containerRef.current || gMapRef.current) return;
+        gMapRef.current = new window.google.maps.Map(containerRef.current, {
+          center: { lat: 20.5937, lng: 78.9629 },
+          zoom: 5,
+          styles: DARK_MAP_STYLES,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: true,
+        });
+        setMapReady(true);
       })
-      .catch(err => console.error('Failed to load rides:', err))
-      .finally(() => setLoading(false));
-  }, [statusFilter]);
+      .catch(() => setMapError(true));
+  }, []);
 
-  const activeRideCount = liveRides.length;
-  const onlineDrivers = 0;
-  const selectedStatusStyle = getStatusPill(selectedRide?.status || 'in progress');
+  useEffect(() => {
+    if (!mapReady || !gMapRef.current || !window.google?.maps) return;
 
-  if (loading) {
+    // Clear old markers + polylines
+    markersRef.current.forEach((m) => m.setMap(null));
+    markersRef.current = [];
+
+    const ridesWithCoords = rides.filter((r) => r.pickup_lat && r.pickup_lng);
+    if (ridesWithCoords.length === 0) return;
+
+    ridesWithCoords.forEach((ride) => {
+      const hasPickup = !!(ride.pickup_lat && ride.pickup_lng);
+      const hasDrop   = !!(ride.drop_lat   && ride.drop_lng);
+
+      const infoContent = `
+        <div style="font-family:'Outfit',sans-serif;padding:10px 12px;min-width:200px;color:#0c1f5e">
+          <div style="font-weight:700;font-size:13px;margin-bottom:6px">Ride #${ride.id}</div>
+          <div style="font-size:12px;margin-bottom:3px">🧑 ${ride.passenger_name || "—"}</div>
+          <div style="font-size:12px;margin-bottom:3px">🚗 ${ride.driver_name || "—"} · <span style="text-transform:capitalize">${ride.vehicle_type || ""}</span></div>
+          <div style="font-size:12px;margin-bottom:3px">💰 ${fmtRupee(ride.final_fare)}</div>
+          ${ride.vehicle_number ? `<div style="font-size:11px;color:#666">🚘 ${ride.vehicle_number}</div>` : ""}
+        </div>`;
+
+      const infoWindow = new window.google.maps.InfoWindow({ content: infoContent });
+
+      if (hasPickup) {
+        const pickupMarker = new window.google.maps.Marker({
+          position: { lat: parseFloat(ride.pickup_lat), lng: parseFloat(ride.pickup_lng) },
+          map: gMapRef.current,
+          title: `Pickup: ${ride.pickup_address || ""}`,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            fillColor: "#4ade80", fillOpacity: 1,
+            strokeColor: "#fff", strokeWeight: 2, scale: 9,
+          },
+        });
+        pickupMarker.addListener("click", () => {
+          infoWindow.open(gMapRef.current, pickupMarker);
+          onRideClick && onRideClick(ride.id);
+        });
+        markersRef.current.push(pickupMarker);
+      }
+
+      if (hasDrop) {
+        const dropMarker = new window.google.maps.Marker({
+          position: { lat: parseFloat(ride.drop_lat), lng: parseFloat(ride.drop_lng) },
+          map: gMapRef.current,
+          title: `Drop: ${ride.drop_address || ""}`,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            fillColor: "#f87171", fillOpacity: 1,
+            strokeColor: "#fff", strokeWeight: 2, scale: 9,
+          },
+        });
+        markersRef.current.push(dropMarker);
+      }
+
+      if (hasPickup && hasDrop) {
+        const line = new window.google.maps.Polyline({
+          path: [
+            { lat: parseFloat(ride.pickup_lat), lng: parseFloat(ride.pickup_lng) },
+            { lat: parseFloat(ride.drop_lat),   lng: parseFloat(ride.drop_lng)   },
+          ],
+          geodesic: true,
+          strokeColor: "#D4AF37",
+          strokeOpacity: 0.65,
+          strokeWeight: 2,
+          map: gMapRef.current,
+        });
+        markersRef.current.push(line);
+      }
+    });
+  }, [rides, mapReady]);
+
+  // Pan to selected ride
+  useEffect(() => {
+    if (!mapReady || !gMapRef.current || !selectedId) return;
+    const ride = rides.find((r) => r.id === selectedId);
+    if (!ride?.pickup_lat) return;
+    gMapRef.current.panTo({ lat: parseFloat(ride.pickup_lat), lng: parseFloat(ride.pickup_lng) });
+    gMapRef.current.setZoom(14);
+  }, [selectedId, rides, mapReady]);
+
+  if (mapError) {
     return (
-      <>
-        <GS />
-        <div style={{ padding: 60, textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontFamily: 'Outfit,sans-serif' }}>
-          Loading live rides...
-        </div>
-      </>
-    );
-  }
-
-  if (liveRides.length === 0) {
-    return (
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#010917 0%,#020D26 25%,#04122E 55%,#030C22 80%,#010917 100%)', padding: '20px' }}>
-        <GS />
-        <div style={{ maxWidth: '100%', minWidth: 0, fontFamily: "'Outfit',sans-serif" }}>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <p style={{ fontFamily: "'Cinzel',serif", fontSize: 8.5, letterSpacing: 2.5, color: 'rgba(212,175,55,0.4)', textTransform: 'uppercase', margin: '0 0 4px' }}>Status Filter</p>
-                <h2 style={{ fontFamily: "'Cinzel',serif", fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 }}>Ride Status</h2>
-              </div>
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                style={{
-                  padding: '8px 12px',
-                  background: 'rgba(212,175,55,0.1)',
-                  border: '1px solid rgba(212,175,55,0.3)',
-                  borderRadius: '8px',
-                  color: '#D4AF37',
-                  fontFamily: "'Outfit',sans-serif",
-                  fontSize: '12px',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="requested">Requested</option>
-                <option value="accepted">Accepted</option>
-                <option value="ongoing">Ongoing</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-          </div>
-          <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
-              <div style={{ fontSize: 64, marginBottom: 20 }}>🚕</div>
-              <h2 style={{ fontFamily: "'Cinzel',serif", fontSize: 24, marginBottom: 8, color: 'rgba(255,255,255,0.7)' }}>No Rides Found</h2>
-              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', maxWidth: 400, margin: '0 auto' }}>
-                There are currently no {statusFilter} rides. Try selecting a different status to view rides.
-              </p>
-            </div>
-          </div>
-        </div>
+      <div style={{ height:480, borderRadius:16, border:"1px solid rgba(212,175,55,0.1)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.02)", color:"#f87171", fontFamily:"Outfit,sans-serif", fontSize:13 }}>
+        Failed to load Google Maps. Check your API key or network.
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#010917 0%,#020D26 25%,#04122E 55%,#030C22 80%,#010917 100%)', padding: '20px' }}>
-      <GS />
-
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "100%",
-          minWidth: 0,
-          fontFamily: "'Outfit',sans-serif",
-        }}
-      >
-        {/* HEADER */}
-        <div className="fup topGrid" style={{ animationDelay: "0ms" }}>
-          <div className="dbc" style={{ padding: "20px 22px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-              <span className="ldot" />
-              <p
-                style={{
-                  fontFamily: "'Cinzel',serif",
-                  fontSize: 9,
-                  letterSpacing: 3,
-                  color: "rgba(212,175,55,0.44)",
-                  textTransform: "uppercase",
-                  margin: 0,
-                }}
-              >
-                GO Mobility · Real-Time Operations
-              </p>
-            </div>
-
-            <h1
-              style={{
-                fontFamily: "'Cinzel',serif",
-                fontSize: "clamp(24px,4.6vw,46px)",
-                fontWeight: 900,
-                lineHeight: 1.05,
-                letterSpacing: "-0.03em",
-                margin: "0 0 10px",
-              }}
-            >
-              <span style={{ color: "#fff" }}>Live Ride </span>
-              <span className="shim">Monitoring</span>
-            </h1>
-
-            <p
-              style={{
-                fontFamily: "'Cormorant Garamond',serif",
-                fontStyle: "italic",
-                fontSize: "clamp(14px,1.4vw,18px)",
-                color: "rgba(212,175,55,0.5)",
-                lineHeight: 1.7,
-                margin: 0,
-                maxWidth: 640,
-              }}
-            >
-              Real-time visibility into active trips, driver movement, ETA flow, and ride progress across the platform.
-            </p>
-          </div>
-
-          <div
-            className="dbc"
-            style={{
-              padding: "20px 22px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              gap: 14,
-            }}
-          >
-            <div>
-              <ST sub="Monitoring Status" main="Fleet View Active" />
-              <p
-                style={{
-                  margin: "8px 0 0",
-                  fontSize: 12,
-                  lineHeight: 1.6,
-                  color: "rgba(255,255,255,0.34)",
-                }}
-              >
-                Active routes, pickup points, and ride state transitions are being tracked in the command layer.
-              </p>
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <span className="bup">
-                <ArrowUpRight size={10} />
-                Live Routes
-              </span>
-              <span className="bup">
-                <ArrowUpRight size={10} />
-                ETA Visible
-              </span>
-            </div>
-          </div>
+    <div style={{ position:"relative" }}>
+      <div ref={containerRef} style={{ width:"100%", height:480, borderRadius:16, overflow:"hidden", border:"1px solid rgba(212,175,55,0.15)" }} />
+      {!mapReady && (
+        <div style={{ position:"absolute", inset:0, background:"rgba(2,13,38,0.8)", borderRadius:16, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.4)", fontFamily:"Outfit,sans-serif", fontSize:13 }}>
+          Loading map…
         </div>
-
-        {/* STATUS FILTER */}
-        <div className="fup" style={{ animationDelay: "40ms", marginBottom: 18 }}>
-          <div className="dbc" style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 10, color: "rgba(212,175,55,0.5)", fontFamily: "'Outfit',sans-serif", textTransform: "uppercase", letterSpacing: "0.8px" }}>Filter by Status</span>
-            </div>
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                background: 'rgba(212,175,55,0.08)',
-                border: '1px solid rgba(212,175,55,0.24)',
-                borderRadius: '8px',
-                color: '#D4AF37',
-                fontFamily: "'Outfit',sans-serif",
-                fontSize: '12px',
-                cursor: 'pointer',
-                fontWeight: 600
-              }}
-            >
-              <option value="requested">Requested</option>
-              <option value="accepted">Accepted</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
+      )}
+      <div style={{ position:"absolute", top:12, left:12, display:"flex", flexDirection:"column", gap:6, pointerEvents:"none" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(2,13,38,0.85)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"5px 10px" }}>
+          <span style={{ width:10, height:10, borderRadius:"50%", background:"#4ade80", display:"inline-block", border:"1.5px solid #fff" }}/>
+          <span style={{ fontSize:11, color:"rgba(255,255,255,0.7)", fontFamily:"Outfit,sans-serif" }}>Pickup</span>
         </div>
-
-        {/* STATS */}
-        <div className="statGrid fup" style={{ animationDelay: "80ms" }}>
-          <StatCard
-            icon={CarFront}
-            label="Active Rides"
-            value={activeRideCount}
-            color="#D4AF37"
-          />
-          <StatCard
-            icon={Activity}
-            label="Drivers Online"
-            value={onlineDrivers.toLocaleString("en-IN")}
-            color="#34D399"
-          />
-          <StatCard
-            icon={TimerReset}
-            label="Avg ETA"
-            value="8 min"
-            color="#60A5FA"
-          />
-          <StatCard
-            icon={ShieldCheck}
-            label="Trips Stable"
-            value="96.4%"
-            color="#A78BFA"
-          />
+        <div style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(2,13,38,0.85)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"5px 10px" }}>
+          <span style={{ width:10, height:10, borderRadius:"50%", background:"#f87171", display:"inline-block", border:"1.5px solid #fff" }}/>
+          <span style={{ fontSize:11, color:"rgba(255,255,255,0.7)", fontFamily:"Outfit,sans-serif" }}>Drop</span>
         </div>
-
-        {/* MAIN */}
-        <section className="mainGrid fup" style={{ animationDelay: "180ms" }}>
-          {/* MAP */}
-          <div className="dbc" style={{ padding: 0 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-                padding: "18px 20px",
-                borderBottom: "1px solid rgba(212,175,55,0.08)",
-              }}
-            >
-              <ST sub="Spatial Intelligence" main="Live Map" />
-
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <span className="bup">{activeRideCount} Active Rides</span>
-                <span className="bup">{onlineDrivers.toLocaleString("en-IN")} Drivers Online</span>
-              </div>
-            </div>
-
-            <div
-              style={{
-                position: "relative",
-                height: 440,
-                overflow: "hidden",
-                background:
-                  "radial-gradient(circle at center, rgba(212,175,55,0.05), transparent 58%), linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.01))",
-              }}
-            >
-              <div
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  backgroundImage:
-                    "linear-gradient(rgba(212,175,55,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.03) 1px, transparent 1px)",
-                  backgroundSize: "42px 42px",
-                }}
-              />
-
-              {mapPins.map((pin) => (
-                <div
-                  key={pin.id}
-                  style={{
-                    position: "absolute",
-                    left: pin.x,
-                    top: pin.y,
-                    transform: "translate(-50%, -50%)",
-                    zIndex: 2,
-                  }}
-                >
-                  {pin.type === "driver" && (
-                    <div
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: "50%",
-                        border: "2px solid rgba(255,255,255,0.9)",
-                        background: "#34D399",
-                        color: "#081327",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "0 8px 18px rgba(52,211,153,0.28)",
-                      }}
-                    >
-                      <CarFront size={15} strokeWidth={2.3} />
-                    </div>
-                  )}
-
-                  {pin.type === "car" && (
-                    <div
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: "50%",
-                        border: "2px solid rgba(255,255,255,0.9)",
-                        background: "#60A5FA",
-                        color: "#fff",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "0 8px 18px rgba(96,165,250,0.28)",
-                      }}
-                    >
-                      <Navigation size={15} strokeWidth={2.3} />
-                    </div>
-                  )}
-
-                  {pin.type === "pickup" && (
-                    <div
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: "50%",
-                        border: "3px solid rgba(255,255,255,0.95)",
-                        background: "#F87171",
-                        boxShadow: "0 8px 18px rgba(248,113,113,0.28)",
-                      }}
-                    />
-                  )}
-                </div>
-              ))}
-
-              <svg
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  zIndex: 1,
-                  opacity: 0.8,
-                }}
-              >
-                <path
-                  d="M 24 31 C 32 28, 42 25, 52 32 S 72 46, 84 43"
-                  fill="none"
-                  stroke="rgba(212,175,55,0.45)"
-                  strokeWidth="0.6"
-                  strokeDasharray="2 1.6"
-                />
-                <path
-                  d="M 9 18 C 18 26, 20 38, 16 83"
-                  fill="none"
-                  stroke="rgba(96,165,250,0.28)"
-                  strokeWidth="0.5"
-                  strokeDasharray="2 1.5"
-                />
-              </svg>
-
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  textAlign: "center",
-                  padding: "0 24px",
-                  zIndex: 0,
-                  pointerEvents: "none",
-                }}
-              >
-                <div
-                  style={{
-                    width: 62,
-                    height: 62,
-                    borderRadius: "50%",
-                    background: "rgba(255,255,255,0.08)",
-                    border: "1px solid rgba(212,175,55,0.12)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "rgba(212,175,55,0.6)",
-                    backdropFilter: "blur(8px)",
-                  }}
-                >
-                  <MapPin size={30} strokeWidth={1.8} />
-                </div>
-
-                <h3
-                  style={{
-                    margin: "14px 0 0",
-                    fontFamily: "'Cinzel',serif",
-                    fontSize: 16,
-                    color: "#fff",
-                  }}
-                >
-                  Interactive Map View
-                </h3>
-
-                <p
-                  style={{
-                    margin: "8px 0 0",
-                    maxWidth: 400,
-                    fontSize: 12,
-                    lineHeight: 1.7,
-                    color: "rgba(255,255,255,0.34)",
-                  }}
-                >
-                  Showing driver locations, pickup points, route flow, and the currently selected trip in motion.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* ACTIVE RIDES */}
-          <div className="dbc" style={{ padding: 0 }}>
-            <div
-              style={{
-                padding: "18px 20px",
-                borderBottom: "1px solid rgba(212,175,55,0.08)",
-              }}
-            >
-              <ST sub="Fleet Feed" main="Active Rides" />
-            </div>
-
-            <div style={{ maxHeight: 500, overflowY: "auto" }}>
-              {liveRides.length === 0 ? (
-                <div style={{padding:40,textAlign:"center",color:"rgba(255,255,255,0.3)",fontFamily:"Outfit,sans-serif"}}><div style={{fontSize:32,marginBottom:10}}>🚕</div>No active rides available</div>
-              ) : liveRides.map((ride) => {
-                const statusStyle = getStatusPill(ride.status);
-
-                return (
-                  <div
-                    key={ride.rideId}
-                    className="rideRow"
-                    style={{
-                      padding: "16px 18px",
-                      background: ride.active ? "rgba(212,175,55,0.06)" : "transparent",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        justifyContent: "space-between",
-                        gap: 10,
-                        marginBottom: 10,
-                      }}
-                    >
-                      <h3
-                        style={{
-                          margin: 0,
-                          fontFamily: "'Cinzel',serif",
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "#fff",
-                        }}
-                      >
-                        {ride.rideId}
-                      </h3>
-
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          padding: "5px 10px",
-                          borderRadius: 999,
-                          background: statusStyle.bg,
-                          border: `1px solid ${statusStyle.border}`,
-                          color: statusStyle.color,
-                          fontSize: 10.5,
-                          fontWeight: 600,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <CircleDot size={10} />
-                        {ride.status}
-                      </span>
-                    </div>
-
-                    <div style={{ display: "grid", gap: 7 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
-                        <User size={12} color="rgba(255,255,255,0.35)" />
-                        <span>
-                          Driver:{" "}
-                          <span style={{ color: "#fff", fontWeight: 500 }}>{ride.driver}</span>
-                        </span>
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
-                        <User size={12} color="rgba(255,255,255,0.35)" />
-                        <span>
-                          Rider:{" "}
-                          <span style={{ color: "#fff", fontWeight: 500 }}>{ride.rider}</span>
-                        </span>
-                      </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "rgba(255,255,255,0.42)", fontSize: 11.5 }}>
-                        <MapPin size={12} color="rgba(212,175,55,0.5)" />
-                        <span>{ride.route}</span>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: 12,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", color: "rgba(255,255,255,0.38)", fontSize: 11 }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                          <Clock3 size={11} />
-                          ETA: {ride.eta}
-                        </span>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                          <Navigation size={11} />
-                          {ride.duration}
-                        </span>
-                      </div>
-
-                      <div
-                        style={{
-                          fontFamily: "'Cinzel',serif",
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "#D4AF37",
-                        }}
-                      >
-                        {ride.fare}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* LOWER SECTION */}
-        <section className="mainGrid fup" style={{ animationDelay: "260ms" }}>
-          <div className="dbc" style={{ padding: "20px 22px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-                marginBottom: 16,
-              }}
-            >
-              <ST sub="Selected Trip" main={`Ride Details · ${selectedRide?.rideId || '—'}`} />
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "5px 10px",
-                  borderRadius: 999,
-                  background: selectedStatusStyle.bg,
-                  border: `1px solid ${selectedStatusStyle.border}`,
-                  color: selectedStatusStyle.color,
-                  fontSize: 10.5,
-                  fontWeight: 600,
-                }}
-              >
-                <CircleDot size={10} />
-                {selectedRide?.status || '—'}
-              </span>
-            </div>
-
-            <div className="detailsGrid">
-              <DetailCard label="Driver" value={selectedRide?.driver || '—'} accent="#fff" />
-              <DetailCard label="Rider" value={selectedRide?.rider || '—'} accent="#fff" />
-              <DetailCard label="Vehicle Type" value={selectedRide?.vehicleType || '—'} accent="#60A5FA" />
-              <DetailCard label="ETA" value={selectedRide?.eta || '—'} accent="#34D399" />
-              <DetailCard label="Pickup Location" value={selectedRide?.pickup || '—'} accent="#D4AF37" />
-              <DetailCard label="Drop-off Location" value={selectedRide?.dropoff || '—'} accent="#F59E0B" />
-              <DetailCard label="Fare" value={selectedRide?.fare || '—'} accent="#A78BFA" />
-              <DetailCard label="Trip State" value={selectedRide?.status || '—'} accent={selectedStatusStyle.color} />
-            </div>
-          </div>
-
-          <div className="dbc" style={{ padding: "20px 22px" }}>
-            <div style={{ marginBottom: 14 }}>
-              <ST sub="Trip Analytics" main="Monitoring Signals" />
-            </div>
-
-            <div
-              style={{
-                borderRadius: 16,
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(212,175,55,0.1)",
-                padding: "14px 14px",
-                marginBottom: 14,
-              }}
-            >
-              <div style={{ marginBottom: 10 }}>
-                <ST sub="Route Pattern" main="Ride Flow" />
-              </div>
-
-              <div style={{ width: "100%", height: 170 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={routeChartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="rideAreaFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#D4AF37" stopOpacity={0.28} />
-                        <stop offset="100%" stopColor="#D4AF37" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="rgba(212,175,55,0.07)" strokeDasharray="4 6" vertical={false} />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="rides"
-                      name="Load"
-                      stroke="#D4AF37"
-                      strokeWidth={2.3}
-                      fill="url(#rideAreaFill)"
-                      dot={{ r: 3, fill: "#D4AF37", strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: "#D4AF37" }}
-                      isAnimationActive
-                      animationDuration={1500}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div
-              style={{
-                borderRadius: 16,
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(212,175,55,0.1)",
-                padding: "14px 14px",
-              }}
-            >
-              <div style={{ marginBottom: 10 }}>
-                <ST sub="Ride Status" main="ETA Distribution" />
-              </div>
-
-              <div style={{ width: "100%", height: 170 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={statusChartData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
-                    <CartesianGrid stroke="rgba(212,175,55,0.07)" strokeDasharray="4 6" vertical={false} />
-                    <XAxis
-                      dataKey="stage"
-                      tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar
-                      dataKey="value"
-                      name="ETA"
-                      radius={[8, 8, 0, 0]}
-                      isAnimationActive
-                      animationDuration={1400}
-                    >
-                      <Cell fill="#60A5FA" />
-                      <Cell fill="#34D399" />
-                      <Cell fill="#D4AF37" />
-                      <Cell fill="#A78BFA" />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
+    </div>
+  );
+};
+
+export default function RideMonitoringPage() {
+  const [rides, setRides]         = useState([]);
+  const [total, setTotal]         = useState(0);
+  const [loading, setLoading]     = useState(true);
+  const [status, setStatus]       = useState("");
+  const [vehicle, setVehicle]     = useState("");
+  const [startDate, setStart]     = useState("");
+  const [endDate, setEnd]         = useState("");
+  const [offset, setOffset]       = useState(0);
+  const [toast, setToast]         = useState(null);
+  const [modal, setModal]         = useState(null);
+  const [viewMode, setViewMode]   = useState("table"); // "table" | "map"
+  const [ongoingRides, setOngoingRides]   = useState([]);
+  const [ongoingLoading, setOngoingLoading] = useState(false);
+  const [selectedMapRide, setSelectedMapRide] = useState(null);
+  const LIMIT = 20;
+
+  const showToast = (msg, type="error") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = { limit:LIMIT, offset };
+    if (status)    params.status       = status;
+    if (vehicle)   params.vehicle_type = vehicle;
+    if (startDate) params.start_date   = startDate;
+    if (endDate)   params.end_date     = endDate;
+    getRides(params)
+      .then((res) => {
+        const d = res.data?.data || res.data || {};
+        setRides(d.rides || d.items || d.data || []);
+        setTotal(d.pagination?.total || d.total || 0);
+      })
+      .catch(() => showToast("Failed to load rides."))
+      .finally(() => setLoading(false));
+  }, [status, vehicle, startDate, endDate, offset]);
+
+  const loadOngoing = useCallback(() => {
+    setOngoingLoading(true);
+    getRides({ status:"ongoing", limit:100 })
+      .then((res) => {
+        const d = res.data?.data || res.data || {};
+        setOngoingRides(d.rides || d.items || d.data || []);
+      })
+      .catch(() => showToast("Failed to load ongoing rides."))
+      .finally(() => setOngoingLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (viewMode === "map") loadOngoing(); }, [viewMode, loadOngoing]);
+
+  const totalPages = Math.ceil(total / LIMIT);
+  const currentPage = Math.floor(offset / LIMIT) + 1;
+
+  const TH = ({ c }) => <th style={{ padding:"12px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", borderBottom:"1px solid rgba(212,175,55,0.1)", whiteSpace:"nowrap" }}>{c}</th>;
+  const TD = ({ children, style }) => <td style={{ padding:"14px 16px", fontSize:13, color:"rgba(255,255,255,0.8)", borderBottom:"1px solid rgba(255,255,255,0.04)", ...style }}>{children}</td>;
+
+  const sel = (val, set, opts) => (
+    <select value={val} onChange={(e)=>{set(e.target.value);setOffset(0);}} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
+      {opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+    </select>
+  );
+
+  return (
+    <div style={{ fontFamily:"Outfit,sans-serif" }}>
+      <style>{`@keyframes gmPulse{0%,100%{opacity:1}50%{opacity:0.45}}`}</style>
+      {toast && <Toast msg={toast.msg} type={toast.type} onClose={()=>setToast(null)} />}
+      <RideDetailModal ride={modal} onClose={()=>setModal(null)} />
+
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Ride Monitoring</h1>
+        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Total: {total} rides</p>
+      </div>
+
+      {/* View Mode Tabs */}
+      <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+        {[["table","📋 Table View"],["map","🗺 Live Map"]].map(([v,l]) => (
+          <button key={v} onClick={()=>setViewMode(v)} style={{ padding:"8px 18px", borderRadius:10, border:"1px solid", fontSize:13, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, transition:"all .2s", borderColor:viewMode===v?"#D4AF37":"rgba(212,175,55,0.2)", background:viewMode===v?"rgba(212,175,55,0.12)":"transparent", color:viewMode===v?"#D4AF37":"rgba(255,255,255,0.5)" }}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* ── MAP VIEW ── */}
+      {viewMode === "map" && (
+        <div>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.5)", fontFamily:"Outfit,sans-serif" }}>
+              {ongoingLoading ? "Loading ongoing rides…" : `${ongoingRides.length} ongoing rides · click a marker for details`}
+            </div>
+            <button onClick={loadOngoing} disabled={ongoingLoading} style={{ display:"flex", alignItems:"center", gap:6, height:36, padding:"0 14px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, color:"#D4AF37", fontSize:12, cursor:"pointer", opacity:ongoingLoading?0.5:1 }}>
+              <RefreshCw size={12}/> Refresh
+            </button>
+          </div>
+
+          <MapPanel rides={ongoingRides} selectedId={selectedMapRide} onRideClick={(id) => setSelectedMapRide(id)} />
+
+          {/* Ride list beside map for click-to-zoom */}
+          {ongoingRides.length > 0 && (
+            <div style={{ marginTop:14, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:14, overflow:"hidden" }}>
+              <div style={{ padding:"12px 18px", borderBottom:"1px solid rgba(212,175,55,0.08)", fontFamily:"Cinzel,serif", color:"rgba(255,255,255,0.6)", fontSize:12, letterSpacing:"1px" }}>ONGOING RIDES — CLICK TO ZOOM</div>
+              <div style={{ maxHeight:220, overflowY:"auto" }}>
+                {ongoingRides.map((r) => (
+                  <div
+                    key={r.id}
+                    onClick={() => setSelectedMapRide(r.id)}
+                    style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 18px", cursor:"pointer", borderBottom:"1px solid rgba(255,255,255,0.03)", background:selectedMapRide===r.id?"rgba(212,175,55,0.07)":"transparent", transition:"background .15s" }}
+                    onMouseEnter={(e)=>{ if(selectedMapRide!==r.id) e.currentTarget.style.background="rgba(212,175,55,0.03)"; }}
+                    onMouseLeave={(e)=>{ if(selectedMapRide!==r.id) e.currentTarget.style.background="transparent"; }}>
+                    <MapPin size={14} color="#D4AF37" style={{ flexShrink:0 }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, color:"#fff", fontWeight:500 }}>#{r.id} · {r.passenger_name || "—"} → {r.driver_name || "—"}</div>
+                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:2 }}>
+                        {r.vehicle_type} · {fmtRupee(r.final_fare)} · {r.pickup_address || "No address"}
+                      </div>
+                    </div>
+                    {selectedMapRide===r.id && <span style={{ fontSize:10, color:"#D4AF37", fontFamily:"Cinzel,serif" }}>VIEWING</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TABLE VIEW ── */}
+      {viewMode === "table" && (
+        <>
+          <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
+            {sel(status, setStatus, [["","All Status"],["requested","Requested"],["accepted","Accepted"],["ongoing","Ongoing"],["completed","Completed"],["cancelled","Cancelled"]])}
+            {sel(vehicle, setVehicle, [["","All Vehicles"],["bike","Bike"],["auto","Auto"],["car","Car"]])}
+            <input type="date" value={startDate} onChange={(e)=>{setStart(e.target.value);setOffset(0);}} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 12px", color:"rgba(255,255,255,0.7)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif" }} />
+            <input type="date" value={endDate} onChange={(e)=>{setEnd(e.target.value);setOffset(0);}} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 12px", color:"rgba(255,255,255,0.7)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif" }} />
+            {(status||vehicle||startDate||endDate) && (
+              <button onClick={()=>{setStatus("");setVehicle("");setStart("");setEnd("");setOffset(0);}} style={{ height:40, padding:"0 14px", background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:10, color:"#f87171", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>
+                  {["Ride ID","Passenger","Driver","Vehicle","Pickup","Fare","Status","Date"].map((c)=><TH key={c} c={c}/>)}
+                </tr></thead>
+                <tbody>
+                  {loading
+                    ? Array(6).fill(0).map((_,i)=>(
+                        <tr key={i}><td colSpan={8}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
+                      ))
+                    : rides.length === 0
+                      ? <tr><td colSpan={8} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No rides found</td></tr>
+                      : rides.map((r) => (
+                        <tr key={r.id} onClick={() => setModal(r)} style={{ cursor:"pointer" }} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
+                          <TD><span style={{ color:"rgba(212,175,55,0.7)", fontFamily:"monospace", fontSize:12 }}>#{r.id}</span></TD>
+                          <TD><div style={{ fontWeight:500 }}>{r.passenger_name || "—"}</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>{r.passenger_phone || ""}</div></TD>
+                          <TD>{r.driver_name || "—"}</TD>
+                          <TD><span style={{ textTransform:"capitalize", color:"rgba(255,255,255,0.6)" }}>{r.vehicle_type || "—"}</span></TD>
+                          <TD style={{ maxWidth:160 }}><div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.pickup_address || "—"}</div></TD>
+                          <TD><span style={{ fontWeight:700, color:"#D4AF37" }}>{fmtRupee(r.final_fare)}</span></TD>
+                          <TD><StatusBadge status={r.status} /></TD>
+                          <TD style={{ fontSize:12, color:"rgba(255,255,255,0.45)" }}>{fmtDateTime(r.created_at)}</TD>
+                        </tr>
+                      ))
+                  }
+                </tbody>
+              </table>
+            </div>
+            {total > LIMIT && (
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
+                <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>Page {currentPage} of {totalPages} · {total} total</span>
+                <div style={{ display:"flex", gap:8 }}>
+                  {[{icon:<ChevronLeft size={14}/>,dis:offset===0,fn:()=>setOffset(Math.max(0,offset-LIMIT))},{icon:<ChevronRight size={14}/>,dis:offset+LIMIT>=total,fn:()=>setOffset(offset+LIMIT)}].map((b,i)=>(
+                    <button key={i} onClick={b.fn} disabled={b.dis} style={{ width:32, height:32, borderRadius:8, border:"1px solid rgba(212,175,55,0.2)", background:"transparent", cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center", opacity:b.dis?0.3:1 }}>{b.icon}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

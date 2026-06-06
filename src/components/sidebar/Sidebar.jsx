@@ -120,13 +120,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
           overflowX:"hidden",
         }}
       >
-        <SidebarHeader
-          collapsed={desktopCollapsed}
-          onToggle={handleToggle}
-          mobileOpen={mobileOpen}
-          user={user}
-          isSuperAdmin={isSA}
-        />
+        <SidebarHeader collapsed={desktopCollapsed} />
 
         {/* Nav */}
         <nav className="gm-nav" style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:"12px 10px 10px" }}>
@@ -192,13 +186,12 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
           </div>
         </div>
 
-        {/* Desktop collapse toggle button */}
+        {/* Desktop collapse toggle button — positioned near top */}
         <button
           onClick={() => setDesktopCollapsed(p => !p)}
           style={{
             display:"none",
-            position:"absolute", top:"50%", right:-14,
-            transform:"translateY(-50%)",
+            position:"absolute", top:16, right:-14,
             width:28, height:28, borderRadius:"50%",
             background:"linear-gradient(135deg,#D4AF37,#b8920f)",
             border:"2.5px solid #020c20",

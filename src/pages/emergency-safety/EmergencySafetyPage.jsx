@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useToast, ToastProvider, PageWrapper, Card, TableCard, MiniStatRow, GlobalStyles, FormGroup, AlertBox, Modal } from "../../components/ui/index.jsx";
-import { api } from "../../services/api.js";
+import { useToast, ToastProvider, PageWrapper, Card, TableCard, MiniStatRow, GlobalStyles, FormGroup, AlertBox, Modal, Toggle } from "../../components/ui/index.jsx";
+import { getSosHistory } from "../../api/admin";
 
 function normalizeSos(s) {
   return {
@@ -64,7 +64,7 @@ function Content() {
   const [blacklist, setBlacklist] = useState(BLACKLIST);
 
   useEffect(() => {
-    api.getSosHistory()
+    getSosHistory()
       .then(res => {
         const raw = res?.data?.alerts || res?.alerts || res?.data || [];
         const all = Array.isArray(raw) ? raw.map(normalizeSos) : [];
