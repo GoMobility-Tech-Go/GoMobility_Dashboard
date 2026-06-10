@@ -77,12 +77,12 @@ export const suspendDriver = (userId, reason) =>
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 export const triggerEngagement = (data) =>
-  api.post('/notifications/trigger-engagement', data);
-export const getNotificationSchedule = () => api.get('/notifications/schedule');
+  api.post('/notifications/admin/trigger-engagement', data);
+export const getNotificationSchedule = () => api.get('/notifications/admin/schedule');
 
 // ── Support / Complaints ───────────────────────────────────────────────────────
 export const getSupportTickets = (params = {}) =>
-  api.get('/support/tickets', { params });
+  api.get('/support/search', { params: { limit: 50, ...params } });
 export const replyToTicket = (ticketId, message) =>
   api.post(`/support/tickets/${ticketId}/reply`, { message });
 
@@ -105,3 +105,19 @@ export const getPayouts = (params = {}) =>
 // ── Subscription Plan Update ──────────────────────────────────────────────────
 export const updateSubscriptionPlan = (planId, data) =>
   api.patch(`/subscriptions/admin/plans/${planId}`, data);
+
+// ── Pricing Distance Tiers ────────────────────────────────────────────────────
+export const getPricingTiers = () => api.get('/admin/pricing/tiers');
+export const updatePricingTier = (tierName, data) =>
+  api.put(`/admin/pricing/tiers/${tierName}`, data);
+
+// ── Pricing Penalties ─────────────────────────────────────────────────────────
+export const getPricingPenalties = () => api.get('/admin/pricing/penalties');
+export const upsertPricingPenalty = (offenseType, offenseCount, data) =>
+  api.put(`/admin/pricing/penalties/${offenseType}/${offenseCount}`, data);
+export const deletePricingPenalty = (offenseType, offenseCount) =>
+  api.delete(`/admin/pricing/penalties/${offenseType}/${offenseCount}`);
+
+// ── Reports ───────────────────────────────────────────────────────────────────
+export const runReport = (reportType) =>
+  api.post(`/admin/reports/run/${reportType}`);

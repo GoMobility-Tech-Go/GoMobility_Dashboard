@@ -63,6 +63,7 @@ const LoginPage = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [devOtp, setDevOtp] = useState(null);
 
   useEffect(() => { setTimeout(() => setMounted(true), 80); }, []);
 
@@ -72,7 +73,9 @@ const LoginPage = () => {
     if (!phone.trim()) { setError("Please enter your phone number."); return; }
     setLoading(true);
     try {
-      await sendOtp(phone.trim());
+      const res = await sendOtp(phone.trim());
+      const data = res.data?.data || res.data || {};
+      if (data.otp) setDevOtp(data.otp); // show OTP hint when SMS not configured
       setStep("verify-otp");
       setOtp("");
     } catch (err) {
@@ -148,6 +151,7 @@ const LoginPage = () => {
         .input-field::placeholder { color:#b0a88a; font-weight:300; }
         .input-field:focus { border-color:#D4AF37; background:#fff; box-shadow:0 0 0 3px rgba(212,175,55,0.12),0 4px 16px rgba(212,175,55,0.08); }
         .error-box { background:rgba(200,30,30,0.07); border:1px solid rgba(200,30,30,0.2); border-radius:10px; padding:10px 14px; font-size:12.5px; color:#c01818; font-family:'Outfit',sans-serif; font-weight:500; animation:shake .35s ease; }
+        .dev-otp-hint { background:rgba(212,175,55,0.1); border:1px solid rgba(212,175,55,0.35); border-radius:10px; padding:10px 14px; font-size:12.5px; color:#7a5f10; font-family:'Outfit',sans-serif; text-align:center; margin-bottom:10px; }
         @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
         .submit-btn { width:100%; height:52px; border-radius:13px; border:none; cursor:pointer; font-family:'Cinzel',serif; font-size:13px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:#0a1840; background:linear-gradient(135deg,#f0d060 0%,#D4AF37 45%,#b8922a 100%); box-shadow:0 6px 30px rgba(212,175,55,0.4),0 1px 0 rgba(255,255,255,0.3) inset; position:relative; overflow:hidden; transition:transform .2s,box-shadow .2s; margin-top:6px; }
         .submit-btn:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 12px 40px rgba(212,175,55,0.5),0 1px 0 rgba(255,255,255,0.3) inset; }
@@ -252,6 +256,9 @@ const LoginPage = () => {
                   </div>
                   <form onSubmit={handleVerifyOtp}>
                     <div className="field-group">
+                      {devOtp && (
+                        <div className="dev-otp-hint">🔑 OTP: <strong style={{ fontSize:18, letterSpacing:4 }}>{devOtp}</strong></div>
+                      )}
                       <div>
                         <label className="field-label">6-Digit OTP</label>
                         <input
@@ -273,7 +280,7 @@ const LoginPage = () => {
                       <button
                         type="button"
                         className="back-btn"
-                        onClick={() => { setStep("signin"); setOtp(""); setError(""); }}
+                        onClick={() => { setStep("signin"); setOtp(""); setError(""); setDevOtp(null); }}
                         disabled={loading}
                       >
                         Back to Sign In

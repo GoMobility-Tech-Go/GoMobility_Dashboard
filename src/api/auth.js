@@ -10,5 +10,10 @@ export const getProfile = () => api.get('/auth/me');
 
 export const logoutApi = () => api.post('/auth/logout').catch(() => {});
 
-export const registerAdmin = (data) =>
-  api.post('/auth/register', data);
+// Step 1: send OTP to phone for signup
+export const signupSendOtp = (phone) =>
+  api.post('/auth/signup', { phone, role: 'admin' });
+
+// Step 2: verify OTP and create account
+export const signupVerifyOtp = (phone, otp, fullName) =>
+  api.post('/auth/verify-signup', { phone, otp, role: 'admin', fullName });

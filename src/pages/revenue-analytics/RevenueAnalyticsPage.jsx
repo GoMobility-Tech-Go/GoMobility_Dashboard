@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { X, RefreshCw } from "lucide-react";
-import { getRevenueAnalytics } from "../../api/admin";
+import { getRevenueAnalytics, runReport } from "../../api/admin";
 
 const fmtRupee  = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").format(Math.round(n)) : "—";
 const fmtShort  = (n) => n >= 1e5 ? `₹${(n/1e5).toFixed(1)}L` : n >= 1000 ? `₹${(n/1000).toFixed(0)}K` : `₹${Math.round(n)}`;
@@ -41,8 +41,31 @@ export default function RevenueAnalyticsPage() {
   const [error, setError]     = useState(false);
   const [days, setDays]       = useState(30);
   const [toast, setToast]     = useState(null);
+  const [reportRunning, setReportRunning] = useState(null);
 
-  const showToast = (msg, type="error") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
+  const REPORT_TYPES = [
+    { key:"operations",   label:"Operations Report",  icon:"⚙️",  desc:"Rides, drivers, cancellations"   },
+    { key:"financial",    label:"Financial Report",   icon:"💰",  desc:"Earnings, GST, subscriptions"    },
+    { key:"errors",       label:"Error Report",       icon:"🔴",  desc:"Failed payments, app errors"     },
+    { key:"anomalies",    label:"Anomalies Report",   icon:"⚠️",  desc:"High-risk incidents, flagged"    },
+    { key:"pendingDues",  label:"Pending Dues",       icon:"📋",  desc:"Riders & drivers with dues"      },
+    { key:"stuckRides",   label:"Stuck Rides",        icon:"🚗",  desc:"Rides ongoing for 30+ minutes"   },
+  ];
+
+  const handleRunReport = async (reportType) => {
+    setReportRunning(reportType);
+    try {
+      const res = await runReport(reportType);
+      const msg = res.data?.message || `Report "${reportType}" triggered successfully.`;
+      showToast(msg, "success");
+    } catch (err) {
+      showToast(err.response?.data?.message || `Failed to run "${reportType}" report.`, "error");
+    } finally {
+      setReportRunning(null);
+    }
+  };
+
+  const showToast = (msg, type="error") => { setToast({msg, type}); setTimeout(()=>setToast(null),3500); };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -88,9 +111,9 @@ export default function RevenueAnalyticsPage() {
           <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>P&amp;L reports, vehicle breakdown, and business insights</p>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          {[7,30,90].map((d) => (
+          {[{d:7,l:"1 Week"},{d:30,l:"1 Month"},{d:90,l:"3 Months"},{d:365,l:"1 Year"}].map(({d,l}) => (
             <button key={d} onClick={()=>setDays(d)} style={{ padding:"8px 16px", borderRadius:10, border:"1px solid", fontSize:13, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, transition:"all .2s", borderColor:days===d?"#D4AF37":"rgba(212,175,55,0.2)", background:days===d?"rgba(212,175,55,0.12)":"transparent", color:days===d?"#D4AF37":"rgba(255,255,255,0.5)" }}>
-              {d}D
+              {l}
             </button>
           ))}
           <button onClick={load} disabled={loading} title="Refresh" style={{ display:"flex", alignItems:"center", justifyContent:"center", width:38, height:38, borderRadius:10, border:"1px solid rgba(212,175,55,0.2)", background:"rgba(212,175,55,0.08)", color:"#D4AF37", cursor:"pointer", opacity:loading?0.5:1 }}>
@@ -124,7 +147,7 @@ export default function RevenueAnalyticsPage() {
       {!error && (
         <>
           {/* Area Chart — Revenue + Rides Trend */}
-          <ChartCard title={`Revenue Trend · Last ${days} Days`} style={{ marginBottom:16 }}>
+          <ChartCard title={`Revenue Trend · Last ${days===7?"1 Week":days===30?"1 Month":days===90?"3 Months":"1 Year"}`} style={{ marginBottom:16 }}>
             {loading ? <Skeleton height={270} /> : byDay.length === 0 ? (
               <div style={{ height:270, display:"flex", alignItems:"center", justifyContent:"center", color:"rgba(255,255,255,0.25)", fontSize:13 }}>No daily data for this period</div>
             ) : (
@@ -280,6 +303,29 @@ export default function RevenueAnalyticsPage() {
           )}
         </>
       )}
+
+      {/* ── REPORTS SECTION ── */}
+      <div style={{ marginTop:32 }}>
+        <div style={{ fontFamily:"Cinzel,serif", fontSize:15, color:"#fff", fontWeight:700, marginBottom:6 }}>Run Reports</div>
+        <p style={{ fontSize:13, color:"rgba(255,255,255,0.4)", marginBottom:16 }}>Trigger backend report generation. Reports are processed asynchronously and will be sent to configured destinations.</p>
+        <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+          {REPORT_TYPES.map(({ key, label, icon, desc }) => {
+            const isRunning = reportRunning === key;
+            return (
+              <button key={key} onClick={()=>handleRunReport(key)} disabled={!!reportRunning} style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 20px", background:"rgba(255,255,255,0.03)", border:`1px solid ${isRunning?"rgba(212,175,55,0.6)":"rgba(212,175,55,0.15)"}`, borderRadius:14, cursor:reportRunning?"not-allowed":"pointer", fontFamily:"Outfit,sans-serif", transition:"all .2s", opacity:reportRunning&&!isRunning?0.45:1 }}
+                onMouseEnter={(e)=>{ if(!reportRunning) e.currentTarget.style.background="rgba(212,175,55,0.08)"; }}
+                onMouseLeave={(e)=>e.currentTarget.style.background="rgba(255,255,255,0.03)"}
+              >
+                <span style={{ fontSize:20 }}>{icon}</span>
+                <div style={{ textAlign:"left" }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:isRunning?"#D4AF37":"rgba(255,255,255,0.85)" }}>{isRunning?"Generating…":label}</div>
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>{desc}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

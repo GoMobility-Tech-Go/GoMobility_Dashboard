@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, ChevronLeft, ChevronRight, ShieldCheck, ShieldX, UserCheck, UserX, X, FileCheck, FileX, AlertTriangle, Eye } from "lucide-react";
-import { getDrivers, verifyDriver, updateDriverStatus, getKycQueue, approveDocument, rejectDocument, getFraudAlerts, suspendDriver, getKycDocument } from "../../api/admin";
+import { getDrivers, verifyDriver, updateDriverStatus, getKycQueue, approveDocument, rejectDocument, getFraudAlerts, suspendDriver, getKycDocument, getDriverById } from "../../api/admin";
 
 const fmtDate = (d) => d ? new Date(d).toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
 
@@ -145,6 +145,80 @@ const DocViewerModal = ({ docId, onClose }) => {
   );
 };
 
+const DriverDetailModal = ({ driverId, onClose }) => {
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    getDriverById(driverId)
+      .then((res) => setDetail(res.data?.data || res.data))
+      .catch(() => setErr(true))
+      .finally(() => setLoading(false));
+  }, [driverId]);
+
+  const Row = ({ label, value, color }) => value != null && value !== "" && (
+    <div style={{ padding:"10px 14px", background:"rgba(255,255,255,0.04)", borderRadius:8 }}>
+      <div style={{ fontSize:10, color:"rgba(212,175,55,0.6)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{label}</div>
+      <div style={{ fontSize:13, color: color || "rgba(255,255,255,0.85)" }}>{String(value)}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:1004, background:"rgba(0,0,0,0.88)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
+      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:28, width:620, maxWidth:"92vw", maxHeight:"88vh", overflow:"auto" }} onClick={(e)=>e.stopPropagation()}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
+          <h3 style={{ fontFamily:"Cinzel,serif", color:"#D4AF37", fontSize:16, margin:0 }}>Driver Profile</h3>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.06)", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}><X size={14}/></button>
+        </div>
+        {loading ? (
+          <div style={{ textAlign:"center", padding:40, color:"rgba(255,255,255,0.4)", fontFamily:"Outfit,sans-serif" }}>Loading driver details…</div>
+        ) : err ? (
+          <div style={{ textAlign:"center", padding:40, color:"#f87171", fontFamily:"Outfit,sans-serif" }}>Failed to load driver details.</div>
+        ) : detail ? (
+          <>
+            <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:22, padding:"16px 18px", background:"rgba(212,175,55,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:14 }}>
+              <div style={{ width:52, height:52, borderRadius:"50%", background:"rgba(212,175,55,0.15)", border:"2px solid rgba(212,175,55,0.3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
+                {detail.profile_photo_url
+                  ? <img src={detail.profile_photo_url} alt="" style={{ width:"100%", height:"100%", borderRadius:"50%", objectFit:"cover" }} onError={(e)=>{e.target.style.display="none";}} />
+                  : "🧑"}
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontFamily:"Cinzel,serif", fontSize:16, color:"#fff", fontWeight:700 }}>{detail.full_name || detail.name || "—"}</div>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:4 }}>{detail.phone_number || ""} {detail.email ? `· ${detail.email}` : ""}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:18, fontWeight:700, color:"#f59e0b" }}>{detail.rating ? `${detail.rating}★` : "—"}</div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>Rating</div>
+              </div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
+              <Row label="Status" value={detail.is_suspended ? "Suspended" : detail.is_active ? "Active" : "Blocked"} color={detail.is_suspended ? "#f59e0b" : detail.is_active ? "#4ade80" : "#f87171"} />
+              <Row label="KYC Verified" value={detail.is_verified ? "Verified ✓" : "Pending"} color={detail.is_verified ? "#D4AF37" : "#f59e0b"} />
+              <Row label="Vehicle Type" value={detail.vehicle_type} />
+              <Row label="Vehicle Number" value={detail.vehicle_number} />
+              <Row label="Vehicle Model" value={detail.vehicle_model || detail.vehicle?.model} />
+              <Row label="Vehicle Color" value={detail.vehicle_color || detail.vehicle?.color} />
+              <Row label="Total Rides" value={detail.total_rides ?? detail.ride_count} />
+              <Row label="Total Earnings (₹)" value={detail.total_earnings != null ? `₹${detail.total_earnings}` : null} />
+              <Row label="Wallet Balance (₹)" value={detail.wallet_balance != null ? `₹${detail.wallet_balance}` : null} />
+              <Row label="Cancellation Rate" value={detail.cancellation_rate != null ? `${detail.cancellation_rate}%` : null} />
+              <Row label="Joined" value={fmtDate(detail.created_at)} />
+              <Row label="Last Active" value={fmtDate(detail.last_active_at || detail.updated_at)} />
+            </div>
+            {detail.suspension_reason && (
+              <div style={{ padding:"12px 16px", background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", borderRadius:10, marginBottom:14 }}>
+                <div style={{ fontSize:10, color:"#f87171", textTransform:"uppercase", letterSpacing:"1px", marginBottom:4 }}>Suspension Reason</div>
+                <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)" }}>{detail.suspension_reason}</div>
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
 const TABS = ["Drivers", "KYC Queue", "Fraud Alerts"];
 const KYC_TYPES = ["", "AADHAAR", "PAN", "DRIVING_LICENCE", "VEHICLE_RC", "SELFIE", "BANK_ACCOUNT"];
 
@@ -165,6 +239,7 @@ export default function DriverOnboardingPage() {
   const [confirmBlock, setConfirmBlock]   = useState(null);   // driver object
   const [rejectTarget, setRejectTarget]   = useState(null);   // docId
   const [viewDocId, setViewDocId]         = useState(null);   // docId
+  const [viewDriverId, setViewDriverId]   = useState(null);   // driverId
 
   // KYC
   const [kycDocs, setKycDocs]         = useState([]);
@@ -310,6 +385,7 @@ export default function DriverOnboardingPage() {
       )}
 
       {viewDocId && <DocViewerModal docId={viewDocId} onClose={() => setViewDocId(null)} />}
+      {viewDriverId && <DriverDetailModal driverId={viewDriverId} onClose={() => setViewDriverId(null)} />}
 
       <div style={{ marginBottom:24 }}>
         <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Driver Management</h1>
@@ -376,6 +452,14 @@ export default function DriverOnboardingPage() {
                               <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDate(d.created_at)}</TD>
                               <TD>
                                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                                  {/* View Details */}
+                                  <button
+                                    onClick={() => setViewDriverId(d.id)}
+                                    title="View full profile"
+                                    style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 10px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:8, color:"#D4AF37", fontSize:11, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
+                                    <Eye size={12}/> Details
+                                  </button>
+
                                   {/* Block / Unblock */}
                                   <button
                                     onClick={() => {

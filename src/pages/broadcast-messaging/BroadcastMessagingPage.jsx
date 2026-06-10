@@ -10,6 +10,7 @@ import {
   FormGroup,
   AvatarCell,
 } from "../../components/ui/index.jsx";
+import { triggerEngagement } from "../../api/admin";
 
 const NAMES = [
   "Rahul Sharma",
@@ -110,6 +111,8 @@ function Content() {
   const [composeMsg, setComposeMsg] = useState("");
   const [composeTarget, setComposeTarget] = useState("");
   const [msgs, setMsgs] = useState(MSGS);
+  const [sending, setSending] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
 
   const [chatMsgs, setChatMsgs] = useState([
     {
@@ -143,30 +146,43 @@ function Content() {
     toast("Message sent!", "success");
   };
 
-  const sendBroadcast = () => {
+  const sendBroadcast = async () => {
     if (!composeMsg.trim()) {
       toast("Enter a message", "error");
       return;
     }
-
-    const target = composeType.includes("driver") ? "All Drivers" : "All Users";
-
-    setMsgs((m) => [
-      {
+    setSending(true);
+    try {
+      const audienceMap = {
+        "broadcast-drivers": "drivers",
+        "broadcast-users":   "users",
+        "broadcast-gold":    "gold_drivers",
+        "broadcast-city":    "users",
+      };
+      await triggerEngagement({
+        type:    audienceMap[composeType] || "users",
+        message: composeMsg,
+        title:   composeSubject.trim() || "Admin Broadcast",
+      });
+      const target = composeType.includes("driver") ? "All Drivers" : "All Users";
+      setMsgs((m) => [{
         id: m.length + 1,
         from: "Super Admin",
         to: target,
         type: "broadcast",
         msg: composeMsg,
-        time: "Just now",
+        time: new Date().toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" }),
         delivered: true,
         read: false,
-      },
-      ...m,
-    ]);
-
-    toast(`Broadcast sent to ${target}!`, "success");
-    setComposeMsg("");
+      }, ...m]);
+      toast(`Broadcast sent to ${target}!`, "success");
+      setComposeMsg("");
+      setComposeSubject("");
+    } catch {
+      toast("Failed to send broadcast. Please try again.", "error");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -280,6 +296,8 @@ function Content() {
               <input
                 className="gm-input"
                 placeholder="e.g. Important Policy Update"
+                value={composeSubject}
+                onChange={(e) => setComposeSubject(e.target.value)}
               />
             </FormGroup>
 
@@ -336,10 +354,13 @@ function Content() {
                 width: "100%",
                 justifyContent: "center",
                 marginTop: 4,
+                opacity: sending ? 0.6 : 1,
+                cursor: sending ? "not-allowed" : "pointer",
               }}
               onClick={sendBroadcast}
+              disabled={sending}
             >
-              📤 Send Broadcast
+              {sending ? "⏳ Sending…" : "📤 Send Broadcast"}
             </button>
           </Card>
 

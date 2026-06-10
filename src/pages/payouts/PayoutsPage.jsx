@@ -26,6 +26,8 @@ export default function PayoutsPage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
+  const [startDate, setStartDate]     = useState("");
+  const [endDate, setEndDate]         = useState("");
   const [offset, setOffset]           = useState(0);
   const [toast, setToast]             = useState(null);
   const LIMIT = 20;
@@ -37,6 +39,8 @@ export default function PayoutsPage() {
     setError(false);
     const params = { limit: LIMIT, offset };
     if (statusFilter) params.status = statusFilter;
+    if (startDate)    params.start_date = startDate;
+    if (endDate)      params.end_date   = endDate;
     getPayouts(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -46,7 +50,7 @@ export default function PayoutsPage() {
       })
       .catch(() => { setError(true); showToast("Failed to load payout data."); })
       .finally(() => setLoading(false));
-  }, [statusFilter, offset]);
+  }, [statusFilter, startDate, endDate, offset]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -94,7 +98,7 @@ export default function PayoutsPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display:"flex", gap:12, marginBottom:18, flexWrap:"wrap" }}>
+      <div style={{ display:"flex", gap:12, marginBottom:18, flexWrap:"wrap", alignItems:"center" }}>
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setOffset(0); }}
@@ -105,6 +109,22 @@ export default function PayoutsPage() {
           <option value="success">Success</option>
           <option value="failed">Failed</option>
         </select>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)", whiteSpace:"nowrap" }}>From</span>
+          <input type="date" value={startDate} onChange={(e)=>{ setStartDate(e.target.value); setOffset(0); }}
+            style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 12px", color:"rgba(255,255,255,0.7)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif" }} />
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)", whiteSpace:"nowrap" }}>To</span>
+          <input type="date" value={endDate} onChange={(e)=>{ setEndDate(e.target.value); setOffset(0); }}
+            style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 12px", color:"rgba(255,255,255,0.7)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif" }} />
+        </div>
+        {(statusFilter||startDate||endDate) && (
+          <button onClick={()=>{ setStatusFilter(""); setStartDate(""); setEndDate(""); setOffset(0); }}
+            style={{ height:40, padding:"0 14px", background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:10, color:"#f87171", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
+            Clear
+          </button>
+        )}
         <button onClick={load} disabled={loading} style={{ display:"flex", alignItems:"center", gap:7, height:40, padding:"0 16px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, color:"#D4AF37", fontSize:13, cursor:"pointer", opacity:loading?0.5:1 }}>
           <RefreshCw size={13}/> Refresh
         </button>
