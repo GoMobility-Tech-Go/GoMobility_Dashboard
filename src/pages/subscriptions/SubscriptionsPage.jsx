@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Plus, ToggleLeft, ToggleRight, X, Pencil } from "lucide-react";
-import { getSubscriptionPlans, createSubscriptionPlan, updateSubscriptionPlan, togglePlanStatus } from "../../api/admin";
+import { Plus, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { getSubscriptionPlans, createSubscriptionPlan, togglePlanStatus } from "../../api/admin";
 
 const fmtRupee = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").format(n) : "—";
 
@@ -22,7 +22,6 @@ export default function SubscriptionsPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast]     = useState(null);
   const [modal, setModal]     = useState(false);
-  const [editPlan, setEditPlan] = useState(null);
   const [form, setForm]       = useState(EMPTY_FORM);
   const [submitting, setSub]  = useState(false);
   const [toggling, setTog]    = useState({});
@@ -54,26 +53,7 @@ export default function SubscriptionsPage() {
   });
 
   const openCreate = () => {
-    setEditPlan(null);
     setForm(EMPTY_FORM);
-    setModal(true);
-  };
-
-  const openEdit = (rawPlan) => {
-    const p = norm(rawPlan);
-    setEditPlan(p);
-    setForm({
-      name:               p.name || "",
-      slug:               p.slug || "",
-      description:        p.description || "",
-      price:              String(p.price ?? ""),
-      durationDays:       String(p.durationDays ?? ""),
-      rideDiscountPercent: p.benefits?.rideDiscountPercent ?? 0,
-      freeRidesPerMonth:  p.benefits?.freeRidesPerMonth   ?? 0,
-      priorityBooking:    p.benefits?.priorityBooking      ?? false,
-      cancellationWaiver: p.benefits?.cancellationWaiver   ?? false,
-      surgeProtection:    p.benefits?.surgeProtection      ?? false,
-    });
     setModal(true);
   };
 
@@ -98,15 +78,9 @@ export default function SubscriptionsPage() {
     setSub(true);
     try {
       const payload = buildPayload();
-      if (editPlan) {
-        await updateSubscriptionPlan(editPlan.id, payload);
-        showToast("Plan updated successfully.");
-      } else {
-        await createSubscriptionPlan(payload);
-        showToast("Plan created successfully.");
-      }
+      await createSubscriptionPlan(payload);
+      showToast("Plan created successfully.");
       setModal(false);
-      setEditPlan(null);
       setForm(EMPTY_FORM);
       load();
     } catch (err) {
@@ -165,7 +139,7 @@ export default function SubscriptionsPage() {
           <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:32, width:500, maxWidth:"92vw", maxHeight:"90vh", overflow:"auto" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
               <h3 style={{ fontFamily:"Cinzel,serif", color:"#fff", fontSize:16, margin:0 }}>
-                {editPlan ? "Edit Plan" : "Create Subscription Plan"}
+                Create Subscription Plan
               </h3>
               <button onClick={() => setModal(false)} style={{ background:"rgba(255,255,255,0.06)", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}><X size={14}/></button>
             </div>
@@ -231,7 +205,7 @@ export default function SubscriptionsPage() {
               </div>
 
               <button type="submit" disabled={submitting} style={{ height:50, background:"linear-gradient(135deg,#f0d060,#D4AF37,#b8922a)", border:"none", borderRadius:12, color:"#0a1840", fontSize:13, fontFamily:"Cinzel,serif", fontWeight:700, cursor:submitting?"not-allowed":"pointer", opacity:submitting?0.75:1, letterSpacing:"1px", marginTop:4 }}>
-                {submitting ? "Saving…" : (editPlan ? "Update Plan" : "Create Plan")}
+                {submitting ? "Creating…" : "Create Plan"}
               </button>
             </form>
           </div>
@@ -291,14 +265,9 @@ export default function SubscriptionsPage() {
 
                     <div style={{ display:"flex", gap:8 }}>
                       <button
-                        onClick={() => openEdit(rawPlan)}
-                        style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:8, color:"#D4AF37", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
-                        <Pencil size={12}/> Edit
-                      </button>
-                      <button
                         onClick={() => handleToggle(rawPlan)}
                         disabled={toggling[p.id]}
-                        style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, padding:"8px 14px", background:p.is_active?"rgba(239,68,68,0.1)":"rgba(34,197,94,0.1)", border:`1px solid ${p.is_active?"rgba(239,68,68,0.25)":"rgba(34,197,94,0.25)"}`, borderRadius:8, color:p.is_active?"#f87171":"#4ade80", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif", opacity:toggling[p.id]?0.5:1 }}>
+                        style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:7, padding:"8px 14px", background:p.is_active?"rgba(239,68,68,0.1)":"rgba(34,197,94,0.1)", border:`1px solid ${p.is_active?"rgba(239,68,68,0.25)":"rgba(34,197,94,0.25)"}`, borderRadius:8, color:p.is_active?"#f87171":"#4ade80", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif", opacity:toggling[p.id]?0.5:1 }}>
                         {p.is_active ? <ToggleLeft size={14}/> : <ToggleRight size={14}/>}
                         {p.is_active ? "Deactivate" : "Activate"}
                       </button>
