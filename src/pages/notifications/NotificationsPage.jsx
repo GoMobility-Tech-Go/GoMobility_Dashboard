@@ -24,7 +24,7 @@ export default function NotificationsPage() {
   const [target, setTarget]   = useState("all_users");
   const [sending, setSending] = useState(false);
   const [toast, setToast]     = useState(null);
-  const [schedule, setSchedule] = useState([]);
+  const [schedule, setSchedule] = useState(null);
   const [schedLoading, setSchedLoading] = useState(true);
 
   const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
@@ -33,8 +33,8 @@ export default function NotificationsPage() {
     setSchedLoading(true);
     getNotificationSchedule()
       .then((res) => {
-        const d = res.data?.data || res.data || [];
-        setSchedule(Array.isArray(d) ? d : d.schedule || d.items || []);
+        const d = res.data?.data || res.data || null;
+        setSchedule(d && typeof d === "object" ? d : null);
       })
       .catch(() => {})
       .finally(() => setSchedLoading(false));
@@ -120,29 +120,63 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        {/* Schedule / History Card */}
+        {/* Schedule Card */}
         <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.12)", borderRadius:18, overflow:"hidden" }}>
           <div style={{ padding:"18px 22px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", gap:10 }}>
             <Calendar size={15} color="rgba(212,175,55,0.7)" />
-            <span style={{ fontFamily:"Cinzel,serif", fontSize:14, fontWeight:600, color:"#fff" }}>Scheduled Notifications</span>
+            <span style={{ fontFamily:"Cinzel,serif", fontSize:14, fontWeight:600, color:"#fff" }}>Notification Schedule</span>
           </div>
           {schedLoading
             ? <div style={{ padding:32, display:"flex", flexDirection:"column", gap:10 }}>
                 {Array(3).fill(0).map((_,i) => <div key={i} style={{ height:44, borderRadius:8, background:"rgba(255,255,255,0.04)", animation:"gmPulse 1.5s ease-in-out infinite" }} />)}
               </div>
-            : schedule.length === 0
+            : !schedule
               ? <div style={{ padding:48, textAlign:"center" }}>
                   <Bell size={32} color="rgba(255,255,255,0.1)" style={{ marginBottom:12 }} />
-                  <div style={{ fontSize:13, color:"rgba(255,255,255,0.3)", fontWeight:600, marginBottom:4 }}>No scheduled notifications</div>
-                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.2)" }}>Compose and send a notification above</div>
+                  <div style={{ fontSize:13, color:"rgba(255,255,255,0.3)", fontWeight:600 }}>Schedule unavailable</div>
                 </div>
-              : <div style={{ padding:14, display:"flex", flexDirection:"column", gap:10 }}>
-                  {schedule.map((item, i) => (
-                    <div key={item.id || i} style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:10, padding:"12px 16px" }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:"#fff", marginBottom:4 }}>{item.title || "—"}</div>
-                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>{item.scheduled_at || item.scheduledAt || "—"} · {item.target || "—"}</div>
+              : <div style={{ padding:18, display:"flex", flexDirection:"column", gap:12 }}>
+
+                  {/* Server time + day */}
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 14px", background:"rgba(212,175,55,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10 }}>
+                    <div>
+                      <div style={{ fontSize:10, color:"rgba(212,175,55,0.55)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>Server Time</div>
+                      <div style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.85)", fontFamily:"monospace" }}>
+                        {schedule.currentTime ? new Date(schedule.currentTime).toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit", second:"2-digit" }) : "—"}
+                      </div>
                     </div>
-                  ))}
+                    <span style={{ padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600,
+                      background: schedule.isWeekend ? "rgba(245,158,11,0.1)" : "rgba(52,211,153,0.1)",
+                      border: `1px solid ${schedule.isWeekend ? "rgba(245,158,11,0.25)" : "rgba(52,211,153,0.25)"}`,
+                      color: schedule.isWeekend ? "#F59E0B" : "#34D399"
+                    }}>{schedule.day || "—"}</span>
+                  </div>
+
+                  {/* Daily notification windows */}
+                  <div>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:8 }}>Daily Notification Windows</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {Object.entries(schedule.notificationTimes || {}).map(([slot, time]) => {
+                        const icons = { morning:"🌅", afternoon:"☀️", evening:"🌆" };
+                        return (
+                          <div key={slot} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 13px", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:9 }}>
+                            <span style={{ fontSize:12, color:"rgba(255,255,255,0.65)", textTransform:"capitalize" }}>{icons[slot] || "🔔"} {slot}</span>
+                            <span style={{ fontSize:12, fontWeight:600, color:"#D4AF37", fontFamily:"monospace" }}>{time}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Next scheduled notification */}
+                  {schedule.nextScheduledNotification && (
+                    <div style={{ padding:"11px 14px", background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.15)", borderRadius:10 }}>
+                      <div style={{ fontSize:10, color:"rgba(96,165,250,0.6)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:4 }}>Next Scheduled Send</div>
+                      <div style={{ fontSize:13, fontWeight:600, color:"#60A5FA", fontFamily:"monospace" }}>
+                        {new Date(schedule.nextScheduledNotification).toLocaleString("en-IN", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}
+                      </div>
+                    </div>
+                  )}
                 </div>
           }
         </div>

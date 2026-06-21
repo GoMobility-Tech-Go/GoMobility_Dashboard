@@ -1,17 +1,32 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, ChevronLeft, ChevronRight, ShieldCheck, ShieldX, UserCheck, UserX, X, FileCheck, FileX, AlertTriangle, Eye } from "lucide-react";
-import { getDrivers, verifyDriver, updateDriverStatus, getKycQueue, approveDocument, rejectDocument, getFraudAlerts, suspendDriver, getKycDocument, getDriverById } from "../../api/admin";
+import {
+  Search, ShieldCheck, ShieldX, UserCheck, UserX,
+  X, FileCheck, FileX, AlertTriangle, Eye, Car, Star, MapPin, Phone,
+  CheckCircle, Clock, XCircle, RefreshCw, ExternalLink, User, Wallet,
+  CreditCard, Calendar
+} from "lucide-react";
+import { Pagination } from "../../components/ui/index.jsx";
+import {
+  getDrivers, verifyDriver, updateDriverStatus, getKycQueue,
+  approveDocument, rejectDocument, getFraudAlerts, suspendDriver,
+  getKycDocument, getDriverById, getDriverKycStatus
+} from "../../api/admin";
 
-const fmtDate = (d) => d ? new Date(d).toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
+const fmtDate = (d) => d
+  ? new Date(d).toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" })
+  : "—";
 
+const fmtNum = (n) => n != null ? new Intl.NumberFormat("en-IN").format(n) : "—";
+
+// ── Small helpers ─────────────────────────────────────────────────────────────
 const Badge = ({ label, color, bg, border }) => (
   <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:bg, color, border:`1px solid ${border}` }}>{label}</span>
 );
 
 const Toast = ({ msg, type, onClose }) => (
   <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background:type==="error"?"#7f1d1d":"#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", maxWidth:360 }}>
-    <span style={{ flex:1 }}>{msg}</span>
-    <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer", padding:0 }}><X size={14}/></button>
+  <span style={{ flex:1 }}>{msg}</span>
+  <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer", padding:0 }}><X size={14}/></button>
   </div>
 );
 
@@ -30,7 +45,7 @@ const ConfirmDialog = ({ msg, confirmLabel="Confirm", danger=true, onConfirm, on
 const SuspendModal = ({ target, onConfirm, onCancel }) => {
   const [reason, setReason] = useState("Fake documents submitted");
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:1001, background:"rgba(0,0,0,0.8)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+    <div style={{ position:"fixed", inset:0, zIndex:1002, background:"rgba(0,0,0,0.8)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center" }}>
       <div style={{ background:"#020d26", border:"1px solid rgba(239,68,68,0.3)", borderRadius:20, padding:28, width:440, maxWidth:"90vw" }} onClick={(e)=>e.stopPropagation()}>
         <h3 style={{ fontFamily:"Cinzel,serif", color:"#f87171", fontSize:15, margin:"0 0 6px" }}>⚠ Suspend Driver Permanently</h3>
         <p style={{ fontSize:12.5, color:"rgba(255,255,255,0.5)", fontFamily:"Outfit,sans-serif", margin:"0 0 20px", lineHeight:1.6 }}>
@@ -38,7 +53,7 @@ const SuspendModal = ({ target, onConfirm, onCancel }) => {
         </p>
         <div style={{ marginBottom:16 }}>
           <label style={{ display:"block", fontSize:11, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:7, fontFamily:"Cinzel,serif" }}>Reason *</label>
-          <textarea value={reason} onChange={(e)=>setReason(e.target.value)} rows={3} placeholder="e.g. Fake documents submitted" style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", resize:"vertical", boxSizing:"border-box" }} />
+          <textarea value={reason} onChange={(e)=>setReason(e.target.value)} rows={3} style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", resize:"vertical", boxSizing:"border-box" }} />
         </div>
         <div style={{ display:"flex", gap:10 }}>
           <button onClick={onCancel} style={{ flex:1, height:40, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:13, fontFamily:"Outfit,sans-serif" }}>Cancel</button>
@@ -55,7 +70,7 @@ const RejectModal = ({ onConfirm, onCancel }) => {
   const [reason, setReason] = useState("");
   const [allowRetry, setAllowRetry] = useState(true);
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:1002, background:"rgba(0,0,0,0.75)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+    <div style={{ position:"fixed", inset:0, zIndex:1003, background:"rgba(0,0,0,0.75)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center" }}>
       <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:28, width:420, maxWidth:"90vw" }} onClick={(e)=>e.stopPropagation()}>
         <h3 style={{ fontFamily:"Cinzel,serif", color:"#fff", fontSize:15, margin:"0 0 20px" }}>Reject Document</h3>
         <div style={{ marginBottom:16 }}>
@@ -75,152 +90,345 @@ const RejectModal = ({ onConfirm, onCancel }) => {
   );
 };
 
-const DocViewerModal = ({ docId, onClose }) => {
-  const [detail, setDetail] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(false);
-  const [imgError, setImgError] = useState(false);
-
-  useEffect(() => {
-    getKycDocument(docId)
-      .then((res) => setDetail(res.data?.data || res.data))
-      .catch(() => setErr(true))
-      .finally(() => setLoading(false));
-  }, [docId]);
-
-  const meta = [
-    ["Driver", detail?.driver_name || detail?.driver?.full_name],
-    ["Phone", detail?.driver_phone || detail?.driver?.phone_number],
-    ["Doc Type", (detail?.document_type || "").replace(/_/g, " ")],
-    ["Status", detail?.status],
-    ["Submitted", fmtDate(detail?.submitted_at || detail?.created_at)],
-  ];
-
-  return (
-    <div style={{ position:"fixed", inset:0, zIndex:1003, background:"rgba(0,0,0,0.88)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
-      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:28, width:580, maxWidth:"92vw", maxHeight:"88vh", overflow:"auto" }} onClick={(e)=>e.stopPropagation()}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <h3 style={{ fontFamily:"Cinzel,serif", color:"#fff", fontSize:15, margin:0 }}>Document Review</h3>
-          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.06)", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}><X size={14}/></button>
-        </div>
-        {loading ? (
-          <div style={{ textAlign:"center", padding:40, color:"rgba(255,255,255,0.4)", fontFamily:"Outfit,sans-serif" }}>Loading document…</div>
-        ) : err ? (
-          <div style={{ textAlign:"center", padding:40, color:"#f87171", fontFamily:"Outfit,sans-serif" }}>Failed to load document details.</div>
-        ) : (
-          <>
-            {detail?.document_url && !imgError && (
-              <div style={{ marginBottom:18, borderRadius:12, overflow:"hidden", border:"1px solid rgba(212,175,55,0.15)", background:"rgba(255,255,255,0.03)" }}>
-                <img
-                  src={detail.document_url}
-                  alt="KYC Document"
-                  onError={() => setImgError(true)}
-                  style={{ width:"100%", display:"block", maxHeight:320, objectFit:"contain" }}
-                />
-              </div>
-            )}
-            {imgError && (
-              <div style={{ marginBottom:18, padding:24, borderRadius:12, border:"1px solid rgba(212,175,55,0.1)", background:"rgba(255,255,255,0.02)", textAlign:"center", color:"rgba(255,255,255,0.35)", fontSize:13, fontFamily:"Outfit,sans-serif" }}>
-                📄 Image preview unavailable — <a href={detail?.document_url} target="_blank" rel="noreferrer" style={{ color:"#D4AF37" }}>Open original</a>
-              </div>
-            )}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              {meta.map(([l, v]) => v && (
-                <div key={l} style={{ padding:"10px 14px", background:"rgba(255,255,255,0.04)", borderRadius:8 }}>
-                  <div style={{ fontSize:10, color:"rgba(212,175,55,0.6)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{l}</div>
-                  <div style={{ fontSize:13, color:"rgba(255,255,255,0.85)", textTransform:"capitalize" }}>{String(v)}</div>
-                </div>
-              ))}
-              {detail?.extracted_data && Object.entries(detail.extracted_data).map(([k, v]) => (
-                <div key={k} style={{ padding:"10px 14px", background:"rgba(255,255,255,0.04)", borderRadius:8 }}>
-                  <div style={{ fontSize:10, color:"rgba(212,175,55,0.6)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{k.replace(/_/g," ")}</div>
-                  <div style={{ fontSize:13, color:"rgba(255,255,255,0.85)" }}>{String(v ?? "—")}</div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
+// ── Doc status badge ──────────────────────────────────────────────────────────
+const DocStatusBadge = ({ status }) => {
+  const s = (status || "").toLowerCase();
+  if (s === "approved") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(34,197,94,0.12)", color:"#4ade80", border:"1px solid rgba(34,197,94,0.3)" }}><CheckCircle size={10}/>Approved</span>;
+  if (s === "rejected") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(239,68,68,0.1)", color:"#f87171", border:"1px solid rgba(239,68,68,0.25)" }}><XCircle size={10}/>Rejected</span>;
+  if (s === "manual_review") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(139,92,246,0.12)", color:"#a78bfa", border:"1px solid rgba(139,92,246,0.3)" }}><Eye size={10}/>Manual Review</span>;
+  return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(245,158,11,0.1)", color:"#f59e0b", border:"1px solid rgba(245,158,11,0.3)" }}><Clock size={10}/>Pending</span>;
 };
 
-const DriverDetailModal = ({ driverId, onClose }) => {
-  const [detail, setDetail] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState(false);
+// ── Full-screen Driver Detail Panel ──────────────────────────────────────────
+const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) => {
+  const [profile, setProfile]   = useState(null);
+  const [docs, setDocs]         = useState([]);
+  const [pLoading, setPLoad]    = useState(true);
+  const [dLoading, setDLoad]    = useState(true);
+  const [acting, setActing]     = useState({});
+  const [rejectDocId, setRejectDocId] = useState(null);
+  const [imgPrev, setImgPrev]   = useState(null);
 
   useEffect(() => {
+    setPLoad(true);
     getDriverById(driverId)
-      .then((res) => setDetail(res.data?.data || res.data))
-      .catch(() => setErr(true))
-      .finally(() => setLoading(false));
+      .then((res) => setProfile(res.data?.data || res.data))
+      .catch(() => {})
+      .finally(() => setPLoad(false));
   }, [driverId]);
 
-  const Row = ({ label, value, color }) => value != null && value !== "" && (
-    <div style={{ padding:"10px 14px", background:"rgba(255,255,255,0.04)", borderRadius:8 }}>
-      <div style={{ fontSize:10, color:"rgba(212,175,55,0.6)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{label}</div>
-      <div style={{ fontSize:13, color: color || "rgba(255,255,255,0.85)" }}>{String(value)}</div>
-    </div>
-  );
+  useEffect(() => {
+    if (!userId) { setDLoad(false); return; }
+    setDLoad(true);
+    getDriverKycStatus(userId)
+      .then((res) => {
+        const d = res.data?.data || res.data || {};
+        const list = d.documents || d.items || (Array.isArray(d) ? d : []);
+        setDocs(list);
+      })
+      .catch(() => setDocs([]))
+      .finally(() => setDLoad(false));
+  }, [userId]);
+
+  const doAct = async (key, fn, msg) => {
+    setActing(p => ({...p,[key]:true}));
+    try { await fn(); showToast(msg); onAction(); }
+    catch (e) { showToast(e.response?.data?.message || "Action failed.", "error"); }
+    finally { setActing(p => ({...p,[key]:false})); }
+  };
+
+  const handleApproveDoc = (docId) =>
+    doAct("doc"+docId, () => approveDocument(docId), "Document approved.");
+
+  const handleRejectDoc = (docId, reason, allowRetry) => {
+    setRejectDocId(null);
+    doAct("doc"+docId, () => rejectDocument(docId, reason, allowRetry), "Document rejected.");
+  };
+
+  const p = profile;
+  const isSuspended = p?.is_suspended || p?.suspended || p?.isSuspended;
+  const isActive    = p?.is_active    || p?.isActive;
+  const isVerified  = !!(p?.is_verified || p?.isVerified || p?.verified_at || p?.verifiedAt);
+
+  const docTypeLabel = (t) => (t||"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+
+  // Extract vehicle info from VEHICLE_RC KYC document (since admin API doesn't join driver_vehicle table)
+  const vehicleFromKyc = (() => {
+    const rcDoc = docs.find(d => d.document_type === "VEHICLE_RC");
+    if (!rcDoc) return null;
+    let ext = rcDoc.extracted_data || {};
+    if (typeof ext === "string") { try { ext = JSON.parse(ext); } catch { ext = {}; } }
+    return {
+      vehicle_number: rcDoc.document_number || ext.rc_number || ext.reg_number || null,
+      vehicle_type:   ext.vehicle_type || ext.vehicle_class || ext.body_type || null,
+      vehicle_model:  ext.vehicle_model || ext.model || null,
+      vehicle_color:  ext.vehicle_color || ext.color || null,
+    };
+  })();
 
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:1004, background:"rgba(0,0,0,0.88)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
-      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:28, width:620, maxWidth:"92vw", maxHeight:"88vh", overflow:"auto" }} onClick={(e)=>e.stopPropagation()}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
-          <h3 style={{ fontFamily:"Cinzel,serif", color:"#D4AF37", fontSize:16, margin:0 }}>Driver Profile</h3>
-          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.06)", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}><X size={14}/></button>
+    <>
+      {rejectDocId && (
+        <RejectModal
+          onConfirm={(r,a) => handleRejectDoc(rejectDocId, r, a)}
+          onCancel={() => setRejectDocId(null)}
+        />
+      )}
+
+      {/* Image preview overlay */}
+      {imgPrev && (
+        <div style={{ position:"fixed", inset:0, zIndex:2000, background:"rgba(0,0,0,0.92)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={() => setImgPrev(null)}>
+          <img src={imgPrev} alt="Document" style={{ maxWidth:"88vw", maxHeight:"88vh", borderRadius:12, objectFit:"contain", boxShadow:"0 0 60px rgba(0,0,0,0.8)" }} />
+          <button onClick={() => setImgPrev(null)} style={{ position:"absolute", top:20, right:24, background:"rgba(255,255,255,0.1)", border:"none", borderRadius:8, width:36, height:36, cursor:"pointer", color:"#fff", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center" }}><X size={18}/></button>
         </div>
-        {loading ? (
-          <div style={{ textAlign:"center", padding:40, color:"rgba(255,255,255,0.4)", fontFamily:"Outfit,sans-serif" }}>Loading driver details…</div>
-        ) : err ? (
-          <div style={{ textAlign:"center", padding:40, color:"#f87171", fontFamily:"Outfit,sans-serif" }}>Failed to load driver details.</div>
-        ) : detail ? (
-          <>
-            <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:22, padding:"16px 18px", background:"rgba(212,175,55,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:14 }}>
-              <div style={{ width:52, height:52, borderRadius:"50%", background:"rgba(212,175,55,0.15)", border:"2px solid rgba(212,175,55,0.3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
-                {detail.profile_photo_url
-                  ? <img src={detail.profile_photo_url} alt="" style={{ width:"100%", height:"100%", borderRadius:"50%", objectFit:"cover" }} onError={(e)=>{e.target.style.display="none";}} />
-                  : "🧑"}
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontFamily:"Cinzel,serif", fontSize:16, color:"#fff", fontWeight:700 }}>{detail.full_name || detail.name || "—"}</div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:4 }}>{detail.phone_number || ""} {detail.email ? `· ${detail.email}` : ""}</div>
-              </div>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontSize:18, fontWeight:700, color:"#f59e0b" }}>{detail.rating ? `${detail.rating}★` : "—"}</div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>Rating</div>
-              </div>
+      )}
+
+      {/* Panel backdrop */}
+      <div style={{ position:"fixed", inset:0, zIndex:1010, background:"rgba(0,0,0,0.6)", backdropFilter:"blur(3px)" }} onClick={onClose} />
+
+      {/* Panel */}
+      <div style={{ position:"fixed", top:0, right:0, bottom:0, zIndex:1011, width:"min(680px,95vw)", background:"linear-gradient(160deg,#020c20,#030f28)", borderLeft:"1px solid rgba(212,175,55,0.2)", overflowY:"auto", display:"flex", flexDirection:"column" }}>
+
+        {/* Header */}
+        <div style={{ padding:"20px 24px", borderBottom:"1px solid rgba(212,175,55,0.1)", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background:"#020c20", zIndex:10 }}>
+          <span style={{ fontFamily:"Cinzel,serif", fontSize:15, fontWeight:700, color:"#D4AF37" }}>Driver Profile</span>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, width:32, height:32, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}><X size={15}/></button>
+        </div>
+
+        <div style={{ padding:24, flex:1 }}>
+          {pLoading ? (
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              {Array(6).fill(0).map((_,i) => <div key={i} style={{ height:56, background:"rgba(255,255,255,0.04)", borderRadius:12, animation:"gmPulse 1.5s ease-in-out infinite" }} />)}
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
-              <Row label="Status" value={detail.is_suspended ? "Suspended" : detail.is_active ? "Active" : "Blocked"} color={detail.is_suspended ? "#f59e0b" : detail.is_active ? "#4ade80" : "#f87171"} />
-              <Row label="KYC Verified" value={detail.is_verified ? "Verified ✓" : "Pending"} color={detail.is_verified ? "#D4AF37" : "#f59e0b"} />
-              <Row label="Vehicle Type" value={detail.vehicle_type} />
-              <Row label="Vehicle Number" value={detail.vehicle_number} />
-              <Row label="Vehicle Model" value={detail.vehicle_model || detail.vehicle?.model} />
-              <Row label="Vehicle Color" value={detail.vehicle_color || detail.vehicle?.color} />
-              <Row label="Total Rides" value={detail.total_rides ?? detail.ride_count} />
-              <Row label="Total Earnings (₹)" value={detail.total_earnings != null ? `₹${detail.total_earnings}` : null} />
-              <Row label="Wallet Balance (₹)" value={detail.wallet_balance != null ? `₹${detail.wallet_balance}` : null} />
-              <Row label="Cancellation Rate" value={detail.cancellation_rate != null ? `${detail.cancellation_rate}%` : null} />
-              <Row label="Joined" value={fmtDate(detail.created_at)} />
-              <Row label="Last Active" value={fmtDate(detail.last_active_at || detail.updated_at)} />
-            </div>
-            {detail.suspension_reason && (
-              <div style={{ padding:"12px 16px", background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", borderRadius:10, marginBottom:14 }}>
-                <div style={{ fontSize:10, color:"#f87171", textTransform:"uppercase", letterSpacing:"1px", marginBottom:4 }}>Suspension Reason</div>
-                <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)" }}>{detail.suspension_reason}</div>
+          ) : !p ? (
+            <div style={{ textAlign:"center", padding:60, color:"rgba(255,255,255,0.35)", fontFamily:"Outfit,sans-serif" }}>Failed to load driver profile.</div>
+          ) : (
+            <>
+              {/* ── Profile Header ── */}
+              <div style={{ display:"flex", alignItems:"center", gap:18, marginBottom:22, padding:"18px 20px", background:"rgba(212,175,55,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:16 }}>
+                <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(212,175,55,0.12)", border:"2px solid rgba(212,175,55,0.35)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden" }}>
+                  {(p.profile_photo_url||p.profilePicture||p.profile_picture)
+                    ? <img src={p.profile_photo_url||p.profilePicture||p.profile_picture} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={(e)=>{e.target.style.display="none";}} />
+                    : <User size={28} color="rgba(212,175,55,0.5)" />
+                  }
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:"Cinzel,serif", fontSize:18, fontWeight:700, color:"#fff" }}>{p.full_name || p.fullName || p.name || "—"}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:5, flexWrap:"wrap" }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:"rgba(255,255,255,0.5)" }}><Phone size={11}/>{p.phone_number || p.phone || "—"}</span>
+                    {p.email && <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>· {p.email}</span>}
+                  </div>
+                  <div style={{ display:"flex", gap:7, marginTop:8, flexWrap:"wrap" }}>
+                    {isSuspended
+                      ? <Badge label="Suspended" color="#f59e0b" bg="rgba(245,158,11,0.1)" border="rgba(245,158,11,0.3)" />
+                      : isActive
+                        ? <Badge label="Active" color="#4ade80" bg="rgba(34,197,94,0.12)" border="rgba(34,197,94,0.3)" />
+                        : <Badge label="Blocked" color="#f87171" bg="rgba(239,68,68,0.12)" border="rgba(239,68,68,0.3)" />
+                    }
+                    {isVerified
+                      ? <Badge label="KYC Verified ✓" color="#D4AF37" bg="rgba(212,175,55,0.12)" border="rgba(212,175,55,0.3)" />
+                      : <Badge label="KYC Pending" color="#f59e0b" bg="rgba(245,158,11,0.08)" border="rgba(245,158,11,0.25)" />
+                    }
+                    {(p.is_available||p.isAvailable) && <Badge label="Online" color="#4ade80" bg="rgba(34,197,94,0.08)" border="rgba(34,197,94,0.2)" />}
+                  </div>
+                </div>
+                <div style={{ textAlign:"center", flexShrink:0 }}>
+                  <div style={{ fontSize:26, fontWeight:800, color:"#f59e0b" }}>{p.rating ? parseFloat(p.rating).toFixed(1) : "—"}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:3, justifyContent:"center", marginTop:2 }}><Star size={10} color="#f59e0b"/><span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>Rating</span></div>
+                </div>
               </div>
-            )}
-          </>
-        ) : null}
+
+              {/* ── Stat Cards ── */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:22 }}>
+                {[
+                  { icon:<Car size={16} color="#60a5fa"/>, label:"Total Rides", value:fmtNum(p.total_rides ?? p.totalRides ?? p.ride_count) },
+                  { icon:<Wallet size={16} color="#4ade80"/>, label:"Total Earnings", value:(p.total_earnings||p.totalEarnings) ? `₹${fmtNum(Math.floor(p.total_earnings||p.totalEarnings))}` : "—" },
+                  { icon:<MapPin size={16} color="#D4AF37"/>, label:"Cancellation", value:(p.cancellation_rate??p.cancellationRate) != null ? `${p.cancellation_rate??p.cancellationRate}%` : "—" },
+                ].map(({ icon, label, value }) => (
+                  <div key={label} style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:12, padding:"14px 16px" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:8 }}>{icon}<span style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>{label}</span></div>
+                    <div style={{ fontSize:18, fontWeight:700, color:"#fff" }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Vehicle Info ── */}
+              <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:14, padding:"16px 18px", marginBottom:22 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+                  <Car size={14} color="rgba(212,175,55,0.7)"/>
+                  <span style={{ fontFamily:"Cinzel,serif", fontSize:13, fontWeight:600, color:"#fff" }}>Vehicle Details</span>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  {[
+                    ["Type",         (p.vehicle_type||p.vehicleType||vehicleFromKyc?.vehicle_type||"—").replace(/\b\w/g,c=>c.toUpperCase())],
+                    ["Number",       p.vehicle_number||p.vehicleNumber||vehicleFromKyc?.vehicle_number||"—"],
+                    ["Model (RC)",   p.vehicle_model_from_rc||p.vehicleModelFromRc||p.vehicle_model||p.vehicleModel||vehicleFromKyc?.vehicle_model||"—"],
+                    ["Color",        p.vehicle_color||p.vehicleColor||vehicleFromKyc?.vehicle_color||"—"],
+                  ].map(([l,v]) => (
+                    <div key={l} style={{ padding:"9px 12px", background:"rgba(255,255,255,0.03)", borderRadius:8 }}>
+                      <div style={{ fontSize:10, color:"rgba(212,175,55,0.55)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{l}</div>
+                      <div style={{ fontSize:13, color:"rgba(255,255,255,0.82)", fontWeight:500 }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Other Info ── */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:22 }}>
+                {[
+                  ["Joined",      fmtDate(p.created_at||p.createdAt)],
+                  ["Last Login",  fmtDate(p.last_login||p.lastLogin||p.updated_at||p.updatedAt)],
+                  ["Verified At", (p.verified_at||p.verifiedAt) ? fmtDate(p.verified_at||p.verifiedAt) : "Not verified"],
+                  ["Wallet",      (p.wallet_balance??p.walletBalance) != null ? `₹${fmtNum(p.wallet_balance??p.walletBalance)}` : "—"],
+                ].filter(([,v]) => v && v !== "—").map(([l,v]) => (
+                  <div key={l} style={{ padding:"9px 12px", background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:8 }}>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{l}</div>
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.7)" }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+
+              {(p.suspension_reason||p.suspensionReason) && (
+                <div style={{ padding:"12px 16px", background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", borderRadius:10, marginBottom:18 }}>
+                  <div style={{ fontSize:10, color:"#f87171", textTransform:"uppercase", letterSpacing:"1px", marginBottom:4 }}>Suspension Reason</div>
+                  <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)" }}>{p.suspension_reason||p.suspensionReason}</div>
+                </div>
+              )}
+
+              {/* ── Quick Actions ── */}
+              <div style={{ display:"flex", gap:10, marginBottom:24, flexWrap:"wrap" }}>
+                <button
+                  onClick={() => doAct("verify", () => verifyDriver(driverId, !isVerified), `Driver ${isVerified?"unverified":"verified"}.`)}
+                  disabled={acting["verify"]}
+                  style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 18px", background:isVerified?"rgba(239,68,68,0.1)":"rgba(212,175,55,0.12)", border:`1px solid ${isVerified?"rgba(239,68,68,0.3)":"rgba(212,175,55,0.35)"}`, borderRadius:10, color:isVerified?"#f87171":"#D4AF37", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, opacity:acting["verify"]?0.5:1 }}>
+                  <ShieldCheck size={13}/>{isVerified ? "Unverify KYC" : "Verify KYC"}
+                </button>
+                <button
+                  onClick={() => doAct("status", () => updateDriverStatus(driverId, !isActive), isActive?"Driver blocked.":"Driver unblocked.")}
+                  disabled={acting["status"] || isSuspended}
+                  style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 18px", background:isActive?"rgba(239,68,68,0.1)":"rgba(34,197,94,0.1)", border:`1px solid ${isActive?"rgba(239,68,68,0.25)":"rgba(34,197,94,0.25)"}`, borderRadius:10, color:isActive?"#f87171":"#4ade80", fontSize:12, cursor:isSuspended?"not-allowed":"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, opacity:(acting["status"]||isSuspended)?0.4:1 }}>
+                  {isActive ? <UserX size={13}/> : <UserCheck size={13}/>}
+                  {isActive ? "Block Driver" : "Unblock Driver"}
+                </button>
+              </div>
+
+              {/* ── KYC Documents ── */}
+              <div>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <CreditCard size={14} color="rgba(212,175,55,0.7)"/>
+                    <span style={{ fontFamily:"Cinzel,serif", fontSize:13, fontWeight:600, color:"#fff" }}>KYC Documents</span>
+                    {!dLoading && (
+                      <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:"rgba(212,175,55,0.1)", color:"#D4AF37", border:"1px solid rgba(212,175,55,0.2)" }}>
+                        {docs.length} uploaded
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {dLoading ? (
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    {Array(3).fill(0).map((_,i) => <div key={i} style={{ height:100, background:"rgba(255,255,255,0.03)", borderRadius:12, animation:"gmPulse 1.5s ease-in-out infinite" }} />)}
+                  </div>
+                ) : docs.length === 0 ? (
+                  <div style={{ padding:"32px 20px", textAlign:"center", background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.08)", borderRadius:14 }}>
+                    <CreditCard size={28} color="rgba(255,255,255,0.1)" style={{ marginBottom:10, display:"block", margin:"0 auto 10px" }} />
+                    <div style={{ fontSize:13, color:"rgba(255,255,255,0.3)", fontFamily:"Outfit,sans-serif" }}>No documents uploaded yet</div>
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                    {docs.map((doc) => {
+                      const docId = doc.id;
+                      const status = (doc.status || "pending").toLowerCase();
+                      const isPending = status === "pending" || status === "under_review" || status === "manual_review";
+                      return (
+                        <div key={docId} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${status==="approved"?"rgba(34,197,94,0.2)":status==="rejected"?"rgba(239,68,68,0.18)":"rgba(212,175,55,0.12)"}`, borderRadius:14, overflow:"hidden" }}>
+                          <div style={{ display:"flex", gap:16, padding:16 }}>
+                            {/* Document Thumbnail */}
+                            <div
+                              onClick={() => doc.file_url && setImgPrev(doc.file_url)}
+                              style={{ width:90, height:70, borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.12)", overflow:"hidden", flexShrink:0, cursor:doc.file_url?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
+                              {doc.file_url ? (
+                                <>
+                                  <img src={doc.file_url} alt="doc" style={{ width:"100%", height:"100%", objectFit:"cover" }}
+                                    onError={(e)=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}} />
+                                  <div style={{ display:"none", position:"absolute", inset:0, alignItems:"center", justifyContent:"center", fontSize:10, color:"rgba(255,255,255,0.35)", flexDirection:"column", gap:4 }}>
+                                    <ExternalLink size={14} color="rgba(212,175,55,0.5)"/>
+                                    <span>Open</span>
+                                  </div>
+                                  <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0)", transition:".2s", display:"flex", alignItems:"center", justifyContent:"center", opacity:0 }}
+                                    onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,0,0,0.4)";e.currentTarget.style.opacity=1;}}
+                                    onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,0,0,0)";e.currentTarget.style.opacity=0;}}>
+                                    <Eye size={16} color="#fff"/>
+                                  </div>
+                                </>
+                              ) : (
+                                <div style={{ textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:10 }}>No image</div>
+                              )}
+                            </div>
+
+                            {/* Doc Info */}
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:6 }}>
+                                <div style={{ fontSize:13, fontWeight:600, color:"#fff" }}>{docTypeLabel(doc.document_type || doc.type)}</div>
+                                <DocStatusBadge status={doc.status} />
+                              </div>
+                              {doc.document_number && (
+                                <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", marginBottom:4, fontFamily:"monospace" }}>{doc.document_number}</div>
+                              )}
+                              <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"rgba(255,255,255,0.3)" }}>
+                                <Calendar size={10}/>
+                                {fmtDate(doc.submitted_at || doc.created_at)}
+                              </div>
+                              {doc.reject_reason && (
+                                <div style={{ marginTop:7, fontSize:11, color:"#f87171", background:"rgba(239,68,68,0.08)", padding:"5px 10px", borderRadius:6 }}>
+                                  Rejected: {doc.reject_reason}
+                                </div>
+                              )}
+                              {isPending && (
+                                <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                                  <button
+                                    onClick={() => handleApproveDoc(docId)}
+                                    disabled={acting["doc"+docId]}
+                                    style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:"rgba(34,197,94,0.12)", border:"1px solid rgba(34,197,94,0.25)", borderRadius:8, color:"#4ade80", fontSize:11, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, opacity:acting["doc"+docId]?0.5:1 }}>
+                                    <FileCheck size={11}/>{acting["doc"+docId]?"…":"Approve"}
+                                  </button>
+                                  <button
+                                    onClick={() => setRejectDocId(docId)}
+                                    disabled={acting["doc"+docId]}
+                                    style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:8, color:"#f87171", fontSize:11, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, opacity:acting["doc"+docId]?0.5:1 }}>
+                                    <FileX size={11}/>Reject
+                                  </button>
+                                  {doc.file_url && (
+                                    <a href={doc.file_url} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:"rgba(212,175,55,0.08)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:8, color:"#D4AF37", fontSize:11, textDecoration:"none" }}>
+                                      <ExternalLink size={11}/>Open
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                              {!isPending && doc.file_url && (
+                                <a href={doc.file_url} target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:5, marginTop:8, padding:"4px 10px", background:"rgba(212,175,55,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:7, color:"#D4AF37", fontSize:11, textDecoration:"none" }}>
+                                  <ExternalLink size={10}/>View Document
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
+// ── Main Page ─────────────────────────────────────────────────────────────────
 const TABS = ["Drivers", "KYC Queue", "Fraud Alerts"];
-const KYC_TYPES = ["", "AADHAAR", "PAN", "DRIVING_LICENCE", "VEHICLE_RC", "SELFIE", "BANK_ACCOUNT"];
 
 export default function DriverOnboardingPage() {
   const [tab, setTab]           = useState("Drivers");
@@ -235,30 +443,29 @@ export default function DriverOnboardingPage() {
   const [acting, setActing]     = useState({});
 
   // Modals
-  const [suspendTarget, setSuspendTarget] = useState(null);   // { userId, name }
-  const [confirmBlock, setConfirmBlock]   = useState(null);   // driver object
-  const [rejectTarget, setRejectTarget]   = useState(null);   // docId
-  const [viewDocId, setViewDocId]         = useState(null);   // docId
-  const [viewDriverId, setViewDriverId]   = useState(null);   // driverId
+  const [suspendTarget, setSuspendTarget]   = useState(null);
+  const [confirmBlock, setConfirmBlock]     = useState(null);
+  const [rejectTarget, setRejectTarget]     = useState(null);
+  const [viewDriver, setViewDriver]         = useState(null); // { driverId, userId }
 
   // KYC
-  const [kycDocs, setKycDocs]         = useState([]);
-  const [kycLoading, setKycLoading]   = useState(false);
+  const [kycDocs, setKycDocs]           = useState([]);
+  const [kycLoading, setKycLoading]     = useState(false);
   const [kycTypeFilter, setKycTypeFilter] = useState("");
 
   // Fraud
-  const [fraudAlerts, setFraudAlerts] = useState([]);
+  const [fraudAlerts, setFraudAlerts]   = useState([]);
   const [fraudLoading, setFraudLoading] = useState(false);
-  const [severity, setSeverity]       = useState("HIGH");
+  const [severity, setSeverity]         = useState("HIGH");
 
-  const LIMIT = 20;
+  const LIMIT = 10;
   const showToast = (msg, type="success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3500); };
 
   const loadDrivers = useCallback(() => {
     setLoading(true);
-    const params = { limit: LIMIT, offset };
-    if (search)   params.search     = search;
-    if (status)   params.status     = status;
+    const params = { limit:LIMIT, offset };
+    if (search)        params.search      = search;
+    if (status)        params.status      = status;
     if (verified !== "") params.is_verified = verified;
     getDrivers(params)
       .then((res) => {
@@ -272,7 +479,7 @@ export default function DriverOnboardingPage() {
 
   const loadKyc = useCallback(() => {
     setKycLoading(true);
-    const params = { limit: 20, page: 1 };
+    const params = { limit:50, page:1, status:"all" };
     if (kycTypeFilter) params.type = kycTypeFilter;
     getKycQueue(params)
       .then((res) => {
@@ -311,29 +518,26 @@ export default function DriverOnboardingPage() {
     setActing((p) => ({ ...p, ["sus"+userId]: true }));
     try {
       await suspendDriver(userId, reason);
-      showToast(`${name || "Driver"} suspended permanently.`);
+      showToast(`${name || "Driver"} suspended.`);
       loadDrivers();
       if (tab === "Fraud Alerts") loadFraud();
-    } catch (err) {
-      showToast(err.response?.data?.message || "Suspend failed.", "error");
-    } finally {
-      setActing((p) => ({ ...p, ["sus"+userId]: false }));
-    }
+    } catch (err) { showToast(err.response?.data?.message || "Suspend failed.", "error"); }
+    finally { setActing((p) => ({ ...p, ["sus"+userId]: false })); }
   };
 
-  const handleApprove = async (docId) => {
-    setActing((p) => ({ ...p, [docId]: true }));
+  const handleApproveKyc = async (docId) => {
+    setActing(p => ({...p,[docId]:true}));
     try { await approveDocument(docId); showToast("Document approved."); loadKyc(); }
     catch (err) { showToast(err.response?.data?.message || "Approval failed.", "error"); }
-    finally { setActing((p) => ({ ...p, [docId]: false })); }
+    finally { setActing(p => ({...p,[docId]:false})); }
   };
 
-  const handleReject = async (docId, reason, allowRetry) => {
+  const handleRejectKyc = async (docId, reason, allowRetry) => {
     setRejectTarget(null);
-    setActing((p) => ({ ...p, [docId]: true }));
+    setActing(p => ({...p,[docId]:true}));
     try { await rejectDocument(docId, reason, allowRetry); showToast("Document rejected."); loadKyc(); }
     catch (err) { showToast(err.response?.data?.message || "Rejection failed.", "error"); }
-    finally { setActing((p) => ({ ...p, [docId]: false })); }
+    finally { setActing(p => ({...p,[docId]:false})); }
   };
 
   const totalPages = Math.ceil(total / LIMIT);
@@ -342,13 +546,7 @@ export default function DriverOnboardingPage() {
   const TH = ({ c }) => <th style={{ padding:"12px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", borderBottom:"1px solid rgba(212,175,55,0.1)", whiteSpace:"nowrap" }}>{c}</th>;
   const TD = ({ children, style }) => <td style={{ padding:"13px 16px", fontSize:13, color:"rgba(255,255,255,0.8)", borderBottom:"1px solid rgba(255,255,255,0.04)", verticalAlign:"middle", ...style }}>{children}</td>;
 
-  const DriverStatusBadge = ({ d }) => {
-    if (d.is_suspended || d.suspended)
-      return <Badge label="Suspended" color="#f59e0b" bg="rgba(245,158,11,0.1)" border="rgba(245,158,11,0.3)" />;
-    if (d.is_active)
-      return <Badge label="Active" color="#4ade80" bg="rgba(34,197,94,0.12)" border="rgba(34,197,94,0.3)" />;
-    return <Badge label="Blocked" color="#f87171" bg="rgba(239,68,68,0.12)" border="rgba(239,68,68,0.3)" />;
-  };
+  const pendingKycCount = kycDocs.filter(d => (d.status||"").toLowerCase() === "pending").length;
 
   return (
     <div style={{ fontFamily:"Outfit,sans-serif" }}>
@@ -356,47 +554,48 @@ export default function DriverOnboardingPage() {
 
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
-      {suspendTarget && (
-        <SuspendModal
-          target={suspendTarget}
-          onConfirm={executeSuspend}
-          onCancel={() => setSuspendTarget(null)}
-        />
-      )}
+      {suspendTarget && <SuspendModal target={suspendTarget} onConfirm={executeSuspend} onCancel={() => setSuspendTarget(null)} />}
 
       {confirmBlock && (
         <ConfirmDialog
           msg={`Block driver "${confirmBlock.full_name || confirmBlock.name || "this driver"}"? They won't be able to accept rides.`}
           confirmLabel="Block Driver"
-          onConfirm={() => {
-            const d = confirmBlock;
-            setConfirmBlock(null);
-            act(d.id+"s", () => updateDriverStatus(d.id, false), "Driver blocked.");
-          }}
+          onConfirm={() => { const d = confirmBlock; setConfirmBlock(null); act(d.id+"s", () => updateDriverStatus(d.id, false), "Driver blocked."); }}
           onCancel={() => setConfirmBlock(null)}
         />
       )}
 
       {rejectTarget && (
         <RejectModal
-          onConfirm={(r, a) => handleReject(rejectTarget, r, a)}
+          onConfirm={(r, a) => handleRejectKyc(rejectTarget, r, a)}
           onCancel={() => setRejectTarget(null)}
         />
       )}
 
-      {viewDocId && <DocViewerModal docId={viewDocId} onClose={() => setViewDocId(null)} />}
-      {viewDriverId && <DriverDetailModal driverId={viewDriverId} onClose={() => setViewDriverId(null)} />}
+      {viewDriver && (
+        <DriverDetailPanel
+          driverId={viewDriver.driverId}
+          userId={viewDriver.userId}
+          onClose={() => setViewDriver(null)}
+          onAction={() => { loadDrivers(); if (tab === "KYC Queue") loadKyc(); }}
+          showToast={showToast}
+        />
+      )}
 
+      {/* Page Header */}
       <div style={{ marginBottom:24 }}>
         <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Driver Management</h1>
-        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Total: {total} drivers</p>
+        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Total: {total} drivers · Manage onboarding, KYC verification and fraud alerts</p>
       </div>
 
       {/* Tab Nav */}
-      <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+      <div style={{ display:"flex", gap:8, marginBottom:22, flexWrap:"wrap" }}>
         {TABS.map((t) => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding:"8px 18px", borderRadius:10, border:"1px solid", fontSize:13, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, transition:"all .2s", borderColor:tab===t?"#D4AF37":"rgba(212,175,55,0.2)", background:tab===t?"rgba(212,175,55,0.12)":"transparent", color:tab===t?"#D4AF37":"rgba(255,255,255,0.5)" }}>
+          <button key={t} onClick={() => setTab(t)} style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 18px", borderRadius:10, border:"1px solid", fontSize:13, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, transition:"all .2s", borderColor:tab===t?"#D4AF37":"rgba(212,175,55,0.2)", background:tab===t?"rgba(212,175,55,0.12)":"transparent", color:tab===t?"#D4AF37":"rgba(255,255,255,0.5)", position:"relative" }}>
             {t}
+            {t === "KYC Queue" && pendingKycCount > 0 && (
+              <span style={{ background:"#ef4444", color:"#fff", borderRadius:10, fontSize:10, fontWeight:700, padding:"1px 6px", minWidth:18 }}>{pendingKycCount}</span>
+            )}
           </button>
         ))}
       </div>
@@ -410,11 +609,11 @@ export default function DriverOnboardingPage() {
               <input value={search} onChange={(e)=>{setSearch(e.target.value);setOffset(0);}} placeholder="Search name or phone…" style={{ width:"100%", height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, paddingLeft:36, paddingRight:12, color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }} />
             </div>
             {[
-              { val:status, set:(v)=>{setStatus(v);setOffset(0);}, opts:[["","All Status"],["online","Online"],["offline","Offline"]] },
-              { val:verified, set:(v)=>{setVerified(v);setOffset(0);}, opts:[["","All Verified"],["true","Verified"],["false","Unverified"]] },
+              { val:status,   set:(v)=>{setStatus(v);setOffset(0);},   opts:[["","All Status"],["online","Online"],["offline","Offline"]] },
+              { val:verified, set:(v)=>{setVerified(v);setOffset(0);}, opts:[["","All"],["true","Verified"],["false","Unverified"]] },
             ].map(({ val, set, opts }, i) => (
               <select key={i} value={val} onChange={(e)=>set(e.target.value)} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
-                {opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                {opts.map(([v,l])=><option key={v} value={v} style={{ background:"#020617" }}>{l}</option>)}
               </select>
             ))}
           </div>
@@ -423,73 +622,78 @@ export default function DriverOnboardingPage() {
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr>
-                  {["Name","Phone","Vehicle","Rating","Status","Verified","Joined","Actions"].map((c)=><TH key={c} c={c}/>)}
+                  {["Driver","Phone","Vehicle","Rating","Status","KYC","Joined","Actions"].map((c)=><TH key={c} c={c}/>)}
                 </tr></thead>
                 <tbody>
                   {loading
                     ? Array(6).fill(0).map((_,i)=>(
-                        <tr key={i}><td colSpan={8}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
+                        <tr key={i}><td colSpan={8}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
                       ))
                     : drivers.length === 0
-                      ? <tr><td colSpan={8} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers found</td></tr>
+                      ? <tr><td colSpan={8} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers found</td></tr>
                       : drivers.map((d) => {
                           const isSuspended = d.is_suspended || d.suspended;
-                          const userId = d.user_id || d.id;
+                          const userId = d.user_id || d.userId;
+                          const isVerified = !!(d.is_verified || d.verified_at);
                           return (
                             <tr key={d.id} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
-                              <TD><div style={{ fontWeight:600, color:"#fff" }}>{d.full_name || d.name || "—"}</div></TD>
-                              <TD>{d.phone_number || "—"}</TD>
-                              <TD><span style={{ textTransform:"capitalize", color:"rgba(255,255,255,0.6)" }}>{d.vehicle_type || "—"}{d.vehicle_number ? ` · ${d.vehicle_number}` : ""}</span></TD>
-                              <TD><span style={{ color:"#f59e0b", fontWeight:600 }}>{d.rating ? `${d.rating}★` : "—"}</span></TD>
-                              <TD><DriverStatusBadge d={d} /></TD>
                               <TD>
-                                <Badge label={d.is_verified?"Verified":"Pending"}
-                                  color={d.is_verified?"#D4AF37":"#f59e0b"}
-                                  bg={d.is_verified?"rgba(212,175,55,0.12)":"rgba(245,158,11,0.1)"}
-                                  border={d.is_verified?"rgba(212,175,55,0.3)":"rgba(245,158,11,0.25)"}
-                                />
+                                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                                  <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.2)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden" }}>
+                                    {d.profile_photo_url
+                                      ? <img src={d.profile_photo_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={(e)=>{e.target.style.display="none";}}/>
+                                      : <User size={14} color="rgba(212,175,55,0.5)"/>
+                                    }
+                                  </div>
+                                  <div style={{ fontWeight:600, color:"#fff" }}>{d.full_name || d.name || "—"}</div>
+                                </div>
+                              </TD>
+                              <TD style={{ fontFamily:"monospace", fontSize:12 }}>{d.phone_number || "—"}</TD>
+                              <TD>
+                                <div style={{ fontSize:12 }}><span style={{ color:"rgba(255,255,255,0.6)", textTransform:"capitalize" }}>{d.vehicle_type||d.vehicleType||"—"}</span></div>
+                                {(d.vehicle_number||d.vehicleNumber) && <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginTop:2 }}>{d.vehicle_number||d.vehicleNumber}</div>}
+                              </TD>
+                              <TD><span style={{ color:"#f59e0b", fontWeight:600 }}>{d.rating ? `${parseFloat(d.rating).toFixed(1)}★` : "—"}</span></TD>
+                              <TD>
+                                {isSuspended
+                                  ? <Badge label="Suspended" color="#f59e0b" bg="rgba(245,158,11,0.1)" border="rgba(245,158,11,0.3)" />
+                                  : d.is_active
+                                    ? <Badge label="Active" color="#4ade80" bg="rgba(34,197,94,0.12)" border="rgba(34,197,94,0.3)" />
+                                    : <Badge label="Blocked" color="#f87171" bg="rgba(239,68,68,0.12)" border="rgba(239,68,68,0.3)" />
+                                }
+                              </TD>
+                              <TD>
+                                {isVerified
+                                  ? <Badge label="Verified" color="#D4AF37" bg="rgba(212,175,55,0.12)" border="rgba(212,175,55,0.3)" />
+                                  : <Badge label="Pending" color="#f59e0b" bg="rgba(245,158,11,0.08)" border="rgba(245,158,11,0.2)" />
+                                }
                               </TD>
                               <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDate(d.created_at)}</TD>
                               <TD>
-                                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                                  {/* View Details */}
+                                <div style={{ display:"flex", gap:6 }}>
                                   <button
-                                    onClick={() => setViewDriverId(d.id)}
-                                    title="View full profile"
-                                    style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 10px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:8, color:"#D4AF37", fontSize:11, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
+                                    onClick={() => setViewDriver({ driverId: d.id, userId })}
+                                    style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:8, color:"#D4AF37", fontSize:11, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600 }}>
                                     <Eye size={12}/> Details
                                   </button>
-
-                                  {/* Block / Unblock */}
                                   <button
                                     onClick={() => {
                                       if (d.is_active) setConfirmBlock(d);
                                       else act(d.id+"s", () => updateDriverStatus(d.id, true), "Driver unblocked.");
                                     }}
                                     disabled={acting[d.id+"s"] || isSuspended}
-                                    style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 10px", background:d.is_active?"rgba(239,68,68,0.1)":"rgba(34,197,94,0.1)", border:`1px solid ${d.is_active?"rgba(239,68,68,0.25)":"rgba(34,197,94,0.25)"}`, borderRadius:8, color:d.is_active?"#f87171":"#4ade80", fontSize:11, cursor:isSuspended?"not-allowed":"pointer", fontFamily:"Outfit,sans-serif", opacity:(acting[d.id+"s"]||isSuspended)?0.4:1 }}>
-                                    {d.is_active ? <UserX size={12}/> : <UserCheck size={12}/>}
+                                    style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 10px", background:d.is_active?"rgba(239,68,68,0.1)":"rgba(34,197,94,0.1)", border:`1px solid ${d.is_active?"rgba(239,68,68,0.25)":"rgba(34,197,94,0.25)"}`, borderRadius:8, color:d.is_active?"#f87171":"#4ade80", fontSize:11, cursor:isSuspended?"not-allowed":"pointer", opacity:(acting[d.id+"s"]||isSuspended)?0.4:1 }}>
+                                    {d.is_active ? <UserX size={11}/> : <UserCheck size={11}/>}
                                     {d.is_active ? "Block" : "Unblock"}
                                   </button>
-
-                                  {/* Suspend */}
                                   {!isSuspended && (
                                     <button
                                       onClick={() => setSuspendTarget({ userId, name: d.full_name || d.name })}
                                       disabled={acting["sus"+userId]}
-                                      style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 10px", background:"rgba(245,158,11,0.1)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:8, color:"#f59e0b", fontSize:11, cursor:"pointer", fontFamily:"Outfit,sans-serif", opacity:acting["sus"+userId]?0.4:1 }}>
-                                      <ShieldX size={12}/> Suspend
+                                      style={{ padding:"5px 10px", background:"rgba(245,158,11,0.1)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:8, color:"#f59e0b", fontSize:11, cursor:"pointer", opacity:acting["sus"+userId]?0.4:1 }}>
+                                      <ShieldX size={11}/>
                                     </button>
                                   )}
-
-                                  {/* Verify / Unverify */}
-                                  <button
-                                    onClick={() => act(d.id+"v", () => verifyDriver(d.id, !d.is_verified), `Driver ${d.is_verified?"unverified":"verified"}.`)}
-                                    disabled={acting[d.id+"v"]}
-                                    title={d.is_verified?"Unverify":"Verify"}
-                                    style={{ width:30, height:30, borderRadius:8, border:"none", background:d.is_verified?"rgba(239,68,68,0.12)":"rgba(212,175,55,0.12)", cursor:"pointer", color:d.is_verified?"#f87171":"#D4AF37", display:"flex", alignItems:"center", justifyContent:"center", opacity:acting[d.id+"v"]?0.4:1 }}>
-                                    {d.is_verified?<ShieldX size={13}/>:<ShieldCheck size={13}/>}
-                                  </button>
                                 </div>
                               </TD>
                             </tr>
@@ -499,14 +703,9 @@ export default function DriverOnboardingPage() {
                 </tbody>
               </table>
             </div>
-            {total > LIMIT && (
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
-                <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>Page {currentPage} of {totalPages} · {total} total</span>
-                <div style={{ display:"flex", gap:8 }}>
-                  {[{icon:<ChevronLeft size={14}/>,dis:offset===0,fn:()=>setOffset(Math.max(0,offset-LIMIT))},{icon:<ChevronRight size={14}/>,dis:offset+LIMIT>=total,fn:()=>setOffset(offset+LIMIT)}].map((b,i)=>(
-                    <button key={i} onClick={b.fn} disabled={b.dis} style={{ width:32, height:32, borderRadius:8, border:"1px solid rgba(212,175,55,0.2)", background:"transparent", cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center", opacity:b.dis?0.3:1 }}>{b.icon}</button>
-                  ))}
-                </div>
+            {totalPages > 1 && (
+              <div style={{ padding:"14px 20px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
+                <Pagination page={currentPage} total={total} perPage={LIMIT} onChange={(p) => setOffset((p-1)*LIMIT)} />
               </div>
             )}
           </div>
@@ -515,66 +714,106 @@ export default function DriverOnboardingPage() {
 
       {/* ── KYC QUEUE TAB ── */}
       {tab === "KYC Queue" && (
-        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
-          <div style={{ padding:"16px 20px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
-            <span style={{ fontFamily:"Cinzel,serif", fontSize:14, color:"#fff", fontWeight:600 }}>Pending KYC Documents</span>
-            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-              <select
-                value={kycTypeFilter}
-                onChange={(e) => setKycTypeFilter(e.target.value)}
-                style={{ height:34, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"0 12px", color:"rgba(255,255,255,0.8)", fontSize:12, outline:"none", cursor:"pointer" }}>
-                <option value="">All Types</option>
-                <option value="AADHAAR">Aadhaar</option>
-                <option value="PAN">PAN Card</option>
-                <option value="DRIVING_LICENCE">Driving Licence</option>
-                <option value="VEHICLE_RC">Vehicle RC</option>
-                <option value="SELFIE">Selfie</option>
-                <option value="BANK_ACCOUNT">Bank Account</option>
-              </select>
-              <button onClick={loadKyc} style={{ fontSize:12, color:"rgba(212,175,55,0.7)", background:"none", border:"none", cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>↻ Refresh</button>
+        <>
+          {/* Summary */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
+            {[
+              { label:"Pending Review", count:kycDocs.filter(d=>(d.status||"").toLowerCase()==="pending").length, color:"#f59e0b", bg:"rgba(245,158,11,0.08)" },
+              { label:"Approved",       count:kycDocs.filter(d=>(d.status||"").toLowerCase()==="approved").length, color:"#4ade80", bg:"rgba(34,197,94,0.06)" },
+              { label:"Rejected",       count:kycDocs.filter(d=>(d.status||"").toLowerCase()==="rejected").length, color:"#f87171", bg:"rgba(239,68,68,0.06)" },
+            ].map(({ label, count, color, bg }) => (
+              <div key={label} style={{ background:bg, border:`1px solid ${color}30`, borderRadius:14, padding:"16px 20px", textAlign:"center" }}>
+                <div style={{ fontSize:26, fontWeight:800, color }}>{kycLoading ? "—" : count}</div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:4 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
+            <div style={{ padding:"16px 20px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+              <span style={{ fontFamily:"Cinzel,serif", fontSize:14, color:"#fff", fontWeight:600 }}>Document Queue</span>
+              <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                <select value={kycTypeFilter} onChange={(e) => setKycTypeFilter(e.target.value)} style={{ height:34, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"0 12px", color:"rgba(255,255,255,0.8)", fontSize:12, outline:"none", cursor:"pointer" }}>
+                  <option value="">All Types</option>
+                  <option value="AADHAAR">Aadhaar</option>
+                  <option value="PAN">PAN Card</option>
+                  <option value="DRIVING_LICENCE">Driving Licence</option>
+                  <option value="VEHICLE_RC">Vehicle RC</option>
+                  <option value="SELFIE">Selfie</option>
+                  <option value="BANK_ACCOUNT">Bank Account</option>
+                </select>
+                <button onClick={loadKyc} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"rgba(212,175,55,0.7)", background:"rgba(212,175,55,0.08)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"6px 12px", cursor:"pointer" }}>
+                  <RefreshCw size={11}/> Refresh
+                </button>
+              </div>
             </div>
+
+            {kycLoading ? (
+              <div style={{ padding:20, display:"flex", flexDirection:"column", gap:12 }}>
+                {Array(4).fill(0).map((_,i) => <div key={i} style={{ height:90, background:"rgba(255,255,255,0.03)", borderRadius:12, animation:"gmPulse 1.5s ease-in-out infinite" }} />)}
+              </div>
+            ) : kycDocs.length === 0 ? (
+              <div style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13, fontFamily:"Outfit,sans-serif" }}>
+                <CheckCircle size={32} color="rgba(34,197,94,0.2)" style={{ marginBottom:12, display:"block", margin:"0 auto 12px" }} />
+                No documents in queue
+              </div>
+            ) : (
+              <div style={{ padding:16, display:"flex", flexDirection:"column", gap:12 }}>
+                {kycDocs.map((doc) => {
+                  const s2 = (doc.status||"").toLowerCase();
+                  const isPending = s2 === "pending" || s2 === "manual_review" || s2 === "under_review";
+                  const driverName = doc.driver?.full_name || doc.driver_name || "—";
+                  const driverPhone = doc.driver?.phone_number || doc.driver_phone || "";
+                  return (
+                    <div key={doc.id} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${isPending?"rgba(245,158,11,0.15)":"rgba(255,255,255,0.06)"}`, borderRadius:14, padding:16, display:"flex", gap:16, alignItems:"flex-start" }}>
+                      {/* Thumbnail */}
+                      <div style={{ width:80, height:64, borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.1)", overflow:"hidden", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", cursor:doc.file_url?"pointer":"default" }}
+                        onClick={() => doc.file_url && window.open(doc.file_url,"_blank")}>
+                        {doc.file_url
+                          ? <img src={doc.file_url} alt="doc" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={(e)=>{e.target.style.display="none";}} />
+                          : <CreditCard size={20} color="rgba(212,175,55,0.3)"/>
+                        }
+                      </div>
+
+                      {/* Info */}
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:5, flexWrap:"wrap" }}>
+                          <span style={{ fontWeight:600, color:"#fff", fontSize:13 }}>{driverName}</span>
+                          {driverPhone && <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontFamily:"monospace" }}>{driverPhone}</span>}
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:12, color:"rgba(255,255,255,0.65)", textTransform:"capitalize" }}>{(doc.document_type||doc.type||"—").replace(/_/g," ")}</span>
+                          <DocStatusBadge status={doc.status} />
+                          <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{fmtDate(doc.created_at || doc.submitted_at)}</span>
+                        </div>
+                        {doc.reject_reason && (
+                          <div style={{ fontSize:11, color:"#f87171", marginBottom:8 }}>Rejected: {doc.reject_reason}</div>
+                        )}
+                        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                          {isPending && (
+                            <>
+                              <button onClick={() => handleApproveKyc(doc.id)} disabled={acting[doc.id]} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 14px", background:"rgba(34,197,94,0.12)", border:"1px solid rgba(34,197,94,0.25)", borderRadius:8, color:"#4ade80", fontSize:12, cursor:"pointer", fontWeight:600, opacity:acting[doc.id]?0.5:1 }}>
+                                <FileCheck size={12}/>{acting[doc.id]?"Approving…":"Approve"}
+                              </button>
+                              <button onClick={() => setRejectTarget(doc.id)} disabled={acting[doc.id]} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 14px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:8, color:"#f87171", fontSize:12, cursor:"pointer", fontWeight:600, opacity:acting[doc.id]?0.5:1 }}>
+                                <FileX size={12}/>Reject
+                              </button>
+                            </>
+                          )}
+                          {doc.file_url && (
+                            <a href={doc.file_url} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:"rgba(212,175,55,0.08)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:8, color:"#D4AF37", fontSize:12, textDecoration:"none" }}>
+                              <ExternalLink size={11}/>View Full
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          <div style={{ overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr>
-                {["Driver","Doc Type","Status","Submitted","Actions"].map((c)=><TH key={c} c={c}/>)}
-              </tr></thead>
-              <tbody>
-                {kycLoading
-                  ? Array(4).fill(0).map((_,i)=>(
-                      <tr key={i}><td colSpan={5}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
-                    ))
-                  : kycDocs.length === 0
-                    ? <tr><td colSpan={5} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No pending KYC documents</td></tr>
-                    : kycDocs.map((doc) => (
-                      <tr key={doc.id} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
-                        <TD>
-                          <div style={{ fontWeight:600, color:"#fff" }}>{doc.driver?.full_name || doc.driver_name || "—"}</div>
-                          <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:2 }}>{doc.driver?.phone_number || doc.driver_phone || ""}</div>
-                        </TD>
-                        <TD><span style={{ textTransform:"capitalize", color:"rgba(255,255,255,0.7)" }}>{(doc.document_type || doc.type || "—").replace(/_/g," ")}</span></TD>
-                        <TD><Badge label={doc.status || "Pending"} color="#f59e0b" bg="rgba(245,158,11,0.1)" border="rgba(245,158,11,0.25)" /></TD>
-                        <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDate(doc.created_at || doc.submitted_at)}</TD>
-                        <TD>
-                          <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-                            <button onClick={() => setViewDocId(doc.id)} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 11px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:8, color:"#D4AF37", fontSize:12, cursor:"pointer" }}>
-                              <Eye size={12}/> View
-                            </button>
-                            <button onClick={() => handleApprove(doc.id)} disabled={acting[doc.id]} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 11px", background:"rgba(34,197,94,0.12)", border:"1px solid rgba(34,197,94,0.25)", borderRadius:8, color:"#4ade80", fontSize:12, cursor:"pointer", opacity:acting[doc.id]?0.5:1 }}>
-                              <FileCheck size={12}/> Approve
-                            </button>
-                            <button onClick={() => setRejectTarget(doc.id)} disabled={acting[doc.id]} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 11px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:8, color:"#f87171", fontSize:12, cursor:"pointer", opacity:acting[doc.id]?0.5:1 }}>
-                              <FileX size={12}/> Reject
-                            </button>
-                          </div>
-                        </TD>
-                      </tr>
-                    ))
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
+        </>
       )}
 
       {/* ── FRAUD ALERTS TAB ── */}
@@ -582,12 +821,11 @@ export default function DriverOnboardingPage() {
         <>
           <div style={{ display:"flex", gap:10, marginBottom:16 }}>
             {["HIGH","MEDIUM","LOW"].map((s) => (
-              <button key={s} onClick={() => setSeverity(s)} style={{ padding:"7px 16px", borderRadius:10, border:"1px solid", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, transition:"all .2s", borderColor:severity===s?(s==="HIGH"?"#ef4444":s==="MEDIUM"?"#f59e0b":"#3b82f6"):"rgba(212,175,55,0.2)", background:severity===s?(s==="HIGH"?"rgba(239,68,68,0.12)":s==="MEDIUM"?"rgba(245,158,11,0.1)":"rgba(59,130,246,0.1)"):"transparent", color:severity===s?(s==="HIGH"?"#f87171":s==="MEDIUM"?"#f59e0b":"#60a5fa"):"rgba(255,255,255,0.5)" }}>
+              <button key={s} onClick={() => setSeverity(s)} style={{ padding:"7px 16px", borderRadius:10, border:"1px solid", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, borderColor:severity===s?(s==="HIGH"?"#ef4444":s==="MEDIUM"?"#f59e0b":"#3b82f6"):"rgba(212,175,55,0.2)", background:severity===s?(s==="HIGH"?"rgba(239,68,68,0.12)":s==="MEDIUM"?"rgba(245,158,11,0.1)":"rgba(59,130,246,0.1)"):"transparent", color:severity===s?(s==="HIGH"?"#f87171":s==="MEDIUM"?"#f59e0b":"#60a5fa"):"rgba(255,255,255,0.5)" }}>
                 {s}
               </button>
             ))}
           </div>
-
           <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
@@ -600,25 +838,22 @@ export default function DriverOnboardingPage() {
                         <tr key={i}><td colSpan={6}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
                       ))
                     : fraudAlerts.length === 0
-                      ? <tr><td colSpan={6} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No {severity} severity alerts</td></tr>
+                      ? <tr><td colSpan={6} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No {severity} severity alerts</td></tr>
                       : fraudAlerts.map((a) => {
-                          const riskScore = a.risk_score ?? a.riskScore ?? 0;
-                          const riskColor = riskScore >= 85 ? "#f87171" : riskScore >= 70 ? "#f59e0b" : "#60a5fa";
-                          const driverName = a.driver?.full_name || a.driver_name || "—";
+                          const riskScore   = a.risk_score ?? a.riskScore ?? 0;
+                          const riskColor   = riskScore >= 85 ? "#f87171" : riskScore >= 70 ? "#f59e0b" : "#60a5fa";
+                          const driverName  = a.driver?.full_name || a.driver_name || "—";
                           const driverUserId = a.driver?.id || a.driver_id || a.user_id;
                           return (
                             <tr key={a.id || a.alert_number} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
                               <TD><span style={{ fontFamily:"monospace", color:"rgba(212,175,55,0.7)", fontSize:12 }}>{a.alert_number || a.id}</span></TD>
-                              <TD><div style={{ display:"flex", alignItems:"center", gap:6 }}><AlertTriangle size={12} color="#f87171" /><span style={{ fontSize:12 }}>{a.alert_type || a.type || "—"}</span></div></TD>
+                              <TD><div style={{ display:"flex", alignItems:"center", gap:6 }}><AlertTriangle size={12} color="#f87171"/><span style={{ fontSize:12 }}>{a.alert_type || a.type || "—"}</span></div></TD>
                               <TD>{driverName}</TD>
                               <TD><span style={{ padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700, background:`${riskColor}20`, border:`1px solid ${riskColor}40`, color:riskColor }}>{riskScore}</span></TD>
-                              <TD><Badge label={a.status || "flagged"} color="#f87171" bg="rgba(239,68,68,0.1)" border="rgba(239,68,68,0.25)" /></TD>
+                              <TD><Badge label={a.status || "flagged"} color="#f87171" bg="rgba(239,68,68,0.1)" border="rgba(239,68,68,0.25)"/></TD>
                               <TD>
                                 {driverUserId && (
-                                  <button
-                                    onClick={() => setSuspendTarget({ userId: driverUserId, name: driverName })}
-                                    disabled={acting["sus"+driverUserId]}
-                                    style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", background:"rgba(245,158,11,0.1)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:8, color:"#f59e0b", fontSize:12, cursor:"pointer", opacity:acting["sus"+driverUserId]?0.5:1 }}>
+                                  <button onClick={() => setSuspendTarget({ userId:driverUserId, name:driverName })} disabled={acting["sus"+driverUserId]} style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", background:"rgba(245,158,11,0.1)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:8, color:"#f59e0b", fontSize:12, cursor:"pointer", opacity:acting["sus"+driverUserId]?0.5:1 }}>
                                     <ShieldX size={13}/> Suspend
                                   </button>
                                 )}

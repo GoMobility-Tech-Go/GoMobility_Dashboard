@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, Filter, CircleDot, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, Cell } from "recharts";
-import { getSupportTickets, replyToTicket } from "../../api/admin";
+import { getSupportTickets, replyToTicket, getSupportCategories } from "../../api/admin";
 
 function normalizeTicket(t) {
   return {
@@ -47,6 +47,8 @@ export default function ComplaintsSupportPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState("all");
 
   useEffect(() => {
     getSupportTickets()
@@ -59,12 +61,20 @@ export default function ComplaintsSupportPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    getSupportCategories()
+      .then(res => {
+        const raw = res.data?.data || res.data || [];
+        const list = Array.isArray(raw) ? raw : [];
+        setCategories(list.map(c => typeof c === "string" ? c : c.name || c.category || c));
+      })
+      .catch(() => {});
   }, []);
 
-  const filtered = tickets.filter(t =>
-    t.ticketId.toLowerCase().includes(search.toLowerCase()) ||
-    t.type.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = tickets.filter(t => {
+    const matchSearch = t.ticketId.toLowerCase().includes(search.toLowerCase()) || t.type.toLowerCase().includes(search.toLowerCase());
+    const matchCat = activeCategory === "all" || t.type.toLowerCase() === activeCategory.toLowerCase();
+    return matchSearch && matchCat;
+  });
 
   const openCount = tickets.filter(t => t.status === "open").length;
   const inProgressCount = tickets.filter(t => t.status === "in_progress" || t.status === "in progress").length;
@@ -110,8 +120,8 @@ export default function ComplaintsSupportPage() {
           })}
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-          <div className="card" style={{ flex: 1, display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap:"wrap" }}>
+          <div className="card" style={{ flex: 1, minWidth:180, display: "flex", gap: 8 }}>
             <Search size={16} />
             <input
               placeholder="Search tickets..."
@@ -120,6 +130,18 @@ export default function ComplaintsSupportPage() {
               style={{ background: "transparent", border: "none", outline: "none", color: "#fff", width: "100%" }}
             />
           </div>
+          {categories.length > 0 && (
+            <div className="card" style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px" }}>
+              <Filter size={14} color="rgba(212,175,55,0.6)" />
+              <select value={activeCategory} onChange={e=>setActiveCategory(e.target.value)}
+                style={{ background:"transparent", border:"none", outline:"none", color:"rgba(255,255,255,0.8)", fontSize:13, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
+                <option value="all" style={{ background:"#020617" }}>All Categories</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat} style={{ background:"#020617" }}>{cat}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {loading ? (

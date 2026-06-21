@@ -4,11 +4,12 @@ import {
   UserPlus, SlidersHorizontal, ShieldCheck, ScrollText, ShieldAlert, LogOut,
   ChevronLeft, ChevronRight, Menu, X, Crown, Megaphone, AlertTriangle,
   Smartphone, Trophy, MessageCircle, Activity, Target, UserCog, Lock,
-  BarChart2, Receipt, Map
+  BarChart2, Receipt, Map, CheckCheck
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { getAdminNotifications, getUnreadNotifCount, markNotifRead, markAllNotifRead } from "../../api/admin";
 import SidebarHeader from "./SidebarHeader";
 import SidebarItem from "./SidebarItem";
 
@@ -68,12 +69,63 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const [notifs, setNotifs] = useState([]);
+  const [notifsLoading, setNotifsLoading] = useState(false);
   const ref = useRef(null);
+  const bellRef = useRef(null);
   const isSA = user?.role === "Super Admin";
   const groups = isSA ? [...ADMIN_MENU, ...SA_EXTRA] : ADMIN_MENU;
 
+  const fetchUnread = useCallback(() => {
+    getUnreadNotifCount()
+      .then((res) => setUnread(res.data?.data?.count ?? res.data?.count ?? 0))
+      .catch(() => {});
+  }, []);
+
+  const openBell = () => {
+    setBellOpen(p => !p);
+    if (!bellOpen) {
+      setNotifsLoading(true);
+      getAdminNotifications()
+        .then((res) => {
+          const d = res.data?.data || res.data || {};
+          const list = d.notifications || d.items || (Array.isArray(d) ? d : []);
+          setNotifs(list);
+        })
+        .catch(() => setNotifs([]))
+        .finally(() => setNotifsLoading(false));
+    }
+  };
+
+  const handleMarkAll = async () => {
+    try {
+      await markAllNotifRead();
+      setUnread(0);
+      setNotifs(p => p.map(n => ({ ...n, is_read: true })));
+    } catch {}
+  };
+
+  const handleMarkOne = async (id) => {
+    try {
+      await markNotifRead(id);
+      setNotifs(p => p.map(n => n.id === id ? { ...n, is_read: true } : n));
+      setUnread(p => Math.max(0, p - 1));
+    } catch {}
+  };
+
   useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setProfileOpen(false); };
+    fetchUnread();
+    const t = setInterval(fetchUnread, 60000);
+    return () => clearInterval(t);
+  }, [fetchUnread]);
+
+  useEffect(() => {
+    const h = e => {
+      if (ref.current && !ref.current.contains(e.target)) setProfileOpen(false);
+      if (bellRef.current && !bellRef.current.contains(e.target)) setBellOpen(false);
+    };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
@@ -154,6 +206,72 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
             </div>
           ))}
         </nav>
+
+        {/* Notification Bell */}
+        <div ref={bellRef} style={{ padding:"6px 10px", position:"relative" }}>
+          <button
+            onClick={openBell}
+            title="Notifications"
+            style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:desktopCollapsed?"8px 0":"9px 10px", borderRadius:10, border:"1px solid transparent", background:"none", cursor:"pointer", transition:"all .2s", justifyContent:desktopCollapsed?"center":"flex-start", position:"relative" }}
+            onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.04)";e.currentTarget.style.borderColor="rgba(212,175,55,0.15)";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.borderColor="transparent";}}
+          >
+            <div style={{ position:"relative", flexShrink:0 }}>
+              <Bell size={17} color={bellOpen?"#D4AF37":"rgba(255,255,255,0.55)"} />
+              {unread > 0 && (
+                <span style={{ position:"absolute", top:-5, right:-5, minWidth:16, height:16, borderRadius:8, background:"#ef4444", border:"1.5px solid #020c20", fontSize:9, fontWeight:700, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px", lineHeight:1 }}>
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
+            </div>
+            {!desktopCollapsed && (
+              <span style={{ fontSize:13, color:bellOpen?"#D4AF37":"rgba(255,255,255,0.6)", fontFamily:"Outfit,sans-serif", fontWeight:500 }}>Notifications</span>
+            )}
+          </button>
+
+          {/* Bell Dropdown */}
+          {bellOpen && (
+            <div style={{ position:"absolute", bottom:"calc(100% + 6px)", left:desktopCollapsed?60:10, right:desktopCollapsed?"auto":10, width:desktopCollapsed?300:undefined, background:"linear-gradient(135deg,#020c20,#030f28)", border:"1px solid rgba(212,175,55,0.22)", borderRadius:14, boxShadow:"0 20px 60px rgba(0,0,0,0.6)", zIndex:200, overflow:"hidden" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderBottom:"1px solid rgba(212,175,55,0.1)" }}>
+                <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:700, color:"#D4AF37" }}>Notifications</span>
+                {unread > 0 && (
+                  <button onClick={handleMarkAll} style={{ display:"flex", alignItems:"center", gap:4, fontSize:10.5, color:"rgba(255,255,255,0.5)", background:"none", border:"none", cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
+                    <CheckCheck size={11}/> Mark all read
+                  </button>
+                )}
+              </div>
+              <div style={{ maxHeight:300, overflowY:"auto" }}>
+                {notifsLoading ? (
+                  <div style={{ padding:24, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>Loading…</div>
+                ) : notifs.length === 0 ? (
+                  <div style={{ padding:28, textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:12, fontFamily:"Outfit,sans-serif" }}>
+                    <Bell size={24} color="rgba(255,255,255,0.1)" style={{ marginBottom:8, display:"block", margin:"0 auto 8px" }} />
+                    No notifications
+                  </div>
+                ) : notifs.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => !n.is_read && handleMarkOne(n.id)}
+                    style={{ padding:"11px 14px", borderBottom:"1px solid rgba(255,255,255,0.04)", background:n.is_read?"transparent":"rgba(212,175,55,0.04)", cursor:n.is_read?"default":"pointer", transition:"background .15s" }}
+                    onMouseEnter={e=>{if(!n.is_read)e.currentTarget.style.background="rgba(212,175,55,0.08)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background=n.is_read?"transparent":"rgba(212,175,55,0.04)";}}
+                  >
+                    <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
+                      {!n.is_read && <span style={{ width:6, height:6, borderRadius:"50%", background:"#D4AF37", flexShrink:0, marginTop:4 }}/>}
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:12.5, color:"rgba(255,255,255,0.82)", fontFamily:"Outfit,sans-serif", lineHeight:1.4, marginLeft:n.is_read?14:0 }}>{n.title || n.message || n.body || "System notification"}</div>
+                        {(n.body && n.title) && <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:3, lineHeight:1.4, marginLeft:n.is_read?14:0 }}>{n.body}</div>}
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:4, marginLeft:n.is_read?14:0 }}>
+                          {n.created_at ? new Date(n.created_at).toLocaleString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : ""}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Footer / Profile */}
         <div style={{ borderTop:"1px solid rgba(212,175,55,0.1)", padding:"10px 10px" }} ref={ref}>

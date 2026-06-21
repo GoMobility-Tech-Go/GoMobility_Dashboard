@@ -121,3 +121,23 @@ export const deletePricingPenalty = (offenseType, offenseCount) =>
 // ── Reports ───────────────────────────────────────────────────────────────────
 export const runReport = (reportType) =>
   api.post(`/admin/reports/run/${reportType}`);
+
+// ── Infra Stats (Redis + Queues) ──────────────────────────────────────────────
+export const getRedisStats = () => api.get('/admin/infra/redis/stats');
+export const getQueueStats = () => api.get('/admin/infra/queues');
+
+// ── Admin Notifications ───────────────────────────────────────────────────────
+export const getAdminNotifications = (params = {}) =>
+  api.get('/notifications', { params: { limit: 20, offset: 0, ...params } });
+export const getUnreadNotifCount = () => api.get('/notifications/unread-count');
+export const markNotifRead = (id) => api.patch(`/notifications/${id}/read`);
+export const markAllNotifRead = () => api.patch('/notifications/read-all');
+
+// ── Payment Gateway Refund ────────────────────────────────────────────────────
+export const initiatePaymentRefund = (data) => api.post('/payments/refund', data);
+
+// ── Referral Bonus Grant ──────────────────────────────────────────────────────
+export const grantReferralBonus = (data) => api.post('/wallet/referral-bonus', data);
+
+// ── Support Categories ────────────────────────────────────────────────────────
+export const getSupportCategories = () => api.get('/support/categories');

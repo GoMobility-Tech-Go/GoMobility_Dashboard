@@ -1,1012 +1,274 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
-  Bell,
-  Lock,
-  Mail,
-  Shield,
-  User,
-  Moon,
-  Eye,
-  Settings as SettingsIcon,
-  ChevronRight,
-  Laptop,
-  Smartphone,
-  Globe,
-  KeyRound,
-  BadgeCheck,
-  Database,
-  Palette,
+  User, Bell, Shield, Server, LogOut, Moon, Activity,
+  Phone, Mail, BadgeCheck, Clock, Globe, RefreshCw, CheckCircle
 } from "lucide-react";
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  CartesianGrid,
-} from "recharts";
+import { useAuth } from "../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
-const notificationUsage = [
-  { name: "Email", value: 52, color: "#D4AF37" },
-  { name: "SMS", value: 18, color: "#60A5FA" },
-  { name: "Push", value: 30, color: "#34D399" },
-];
+const BASE = "https://api.gomobility.co.in";
 
-const deviceActivity = [
-  { name: "Desktop", value: 64 },
-  { name: "Mobile", value: 24 },
-  { name: "Tablet", value: 12 },
-];
+const fmtUptime = (sec) => {
+  if (!sec) return "—";
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+};
 
-const GlobalStyles = () => (
-  <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@1,400&family=Outfit:wght@300;400;500;600;700&display=swap');
-
-    *, *::before, *::after {
-      box-sizing: border-box;
-    }
-
-    .dbc{
-      background:linear-gradient(145deg,rgba(255,255,255,0.048) 0%,rgba(255,255,255,0.012) 100%);
-      border:1px solid rgba(212,175,55,0.17);
-      border-radius:20px;
-      backdrop-filter:blur(14px);
-      position:relative;
-      overflow:hidden;
-      transition:transform .32s cubic-bezier(.22,1,.36,1),box-shadow .32s,border-color .32s;
-      min-width:0;
-    }
-
-    .dbc::before{
-      content:'';
-      position:absolute;
-      top:0;
-      left:0;
-      right:0;
-      height:1px;
-      background:linear-gradient(90deg,transparent,rgba(212,175,55,0.38),transparent);
-    }
-
-    .dbc:hover{
-      transform:translateY(-3px);
-      border-color:rgba(212,175,55,0.34);
-      box-shadow:0 24px 64px rgba(0,0,0,0.48);
-    }
-
-    .dbm{
-      background:linear-gradient(145deg,rgba(255,255,255,0.05) 0%,rgba(255,255,255,0.012) 100%);
-      border:1px solid rgba(212,175,55,0.16);
-      border-radius:20px;
-      backdrop-filter:blur(12px);
-      position:relative;
-      overflow:hidden;
-      transition:transform .32s cubic-bezier(.22,1,.36,1),box-shadow .32s,border-color .32s;
-      min-width:0;
-    }
-
-    .dbm::before{
-      content:'';
-      position:absolute;
-      top:0;
-      left:0;
-      right:0;
-      height:1px;
-      background:linear-gradient(90deg,transparent,rgba(212,175,55,0.34),transparent);
-    }
-
-    .dbm:hover{
-      transform:translateY(-4px);
-      border-color:rgba(212,175,55,0.36);
-      box-shadow:0 28px 70px rgba(0,0,0,0.52);
-    }
-
-    .bup{
-      display:inline-flex;
-      align-items:center;
-      gap:4px;
-      background:rgba(212,175,55,0.12);
-      border:1px solid rgba(212,175,55,0.28);
-      color:#D4AF37;
-      border-radius:999px;
-      padding:4px 9px;
-      font-size:10px;
-      font-weight:600;
-      font-family:'Outfit',sans-serif;
-      white-space:nowrap;
-    }
-
-    .ldot{
-      display:inline-block;
-      width:7px;
-      height:7px;
-      border-radius:50%;
-      background:#D4AF37;
-      flex-shrink:0;
-      animation:pdot 2.4s ease-in-out infinite;
-    }
-
-    @keyframes pdot{
-      0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,.5)}
-      50%{box-shadow:0 0 0 7px rgba(212,175,55,0)}
-    }
-
-    @keyframes fup{
-      from{opacity:0;transform:translateY(22px)}
-      to{opacity:1;transform:translateY(0)}
-    }
-
-    .fup{
-      animation:fup .65s cubic-bezier(.22,1,.36,1) both;
-    }
-
-    @keyframes shim{
-      0%{background-position:-200% center}
-      100%{background-position:200% center}
-    }
-
-    .shim{
-      background:linear-gradient(90deg,#D4AF37 0%,#f7dc6f 35%,#D4AF37 55%,#b8920f 100%);
-      background-size:200% auto;
-      -webkit-background-clip:text;
-      -webkit-text-fill-color:transparent;
-      background-clip:text;
-      animation:shim 5s linear infinite;
-    }
-
-    .topGrid{
-      display:grid;
-      grid-template-columns:1fr;
-      gap:18px;
-      margin-bottom:20px;
-    }
-
-    @media(min-width:1100px){
-      .topGrid{
-        grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);
-      }
-    }
-
-    .mainGrid{
-      display:grid;
-      grid-template-columns:1fr;
-      gap:18px;
-    }
-
-    @media(min-width:1200px){
-      .mainGrid{
-        grid-template-columns:minmax(0,1.5fr) minmax(320px,.9fr);
-      }
-    }
-
-    .stack{
-      display:grid;
-      gap:18px;
-    }
-
-    .inputDark{
-      width:100%;
-      height:44px;
-      border-radius:12px;
-      border:1px solid rgba(212,175,55,0.14);
-      background:rgba(255,255,255,0.04);
-      color:#fff;
-      padding:0 14px;
-      outline:none;
-      transition:border-color .2s, box-shadow .2s, background .2s;
-      font-size:14px;
-      font-family:'Outfit',sans-serif;
-    }
-
-    .inputDark:focus{
-      border-color:rgba(212,175,55,0.34);
-      box-shadow:0 0 0 4px rgba(212,175,55,0.08);
-      background:rgba(255,255,255,0.055);
-    }
-
-    .inputDark::placeholder{
-      color:rgba(255,255,255,0.24);
-    }
-
-    .sectionBox{
-      border-radius:16px;
-      background:rgba(255,255,255,0.03);
-      border:1px solid rgba(212,175,55,0.1);
-      padding:14px 14px;
-    }
-
-    .optBtn{
-      width:100%;
-      border:none;
-      border-radius:14px;
-      background:rgba(255,255,255,0.03);
-      border:1px solid rgba(212,175,55,0.1);
-      padding:13px 14px;
-      color:#fff;
-      text-align:left;
-      transition:all .22s ease;
-      cursor:pointer;
-    }
-
-    .optBtn:hover{
-      background:rgba(255,255,255,0.05);
-      border-color:rgba(212,175,55,0.2);
-      transform:translateX(3px);
-    }
-
-    .recharts-cartesian-axis-tick-value{
-      font-family:'Outfit',sans-serif;
-    }
-  `}</style>
+const SectionHeader = ({ icon: Icon, title, subtitle }) => (
+  <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+    <div style={{ width:38, height:38, borderRadius:12, background:"rgba(212,175,55,0.12)", border:"1px solid rgba(212,175,55,0.25)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+      <Icon size={17} color="#D4AF37" />
+    </div>
+    <div>
+      <div style={{ fontFamily:"Cinzel,serif", fontSize:15, fontWeight:700, color:"#fff" }}>{title}</div>
+      {subtitle && <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>{subtitle}</div>}
+    </div>
+  </div>
 );
 
-function SectionTitle({ sub, main }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <p
-        style={{
-          fontFamily: "'Cinzel',serif",
-          fontSize: 8.5,
-          letterSpacing: 2.5,
-          color: "rgba(212,175,55,0.4)",
-          textTransform: "uppercase",
-          margin: "0 0 4px",
-        }}
-      >
-        {sub}
-      </p>
-      <h2
-        style={{
-          fontFamily: "'Cinzel',serif",
-          fontSize: "clamp(14px,1.8vw,18px)",
-          fontWeight: 700,
-          color: "#fff",
-          letterSpacing: -0.3,
-          margin: 0,
-        }}
-      >
-        {main}
-      </h2>
-    </div>
-  );
-}
+const InfoRow = ({ label, value, mono }) => (
+  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"11px 0", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
+    <span style={{ fontSize:12, color:"rgba(255,255,255,0.4)" }}>{label}</span>
+    <span style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.85)", fontFamily:mono?"monospace":"Outfit,sans-serif" }}>{value || "—"}</span>
+  </div>
+);
 
-function Toggle({ enabled, onChange }) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      aria-label="Toggle setting"
-      style={{
-        position: "relative",
-        width: 44,
-        height: 26,
-        borderRadius: 999,
-        border: "none",
-        background: enabled
-          ? "linear-gradient(90deg,#D4AF37,#f7dc6f)"
-          : "rgba(255,255,255,0.16)",
-        cursor: "pointer",
-        flexShrink: 0,
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: 3,
-          left: enabled ? 21 : 3,
-          width: 20,
-          height: 20,
-          borderRadius: "50%",
-          background: enabled ? "#081327" : "#fff",
-          transition: "left .22s ease",
-        }}
-      />
+const ToggleRow = ({ title, desc, enabled, onChange }) => (
+  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:14, padding:"12px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+    <div>
+      <div style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.85)" }}>{title}</div>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:3 }}>{desc}</div>
+    </div>
+    <button onClick={onChange} style={{ position:"relative", width:44, height:26, borderRadius:999, border:"none", background:enabled?"linear-gradient(90deg,#D4AF37,#f7dc6f)":"rgba(255,255,255,0.14)", cursor:"pointer", flexShrink:0, transition:"background .2s" }}>
+      <span style={{ position:"absolute", top:3, left:enabled?21:3, width:20, height:20, borderRadius:"50%", background:enabled?"#081327":"#fff", transition:"left .22s ease" }} />
     </button>
-  );
-}
+  </div>
+);
 
-function RightCard({ icon: Icon, title, children }) {
-  return (
-    <div className="dbc" style={{ padding: "20px 22px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 10,
-            background: "rgba(212,175,55,0.12)",
-            border: "1px solid rgba(212,175,55,0.22)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <Icon size={15} color="#D4AF37" />
-        </div>
-
-        <h2
-          style={{
-            margin: 0,
-            fontFamily: "'Cinzel',serif",
-            fontSize: 16,
-            fontWeight: 700,
-            color: "#fff",
-            letterSpacing: -0.2,
-          }}
-        >
-          {title}
-        </h2>
-      </div>
-
-      <div style={{ display: "grid", gap: 10 }}>{children}</div>
-    </div>
-  );
-}
-
-function OptionCard({ title, description }) {
-  return (
-    <button type="button" className="optBtn">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-        }}
-      >
-        <div>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#fff",
-              fontFamily: "'Outfit',sans-serif",
-            }}
-          >
-            {title}
-          </p>
-          <p
-            style={{
-              margin: "4px 0 0",
-              fontSize: 11,
-              color: "rgba(255,255,255,0.34)",
-              fontFamily: "'Outfit',sans-serif",
-            }}
-          >
-            {description}
-          </p>
-        </div>
-
-        <ChevronRight size={15} color="rgba(212,175,55,0.7)" />
-      </div>
-    </button>
-  );
-}
-
-function InfoRow({ label, value }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 10,
-      }}
-    >
-      <span
-        style={{
-          fontSize: 12,
-          color: "rgba(255,255,255,0.38)",
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: 12.5,
-          fontWeight: 600,
-          color: "#fff",
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function NotificationRow({ title, description, enabled, onChange }) {
-  return (
-    <div
-      className="sectionBox"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-      }}
-    >
-      <div>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 13,
-            fontWeight: 600,
-            color: "#fff",
-          }}
-        >
-          {title}
-        </p>
-        <p
-          style={{
-            margin: "4px 0 0",
-            fontSize: 11,
-            color: "rgba(255,255,255,0.34)",
-          }}
-        >
-          {description}
-        </p>
-      </div>
-
-      <Toggle enabled={enabled} onChange={onChange} />
-    </div>
-  );
-}
-
-function CustomTooltip({ active, payload }) {
-  if (!active || !payload || !payload.length) return null;
-
-  const item = payload[0];
-  return (
-    <div
-      style={{
-        background: "rgba(4,18,46,0.96)",
-        border: "1px solid rgba(212,175,55,0.22)",
-        borderRadius: 12,
-        padding: "10px 12px",
-        backdropFilter: "blur(12px)",
-        boxShadow: "0 14px 28px rgba(0,0,0,0.35)",
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: 11,
-          color: "#fff",
-          fontWeight: 600,
-        }}
-      >
-        {item.name}: {item.value}%
-      </p>
-    </div>
-  );
-}
+const Card = ({ children, style }) => (
+  <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.12)", borderRadius:18, padding:"22px 24px", ...style }}>
+    {children}
+  </div>
+);
 
 export default function SettingsPage() {
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [smsAlerts, setSmsAlerts] = useState(false);
-  const [pushNotifications, setPushNotifications] = useState(true);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-  const [darkMode, setDarkMode] = useState(true);
-  const [activityTracking, setActivityTracking] = useState(true);
-  const [backupSync, setBackupSync] = useState(true);
+  // Notification prefs — stored in localStorage
+  const [prefs, setPrefs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("gm_admin_prefs") || "{}"); } catch { return {}; }
+  });
+
+  const setPref = (key, val) => {
+    const next = { ...prefs, [key]: val };
+    setPrefs(next);
+    localStorage.setItem("gm_admin_prefs", JSON.stringify(next));
+  };
+
+  // Health data
+  const [health, setHealth]       = useState(null);
+  const [hLoading, setHLoading]   = useState(true);
+
+  useEffect(() => {
+    fetch(`${BASE}/health`)
+      .then(r => r.json())
+      .then(d => setHealth(d))
+      .catch(() => {})
+      .finally(() => setHLoading(false));
+  }, []);
+
+  const handleLogout = () => {
+    if (window.confirm("Logout from GO Mobility Admin?")) {
+      logout();
+      navigate("/login");
+    }
+  };
+
+  const loginTime = (() => {
+    try {
+      const t = localStorage.getItem("gm_login_time");
+      return t ? new Date(t).toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }) : "This session";
+    } catch { return "This session"; }
+  })();
 
   return (
-    <>
-      <GlobalStyles />
+    <div style={{ fontFamily:"Outfit,sans-serif", maxWidth:900 }}>
 
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "100%",
-          minWidth: 0,
-          fontFamily: "'Outfit',sans-serif",
-        }}
-      >
-        {/* HEADER */}
-        <div className="fup topGrid" style={{ animationDelay: "0ms" }}>
-          <div className="dbc" style={{ padding: "20px 22px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 10,
-                flexWrap: "wrap",
-              }}
-            >
-              <span className="ldot" />
-              <p
-                style={{
-                  fontFamily: "'Cinzel',serif",
-                  fontSize: 9,
-                  letterSpacing: 3,
-                  color: "rgba(212,175,55,0.44)",
-                  textTransform: "uppercase",
-                  margin: 0,
-                }}
-              >
-                GO Mobility · Preferences Center
-              </p>
+      {/* Page Header */}
+      <div style={{ marginBottom:28 }}>
+        <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Settings</h1>
+        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Account info, preferences and platform status</p>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:20 }}>
+
+        {/* ── Left Column ── */}
+        <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+          {/* Admin Profile */}
+          <Card>
+            <SectionHeader icon={User} title="Admin Profile" subtitle="Your account information" />
+
+            {/* Avatar + Name */}
+            <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:22, padding:"16px 18px", background:"rgba(212,175,55,0.05)", border:"1px solid rgba(212,175,55,0.14)", borderRadius:14 }}>
+              <div style={{ width:56, height:56, borderRadius:"50%", background:"linear-gradient(135deg,#D4AF37,#b8922a)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Cinzel,serif", fontSize:20, fontWeight:700, color:"#020c20", flexShrink:0 }}>
+                {user?.initials || "AD"}
+              </div>
+              <div>
+                <div style={{ fontFamily:"Cinzel,serif", fontSize:17, fontWeight:700, color:"#fff" }}>{user?.name || "Admin"}</div>
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:5 }}>
+                  <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"2px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(212,175,55,0.12)", color:"#D4AF37", border:"1px solid rgba(212,175,55,0.28)" }}>
+                    <BadgeCheck size={10}/>{user?.role || "Admin"}
+                  </span>
+                  {user?.isActive && (
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"2px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(34,197,94,0.1)", color:"#4ade80", border:"1px solid rgba(34,197,94,0.25)" }}>
+                      <CheckCircle size={10}/>Active
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <h1
-              style={{
-                fontFamily: "'Cinzel',serif",
-                fontSize: "clamp(24px,4.6vw,46px)",
-                fontWeight: 900,
-                lineHeight: 1.05,
-                letterSpacing: "-0.03em",
-                margin: "0 0 10px",
-              }}
-            >
-              <span style={{ color: "#fff" }}>Settings </span>
-              <span className="shim">Dashboard</span>
-            </h1>
+            <InfoRow label="Full Name"    value={user?.name}  />
+            <InfoRow label="Email"        value={user?.email || "Not set"} />
+            <InfoRow label="Phone"        value={user?.phone || "Not set"} mono />
+            <InfoRow label="Role"         value={user?.role}  />
+            <InfoRow label="User ID"      value={user?.id}    mono />
+            <InfoRow label="Session Start" value={loginTime}  />
 
-            <p
-              style={{
-                fontFamily: "'Cormorant Garamond',serif",
-                fontStyle: "italic",
-                fontSize: "clamp(14px,1.4vw,18px)",
-                color: "rgba(212,175,55,0.5)",
-                lineHeight: 1.7,
-                margin: 0,
-                maxWidth: 640,
-              }}
-            >
-              Manage your account and platform preferences with a refined control center for profile, security, notifications, and system settings.
-            </p>
-          </div>
-
-          <div
-            className="dbc"
-            style={{
-              padding: "20px 22px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              gap: 14,
-            }}
-          >
-            <div>
-              <SectionTitle sub="Quick Overview" main="Settings Snapshot" />
-              <p
-                style={{
-                  margin: "8px 0 0",
-                  fontSize: 12,
-                  lineHeight: 1.6,
-                  color: "rgba(255,255,255,0.34)",
-                }}
-              >
-                Profile details, notification channels, platform access, and security preferences are all available from one unified dashboard.
-              </p>
+            <div style={{ marginTop:16, padding:"11px 14px", background:"rgba(59,130,246,0.06)", border:"1px solid rgba(59,130,246,0.18)", borderRadius:10, fontSize:12, color:"rgba(255,255,255,0.4)", lineHeight:1.6 }}>
+              Profile updates (name, email) must be done directly in the database or by contacting the super admin.
             </div>
+          </Card>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <span className="bup">
-                <BadgeCheck size={10} />
-                Admin Active
-              </span>
-              <span className="bup">
-                <KeyRound size={10} />
-                Security Ready
-              </span>
+          {/* Notification Preferences */}
+          <Card>
+            <SectionHeader icon={Bell} title="Notification Preferences" subtitle="Saved in your browser" />
+            <ToggleRow
+              title="New Ride Alerts"
+              desc="Get notified when new rides are requested"
+              enabled={prefs.rideAlerts ?? true}
+              onChange={() => setPref("rideAlerts", !(prefs.rideAlerts ?? true))}
+            />
+            <ToggleRow
+              title="KYC Queue Alerts"
+              desc="Alert when new documents need review"
+              enabled={prefs.kycAlerts ?? true}
+              onChange={() => setPref("kycAlerts", !(prefs.kycAlerts ?? true))}
+            />
+            <ToggleRow
+              title="Fraud Alerts"
+              desc="Notify on high-risk fraud flags"
+              enabled={prefs.fraudAlerts ?? true}
+              onChange={() => setPref("fraudAlerts", !(prefs.fraudAlerts ?? true))}
+            />
+            <ToggleRow
+              title="Driver Support Tickets"
+              desc="Alert on new unresolved support tickets"
+              enabled={prefs.supportAlerts ?? false}
+              onChange={() => setPref("supportAlerts", !(prefs.supportAlerts ?? false))}
+            />
+            <div style={{ marginTop:14, fontSize:11, color:"rgba(255,255,255,0.25)", lineHeight:1.6 }}>
+              These preferences are saved locally in your browser. They will reset if you clear browser data.
             </div>
-          </div>
+          </Card>
+
         </div>
 
-        {/* MAIN GRID */}
-        <section className="mainGrid fup" style={{ animationDelay: "90ms" }}>
-          {/* LEFT SIDE */}
-          <div className="stack">
-            {/* ACCOUNT INFORMATION */}
-            <div className="dbc" style={{ padding: "20px 22px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 10,
-                    background: "rgba(212,175,55,0.12)",
-                    border: "1px solid rgba(212,175,55,0.22)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <User size={15} color="#D4AF37" />
-                </div>
-                <SectionTitle sub="Profile" main="Account Information" />
+        {/* ── Right Column ── */}
+        <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+          {/* Platform Status */}
+          <Card>
+            <SectionHeader icon={Server} title="Platform Status" subtitle="Live backend information" />
+            {hLoading ? (
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {Array(5).fill(0).map((_,i)=><div key={i} style={{ height:36, background:"rgba(255,255,255,0.04)", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/>)}
               </div>
-
-              <div style={{ display: "grid", gap: 12 }}>
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: 6,
-                      fontSize: 11.5,
-                      color: "rgba(255,255,255,0.44)",
-                    }}
-                  >
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue="Admin User"
-                    className="inputDark"
-                  />
+            ) : health ? (
+              <>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, padding:"10px 14px", background:health.status==="ok"?"rgba(34,197,94,0.07)":"rgba(239,68,68,0.07)", border:`1px solid ${health.status==="ok"?"rgba(34,197,94,0.25)":"rgba(239,68,68,0.25)"}`, borderRadius:10 }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:health.status==="ok"?"#4ade80":"#f87171", flexShrink:0 }}/>
+                  <span style={{ fontSize:13, fontWeight:600, color:health.status==="ok"?"#4ade80":"#f87171" }}>
+                    {health.status==="ok" ? "All Systems Operational" : `Status: ${health.status}`}
+                  </span>
                 </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: 6,
-                      fontSize: 11.5,
-                      color: "rgba(255,255,255,0.44)",
-                    }}
-                  >
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    defaultValue="admin@gomobility.com"
-                    className="inputDark"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: 6,
-                      fontSize: 11.5,
-                      color: "rgba(255,255,255,0.44)",
-                    }}
-                  >
-                    Phone Number
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue="+91 98765 43210"
-                    className="inputDark"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: 6,
-                      fontSize: 11.5,
-                      color: "rgba(255,255,255,0.44)",
-                    }}
-                  >
-                    Role
-                  </label>
-                  <input
-                    type="text"
-                    defaultValue="Super Admin"
-                    className="inputDark"
-                    disabled
-                    style={{
-                      background: "rgba(255,255,255,0.025)",
-                      color: "rgba(255,255,255,0.45)",
-                    }}
-                  />
-                </div>
-
-                <div style={{ paddingTop: 4 }}>
-                  <button
-                    type="button"
-                    style={{
-                      height: 42,
-                      border: "1px solid rgba(212,175,55,0.24)",
-                      borderRadius: 12,
-                      background: "linear-gradient(135deg,rgba(212,175,55,0.18),rgba(212,175,55,0.08))",
-                      color: "#D4AF37",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 8,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      fontFamily: "'Outfit',sans-serif",
-                      cursor: "pointer",
-                      paddingInline: 18,
-                    }}
-                  >
-                    Save Changes
-                  </button>
-                </div>
+                <InfoRow label="Status"       value={health.status?.toUpperCase()} />
+                <InfoRow label="Version"      value={health.version || "—"} mono />
+                <InfoRow label="Environment"  value={health.environment || health.env || "—"} />
+                <InfoRow label="Server Uptime" value={fmtUptime(health.uptime)} />
+                <InfoRow label="Database"     value={health.database?.status || health.db || "—"} />
+              </>
+            ) : (
+              <div style={{ padding:24, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>
+                Could not reach backend
               </div>
+            )}
+            <button
+              onClick={() => { setHLoading(true); fetch(`${BASE}/health`).then(r=>r.json()).then(d=>setHealth(d)).catch(()=>{}).finally(()=>setHLoading(false)); }}
+              style={{ marginTop:14, display:"flex", alignItems:"center", gap:6, fontSize:12, color:"rgba(212,175,55,0.6)", background:"none", border:"none", cursor:"pointer", fontFamily:"Outfit,sans-serif", padding:0 }}>
+              <RefreshCw size={11}/> Refresh Status
+            </button>
+          </Card>
+
+          {/* Display Preferences */}
+          <Card>
+            <SectionHeader icon={Moon} title="Display" subtitle="UI preferences" />
+            <ToggleRow
+              title="Dark Mode"
+              desc="Premium dark appearance (always on for this dashboard)"
+              enabled={true}
+              onChange={() => {}}
+            />
+            <ToggleRow
+              title="Compact Tables"
+              desc="Show more rows with reduced row height"
+              enabled={prefs.compactTables ?? false}
+              onChange={() => setPref("compactTables", !(prefs.compactTables ?? false))}
+            />
+            <ToggleRow
+              title="Show Pagination Info"
+              desc="Display total count and page numbers in tables"
+              enabled={prefs.showPagination ?? true}
+              onChange={() => setPref("showPagination", !(prefs.showPagination ?? true))}
+            />
+          </Card>
+
+          {/* Session & Security */}
+          <Card>
+            <SectionHeader icon={Shield} title="Session & Security" />
+            <InfoRow label="Logged in as"  value={user?.name} />
+            <InfoRow label="Role"          value={user?.role} />
+            <InfoRow label="Session"       value="Active" />
+            <InfoRow label="API"           value="gomobility.co.in" mono />
+
+            <div style={{ marginTop:18 }}>
+              <button
+                onClick={handleLogout}
+                style={{ width:"100%", height:44, display:"flex", alignItems:"center", justifyContent:"center", gap:8, background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.28)", borderRadius:12, color:"#f87171", fontSize:13, fontFamily:"Cinzel,serif", fontWeight:700, cursor:"pointer", letterSpacing:"0.5px", transition:"all .2s" }}
+                onMouseEnter={e=>{e.currentTarget.style.background="rgba(239,68,68,0.18)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="rgba(239,68,68,0.1)";}}
+              >
+                <LogOut size={14}/> Logout
+              </button>
             </div>
+          </Card>
 
-            {/* NOTIFICATION PREFERENCES */}
-            <div className="dbc" style={{ padding: "20px 22px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 10,
-                    background: "rgba(212,175,55,0.12)",
-                    border: "1px solid rgba(212,175,55,0.22)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Bell size={15} color="#D4AF37" />
-                </div>
-                <SectionTitle sub="Alerts" main="Notification Preferences" />
-              </div>
+          {/* About */}
+          <Card>
+            <SectionHeader icon={Globe} title="About" />
+            <InfoRow label="Platform"     value="GO Mobility Admin" />
+            <InfoRow label="Dashboard"    value="v3.0" mono />
+            <InfoRow label="Region"       value="India / IST" />
+            <InfoRow label="Support"      value="admin@gomobility.co.in" />
+          </Card>
 
-              <div style={{ display: "grid", gap: 10 }}>
-                <NotificationRow
-                  title="Email Alerts"
-                  description="Receive important alerts via email"
-                  enabled={emailAlerts}
-                  onChange={() => setEmailAlerts((prev) => !prev)}
-                />
-
-                <NotificationRow
-                  title="SMS Alerts"
-                  description="Get critical updates via SMS"
-                  enabled={smsAlerts}
-                  onChange={() => setSmsAlerts((prev) => !prev)}
-                />
-
-                <NotificationRow
-                  title="Push Notifications"
-                  description="Allow instant browser notifications"
-                  enabled={pushNotifications}
-                  onChange={() => setPushNotifications((prev) => !prev)}
-                />
-              </div>
-            </div>
-
-            {/* EXTRA FEATURES */}
-            <div className="dbc" style={{ padding: "20px 22px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 10,
-                    background: "rgba(212,175,55,0.12)",
-                    border: "1px solid rgba(212,175,55,0.22)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <SettingsIcon size={15} color="#D4AF37" />
-                </div>
-                <SectionTitle sub="Enhancements" main="Additional Settings" />
-              </div>
-
-              <div style={{ display: "grid", gap: 10 }}>
-                <NotificationRow
-                  title="Dark Mode UI"
-                  description="Use premium dark appearance across the dashboard"
-                  enabled={darkMode}
-                  onChange={() => setDarkMode((prev) => !prev)}
-                />
-
-                <NotificationRow
-                  title="Activity Tracking"
-                  description="Track admin usage for audits and analytics"
-                  enabled={activityTracking}
-                  onChange={() => setActivityTracking((prev) => !prev)}
-                />
-
-                <NotificationRow
-                  title="Backup Sync"
-                  description="Keep configuration synced across sessions"
-                  enabled={backupSync}
-                  onChange={() => setBackupSync((prev) => !prev)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT SIDE */}
-          <div className="stack">
-            <RightCard icon={Lock} title="Security">
-              <OptionCard
-                title="Change Password"
-                description="Update your password"
-              />
-              <OptionCard
-                title="Two-Factor Auth"
-                description="Enable 2FA for security"
-              />
-              <OptionCard
-                title="Active Sessions"
-                description="Manage your sessions"
-              />
-            </RightCard>
-
-            <RightCard icon={Mail} title="Support">
-              <OptionCard
-                title="Help Center"
-                description="Browse documentation"
-              />
-              <OptionCard
-                title="Contact Support"
-                description="Get help from our team"
-              />
-            </RightCard>
-
-            <RightCard icon={Shield} title="Platform Info">
-              <div className="sectionBox" style={{ display: "grid", gap: 10 }}>
-                <InfoRow label="Version" value="v2.4.1" />
-                <InfoRow label="Environment" value="Production" />
-                <InfoRow label="Last Updated" value="Mar 17, 2026" />
-              </div>
-            </RightCard>
-
-            {/* EXTRA PREMIUM ANALYTICS */}
-            <RightCard icon={Palette} title="Notification Analytics">
-              <div className="sectionBox">
-                <div style={{ width: "100%", height: 190 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Tooltip content={<CustomTooltip />} />
-                      <Pie
-                        data={notificationUsage}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={36}
-                        outerRadius={66}
-                        paddingAngle={3}
-                        stroke="transparent"
-                        isAnimationActive
-                        animationDuration={1400}
-                      >
-                        {notificationUsage.map((item) => (
-                          <Cell key={item.name} fill={item.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-                  {notificationUsage.map((item) => (
-                    <div
-                      key={item.name}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 10,
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span
-                          style={{
-                            width: 9,
-                            height: 9,
-                            borderRadius: 999,
-                            background: item.color,
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span
-                          style={{
-                            fontSize: 11.5,
-                            color: "rgba(255,255,255,0.42)",
-                          }}
-                        >
-                          {item.name}
-                        </span>
-                      </div>
-
-                      <span
-                        style={{
-                          fontFamily: "'Cinzel',serif",
-                          fontSize: 12.5,
-                          fontWeight: 700,
-                          color: item.color,
-                        }}
-                      >
-                        {item.value}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </RightCard>
-
-            <RightCard icon={Database} title="Device Activity">
-              <div className="sectionBox">
-                <div style={{ width: "100%", height: 180 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={deviceActivity} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
-                      <CartesianGrid stroke="rgba(212,175,55,0.07)" strokeDasharray="4 6" vertical={false} />
-                      <XAxis
-                        dataKey="name"
-                        tick={{ fill: "rgba(255,255,255,0.42)", fontSize: 10 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="value" name="Usage" radius={[8, 8, 0, 0]}>
-                        <Cell fill="#D4AF37" />
-                        <Cell fill="#60A5FA" />
-                        <Cell fill="#34D399" />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-                  <InfoRow label="Primary Device" value="Desktop" />
-                  <InfoRow label="Secondary Device" value="Mobile" />
-                  <InfoRow label="Region" value="India / IST" />
-                </div>
-              </div>
-            </RightCard>
-
-            {/* EXTRA SETTINGS OPTIONS */}
-            <RightCard icon={Globe} title="System Preferences">
-              <OptionCard
-                title="Language & Locale"
-                description="Manage language, format, and regional preferences"
-              />
-              <OptionCard
-                title="Theme Presets"
-                description="Choose interface style presets for dashboard visuals"
-              />
-              <OptionCard
-                title="Connected Devices"
-                description="Review active browsers and trusted access points"
-              />
-            </RightCard>
-
-            <RightCard icon={Laptop} title="Workspace Controls">
-              <OptionCard
-                title="Dashboard Layout"
-                description="Customize your overview layout and widgets"
-              />
-              <OptionCard
-                title="Quick Actions"
-                description="Control which shortcuts appear on your dashboard"
-              />
-              <OptionCard
-                title="Mobile Access"
-                description="Manage mobile admin device visibility and alerts"
-              />
-            </RightCard>
-
-            <RightCard icon={Smartphone} title="Admin Features">
-              <OptionCard
-                title="Role Permissions"
-                description="Review access levels for managers and operators"
-              />
-              <OptionCard
-                title="System Logs"
-                description="Inspect audit events and activity history"
-              />
-              <OptionCard
-                title="Security Policies"
-                description="Apply enterprise security standards and rules"
-              />
-            </RightCard>
-          </div>
-        </section>
+        </div>
       </div>
-    </>
+
+      <style>{`@keyframes gmPulse{0%,100%{opacity:1}50%{opacity:0.45}}`}</style>
+    </div>
   );
 }

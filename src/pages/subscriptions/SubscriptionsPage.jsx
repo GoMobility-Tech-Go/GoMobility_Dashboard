@@ -50,6 +50,9 @@ export default function SubscriptionsPage() {
     durationDays: p.durationDays ?? p.duration_days,
     is_active:    p.isActive  ?? p.is_active ?? true,
     benefits:     p.benefits  || {},
+    pricing:      p.pricing   || null,
+    launchOffer:  p.launchOffer || null,
+    createdAt:    p.createdAt || p.created_at || null,
   });
 
   const openCreate = () => {
@@ -59,7 +62,7 @@ export default function SubscriptionsPage() {
 
   const buildPayload = () => ({
     name:               form.name,
-    slug:               form.slug || form.name.toLowerCase().replace(/\s+/g, "-"),
+    slug:               (form.slug || form.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
     description:        form.description,
     price:              Number(form.price),
     durationDays:       Number(form.durationDays),
@@ -234,15 +237,23 @@ export default function SubscriptionsPage() {
           ? <div style={{ textAlign:"center", padding:60, color:"rgba(255,255,255,0.3)", fontSize:14 }}>No subscription plans found. Create your first plan.</div>
           : <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))", gap:16 }}>
               {plans.map((rawPlan) => {
-                const p = norm(rawPlan);
-                const b = p.benefits || {};
+                const p   = norm(rawPlan);
+                const b   = p.benefits || {};
+                const pr  = p.pricing  || null;
+                const lo  = p.launchOffer || null;
+                const isLaunch = lo?.enabled && (!lo.expiry || new Date(lo.expiry) > new Date());
                 return (
                   <div key={p.id} style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${p.is_active?"rgba(212,175,55,0.25)":"rgba(255,255,255,0.08)"}`, borderRadius:16, padding:24, position:"relative", overflow:"hidden" }}>
                     {p.is_active && <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:"linear-gradient(90deg,#D4AF37,transparent)" }}/>}
 
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
                       <div>
-                        <div style={{ fontFamily:"Cinzel,serif", fontSize:16, fontWeight:700, color:"#fff" }}>{p.name}</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <div style={{ fontFamily:"Cinzel,serif", fontSize:16, fontWeight:700, color:"#fff" }}>{p.name}</div>
+                          {isLaunch && (
+                            <span style={{ padding:"2px 7px", borderRadius:8, fontSize:9.5, fontWeight:700, background:"rgba(251,191,36,0.15)", color:"#FBB024", border:"1px solid rgba(251,191,36,0.35)", letterSpacing:"0.5px" }}>🚀 LAUNCH</span>
+                          )}
+                        </div>
                         <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>/{p.slug}</div>
                       </div>
                       <span style={{ padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:p.is_active?"rgba(34,197,94,0.12)":"rgba(255,255,255,0.06)", color:p.is_active?"#4ade80":"rgba(255,255,255,0.4)", border:`1px solid ${p.is_active?"rgba(34,197,94,0.3)":"rgba(255,255,255,0.1)"}` }}>
@@ -250,18 +261,85 @@ export default function SubscriptionsPage() {
                       </span>
                     </div>
 
-                    {p.description && <p style={{ fontSize:12, color:"rgba(255,255,255,0.4)", margin:"0 0 10px", lineHeight:1.5 }}>{p.description}</p>}
-
-                    <div style={{ fontSize:28, fontWeight:800, color:"#D4AF37", marginBottom:2, fontFamily:"Cinzel,serif" }}>{fmtRupee(p.price)}</div>
-                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:14 }}>{p.durationDays} days validity</div>
-
-                    <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:18 }}>
-                      {(b.rideDiscountPercent > 0) && <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>🎁 {b.rideDiscountPercent}% ride discount</div>}
-                      {(b.freeRidesPerMonth > 0)   && <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>🚗 {b.freeRidesPerMonth} free rides/month</div>}
-                      {b.priorityBooking            && <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>⚡ Priority booking</div>}
-                      {b.cancellationWaiver         && <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>✔ Cancellation waiver</div>}
-                      {b.surgeProtection            && <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>🛡 Surge protection</div>}
+                    {/* Pricing block */}
+                    <div style={{ marginBottom:14 }}>
+                      {/* Launch offer: strikethrough regular + launch price side by side */}
+                      {isLaunch && pr?.regular ? (
+                        <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:2 }}>
+                          <span style={{ fontSize:28, fontWeight:800, color:"#D4AF37", fontFamily:"Cinzel,serif", lineHeight:1 }}>
+                            {fmtRupee(pr.taxableAmount)}
+                          </span>
+                          <span style={{ fontSize:15, fontWeight:500, color:"rgba(255,255,255,0.3)", textDecoration:"line-through", fontFamily:"Cinzel,serif" }}>
+                            {fmtRupee(pr.regular.taxableAmount)}
+                          </span>
+                          <span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontFamily:"Outfit,sans-serif" }}>+ GST</span>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize:28, fontWeight:800, color:"#D4AF37", fontFamily:"Cinzel,serif", lineHeight:1, marginBottom:2 }}>
+                          {fmtRupee(pr?.taxableAmount ?? p.price)}
+                          <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)", fontWeight:400, fontFamily:"Outfit,sans-serif" }}> + GST</span>
+                        </div>
+                      )}
+                      {pr && (
+                        <div style={{ display:"flex", gap:14, marginTop:4 }}>
+                          <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>
+                            GST {pr.gstRatePct}%: <b style={{ color:"rgba(255,255,255,0.6)" }}>+{fmtRupee(Math.round(pr.gstAmount))}</b>
+                          </span>
+                          <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>
+                            Total: <b style={{ color:"#A5F3FC" }}>{fmtRupee(Math.round(pr.totalAmount))}</b>
+                          </span>
+                        </div>
+                      )}
+                      {isLaunch && pr?.savings > 0 && (
+                        <div style={{ display:"inline-flex", alignItems:"center", gap:4, marginTop:5, padding:"2px 8px", borderRadius:6, background:"rgba(52,211,153,0.1)", border:"1px solid rgba(52,211,153,0.25)", fontSize:10.5, color:"#34D399", fontWeight:600 }}>
+                          You save {fmtRupee(Math.round(pr.savings))} · Launch offer
+                        </div>
+                      )}
+                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:6 }}>{p.durationDays} days validity</div>
                     </div>
+
+                    {/* Launch offer expiry */}
+                    {isLaunch && lo?.expiry && (
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:12, padding:"6px 10px", borderRadius:8, background:"rgba(251,191,36,0.06)", border:"1px solid rgba(251,191,36,0.2)" }}>
+                        <span style={{ fontSize:11 }}>⏳</span>
+                        <span style={{ fontSize:11, color:"rgba(251,191,36,0.85)" }}>
+                          Launch price ends{" "}
+                          <b>{new Date(lo.expiry).toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" })}</b>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Benefits list */}
+                    <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:12 }}>
+                      {(b.rideDiscountPercent > 0) && (
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>🎁 <b>{b.rideDiscountPercent}%</b> ride discount</div>
+                      )}
+                      {(b.freeRidesPerMonth > 0) && (
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>🚗 <b>{b.freeRidesPerMonth}</b> free rides/month</div>
+                      )}
+                      {b.priorityBooking && (
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>⚡ Priority booking</div>
+                      )}
+                      {b.cancellationWaiver && (
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>✔ Cancellation waiver</div>
+                      )}
+                      {b.surgeProtection && (
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>🛡 Surge protection</div>
+                      )}
+                    </div>
+
+                    {/* Description — contains waiver count, surge cap, etc. */}
+                    {p.description && (
+                      <div style={{ marginBottom:12, padding:"8px 10px", borderRadius:8, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.07)", fontSize:11, color:"rgba(255,255,255,0.38)", lineHeight:1.6 }}>
+                        {p.description}
+                      </div>
+                    )}
+
+                    {p.createdAt && (
+                      <div style={{ fontSize:10, color:"rgba(255,255,255,0.18)", marginBottom:12 }}>
+                        Created {new Date(p.createdAt).toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" })}
+                      </div>
+                    )}
 
                     <div style={{ display:"flex", gap:8 }}>
                       <button

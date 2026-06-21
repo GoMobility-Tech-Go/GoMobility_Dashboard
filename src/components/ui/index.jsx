@@ -117,14 +117,42 @@ export function SearchBox({ placeholder, value, onChange }) {
 }
 
 // ── PAGINATION ────────────────────────────────────────────────────────────────
-export function Pagination({ total, showing }) {
+export function Pagination({ page, total, perPage, onChange }) {
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const from = total === 0 ? 0 : (page - 1) * perPage + 1;
+  const to   = Math.min(page * perPage, total);
+
+  const pages = (() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (page <= 4)              return [1, 2, 3, 4, 5, "…", totalPages];
+    if (page >= totalPages - 3) return [1, "…", totalPages-4, totalPages-3, totalPages-2, totalPages-1, totalPages];
+    return [1, "…", page - 1, page, page + 1, "…", totalPages];
+  })();
+
+  const btn = (active, disabled) => ({
+    minWidth:32, height:32, borderRadius:8, padding:"0 6px",
+    border:`1px solid ${active?"rgba(212,175,55,0.55)":"rgba(212,175,55,0.18)"}`,
+    background: active ? "rgba(212,175,55,0.16)" : "transparent",
+    color: active ? "#D4AF37" : disabled ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.55)",
+    fontWeight: active ? 700 : 400, fontSize:13,
+    cursor: disabled ? "not-allowed" : "pointer",
+    display:"flex", alignItems:"center", justifyContent:"center",
+    fontFamily:"Outfit,sans-serif", transition:"all .15s",
+  });
+
   return (
     <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,width:"100%" }}>
-      <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",fontFamily:"Outfit,sans-serif" }}>{showing||total}</span>
-      <div style={{ display:"flex",gap:4 }}>
-        {["‹","1","2","3","›"].map((p,i) => (
-          <button key={i} style={{ width:28,height:28,borderRadius:7,border:"1px solid rgba(212,175,55,0.15)",background:p==="1"?"rgba(212,175,55,0.12)":"rgba(255,255,255,0.03)",color:p==="1"?"#D4AF37":"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"Outfit,sans-serif",display:"flex",alignItems:"center",justifyContent:"center" }}>{p}</button>
-        ))}
+      <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",fontFamily:"Outfit,sans-serif" }}>
+        {total > 0 ? `Showing ${from}–${to} of ${total}` : "No results"}
+      </span>
+      <div style={{ display:"flex",gap:4,alignItems:"center" }}>
+        <button style={btn(false, page===1)} disabled={page===1} onClick={()=>onChange(page-1)}>‹</button>
+        {pages.map((p, i) =>
+          p === "…"
+            ? <span key={`e${i}`} style={{ color:"rgba(255,255,255,0.25)",fontSize:13,padding:"0 3px",userSelect:"none" }}>…</span>
+            : <button key={p} style={btn(p===page, false)} onClick={()=>onChange(p)}>{p}</button>
+        )}
+        <button style={btn(false, page===totalPages)} disabled={page===totalPages} onClick={()=>onChange(page+1)}>›</button>
       </div>
     </div>
   );

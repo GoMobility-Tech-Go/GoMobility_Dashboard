@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { X } from "lucide-react";
 import { getTransactions } from "../../api/admin";
+import { Pagination } from "../../components/ui/index.jsx";
 
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "—";
 const fmtRupee = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").format(n) : "—";
@@ -37,7 +38,7 @@ export default function FinancePage() {
   const [endDate, setEnd]     = useState("");
   const [offset, setOffset]   = useState(0);
   const [toast, setToast]     = useState(null);
-  const LIMIT = 20;
+  const LIMIT = 10;
 
   const showToast = (msg, type="error") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
 
@@ -123,14 +124,9 @@ export default function FinancePage() {
             </tbody>
           </table>
         </div>
-        {total > LIMIT && (
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
-            <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>Page {currentPage} of {totalPages} · {total} total</span>
-            <div style={{ display:"flex", gap:8 }}>
-              {[{icon:<ChevronLeft size={14}/>,dis:offset===0,fn:()=>setOffset(Math.max(0,offset-LIMIT))},{icon:<ChevronRight size={14}/>,dis:offset+LIMIT>=total,fn:()=>setOffset(offset+LIMIT)}].map((b,i)=>(
-                <button key={i} onClick={b.fn} disabled={b.dis} style={{ width:32, height:32, borderRadius:8, border:"1px solid rgba(212,175,55,0.2)", background:"transparent", cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center", opacity:b.dis?0.3:1 }}>{b.icon}</button>
-              ))}
-            </div>
+        {totalPages > 1 && (
+          <div style={{ padding:"14px 20px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
+            <Pagination page={currentPage} total={total} perPage={LIMIT} onChange={(p) => setOffset((p-1)*LIMIT)} />
           </div>
         )}
       </div>
