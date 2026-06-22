@@ -24,15 +24,29 @@ function Content() {
     }).finally(() => setLoading(false));
   }, []);
 
-  // Monthly GST breakdown from daily revenue data
+  // Compute totals from byDay array (backend returns byDay not totalRevenue at root)
+  const gross = useMemo(() =>
+    (revenue?.byDay || []).reduce((s, d) => s + (Number(d.totalRevenue) || 0), 0),
+  [revenue]);
+
+  const totalRidesCount = useMemo(() =>
+    (revenue?.byDay || []).reduce((s, d) => s + (Number(d.totalRides) || 0), 0),
+  [revenue]);
+
+  // Driver payouts from withdrawal transactions (most accurate available)
+  const driverPayoutsTotal = useMemo(() =>
+    payouts.reduce((s, t) => s + (Number(t.amount || t.net_amount || 0)), 0),
+  [payouts]);
+
+  // Monthly GST breakdown from byDay array
   const monthlyGst = useMemo(() => {
-    if (!revenue?.dailyRevenue?.length) return [];
+    if (!revenue?.byDay?.length) return [];
     const map = {};
-    revenue.dailyRevenue.forEach(d => {
-      const dt  = new Date(d.day);
+    revenue.byDay.forEach(d => {
+      const dt  = new Date(d.date);
       const key = dt.toLocaleString("en-IN", { month: "short", year: "numeric" });
       if (!map[key]) map[key] = 0;
-      map[key] += Number(d.revenue) || 0;
+      map[key] += Number(d.totalRevenue) || 0;
     });
     return Object.entries(map).map(([month, taxable]) => ({
       month,
@@ -56,8 +70,7 @@ function Content() {
     }
   };
 
-  const gross          = Number(revenue?.totalRevenue)       || 0;
-  const driverPayouts  = Number(revenue?.totalDriverEarnings) || 0;
+  const driverPayouts  = driverPayoutsTotal;
   const totalGst       = Math.round(gross * 0.18);
   const totalTds       = Math.round(driverPayouts * 0.10);
   const fmtINR         = (n) => `₹${Math.abs(n).toLocaleString("en-IN")}`;
@@ -80,7 +93,7 @@ function Content() {
         { label:"TDS on Driver Payouts", value: driverPayouts > 0 ? fmtK(totalTds) : "—",  icon:"💼", color:"#60A5FA" },
         { label:"30d Gross Revenue",     value: gross   > 0 ? fmtK(gross)         : loading ? "…" : "—", icon:"💰", color:"#34D399" },
         { label:"Driver Payouts (30d)",  value: driverPayouts > 0 ? fmtK(driverPayouts) : loading ? "…" : "—", icon:"🚗", color:"#A78BFA" },
-        { label:"Total Rides (30d)",     value: revenue?.totalRides ?? (loading ? "…" : "—"), icon:"🛞", color:"#F59E0B" },
+        { label:"Total Rides (30d)",     value: totalRidesCount > 0 ? totalRidesCount.toLocaleString("en-IN") : (loading ? "…" : "—"), icon:"🛞", color:"#F59E0B" },
         { label:"Monthly Breakdown",     value: monthlyGst.length > 0 ? `${monthlyGst.length} months` : "—", icon:"📅", color:"#34D399" },
       ]}/>
 
@@ -284,23 +297,23 @@ function Content() {
           actions={<button className="btn-outline btn-sm" onClick={handleRunReport} disabled={reportLoading}>↓ Export</button>}>
           {loading ? (
             <div style={{ padding:40, textAlign:"center", color:"rgba(255,255,255,0.35)" }}>Loading…</div>
-          ) : !revenue?.revenueByVehicle?.length ? (
+          ) : !revenue?.byVehicle?.length ? (
             <div style={{ padding:40, textAlign:"center", color:"rgba(255,255,255,0.35)" }}>No vehicle breakdown data available.</div>
           ) : (
             <table className="gm-table">
               <thead><tr><th>Vehicle Type</th><th>Total Revenue</th><th>Ride Count</th><th>Avg per Ride</th><th>GST (18%)</th><th>Share</th></tr></thead>
               <tbody>
-                {revenue.revenueByVehicle.map((v,i) => {
-                  const rev  = Number(v.total_revenue || v.revenue || 0);
-                  const cnt  = Number(v.ride_count || v.rides || 0);
-                  const avg  = cnt > 0 ? Math.round(rev/cnt) : 0;
+                {revenue.byVehicle.map((v,i) => {
+                  const rev  = Number(v.totalRevenue || 0);
+                  const cnt  = Number(v.totalRides || 0);
+                  const avg  = v.avgFare ? Math.round(Number(v.avgFare)) : (cnt > 0 ? Math.round(rev/cnt) : 0);
                   const gst  = Math.round(rev * 0.18);
                   const pct  = gross > 0 ? ((rev/gross)*100).toFixed(1) : "—";
                   const typeColors = { car:"#60A5FA", auto:"#34D399", bike:"#F59E0B" };
-                  const col = typeColors[(v.vehicle_type||"").toLowerCase()] || "#D4AF37";
+                  const col = typeColors[(v.vehicleType||"").toLowerCase()] || "#D4AF37";
                   return (
                     <tr key={i}>
-                      <td><span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px", borderRadius:100, fontSize:11, fontWeight:700, background:`${col}18`, border:`1px solid ${col}40`, color:col, textTransform:"capitalize" }}>{v.vehicle_type||"—"}</span></td>
+                      <td><span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px", borderRadius:100, fontSize:11, fontWeight:700, background:`${col}18`, border:`1px solid ${col}40`, color:col, textTransform:"capitalize" }}>{v.vehicleType||"—"}</span></td>
                       <td style={{ color:"#34D399", fontFamily:"monospace", fontWeight:600 }}>{fmtINR(rev)}</td>
                       <td style={{ color:"rgba(255,255,255,0.7)" }}>{cnt.toLocaleString()}</td>
                       <td style={{ fontFamily:"monospace", color:"rgba(255,255,255,0.6)" }}>{fmtINR(avg)}</td>
@@ -319,8 +332,8 @@ function Content() {
                 <tr style={{ background:"rgba(212,175,55,0.05)" }}>
                   <td style={{ fontWeight:800, color:"#D4AF37" }}>TOTAL</td>
                   <td style={{ color:"#D4AF37", fontFamily:"monospace", fontWeight:800 }}>{fmtINR(gross)}</td>
-                  <td style={{ color:"rgba(255,255,255,0.7)", fontWeight:700 }}>{revenue.totalRides?.toLocaleString()}</td>
-                  <td style={{ fontFamily:"monospace", color:"rgba(255,255,255,0.5)" }}>{gross > 0 && revenue?.totalRides ? fmtINR(Math.round(gross/revenue.totalRides)) : "—"}</td>
+                  <td style={{ color:"rgba(255,255,255,0.7)", fontWeight:700 }}>{totalRidesCount.toLocaleString()}</td>
+                  <td style={{ fontFamily:"monospace", color:"rgba(255,255,255,0.5)" }}>{gross > 0 && totalRidesCount ? fmtINR(Math.round(gross/totalRidesCount)) : "—"}</td>
                   <td style={{ color:"#D4AF37", fontFamily:"monospace", fontWeight:700 }}>{fmtINR(Math.round(gross*0.18))}</td>
                   <td style={{ color:"rgba(255,255,255,0.4)" }}>100%</td>
                 </tr>

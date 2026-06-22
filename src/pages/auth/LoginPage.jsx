@@ -60,6 +60,7 @@ const LoginPage = () => {
   const [step, setStep] = useState("signin");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
+  const [role, setRole] = useState("admin");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -73,7 +74,7 @@ const LoginPage = () => {
     if (!phone.trim()) { setError("Please enter your phone number."); return; }
     setLoading(true);
     try {
-      const res = await sendOtp(phone.trim());
+      const res = await sendOtp(phone.trim(), role);
       const data = res.data?.data || res.data || {};
       if (data.otp) setDevOtp(data.otp); // show OTP hint when SMS not configured
       setStep("verify-otp");
@@ -93,7 +94,7 @@ const LoginPage = () => {
     if (otp.length !== 6) { setError("OTP must be 6 digits."); return; }
     setLoading(true);
     try {
-      const res = await verifyOtp(phone.trim(), otp);
+      const res = await verifyOtp(phone.trim(), otp, role);
       const data = res.data?.data || res.data || {};
       const accessToken = data.accessToken || data.token || data.access_token;
       const refreshToken = data.refreshToken || data.refresh_token;
@@ -218,6 +219,20 @@ const LoginPage = () => {
                   </div>
                   <form onSubmit={handleSendOtp}>
                     <div className="field-group">
+                      <div>
+                        <label className="field-label">Login As</label>
+                        <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                          {[{val:"admin",label:"Admin"},{val:"super_admin",label:"Super Admin 👑"}].map(opt => (
+                            <button key={opt.val} type="button" onClick={() => setRole(opt.val)}
+                              style={{ flex:1, padding:"11px 0", borderRadius:10, border:"1.5px solid", cursor:"pointer", fontSize:12, fontFamily:"'Cinzel',serif", fontWeight:600, letterSpacing:"0.5px", transition:"all .2s",
+                                borderColor: role===opt.val ? "#D4AF37" : "rgba(180,160,100,0.25)",
+                                background:  role===opt.val ? "rgba(212,175,55,0.12)" : "rgba(255,255,255,0.5)",
+                                color:       role===opt.val ? "#8B6914" : "#7a6a4a" }}>
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <div>
                         <label className="field-label">Phone Number</label>
                         <input

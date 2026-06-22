@@ -44,12 +44,13 @@ export default function RevenueAnalyticsPage() {
   const [reportRunning, setReportRunning] = useState(null);
 
   const REPORT_TYPES = [
-    { key:"operations",   label:"Operations Report",  icon:"⚙️",  desc:"Rides, drivers, cancellations"   },
-    { key:"financial",    label:"Financial Report",   icon:"💰",  desc:"Earnings, GST, subscriptions"    },
-    { key:"errors",       label:"Error Report",       icon:"🔴",  desc:"Failed payments, app errors"     },
-    { key:"anomalies",    label:"Anomalies Report",   icon:"⚠️",  desc:"High-risk incidents, flagged"    },
-    { key:"pendingDues",  label:"Pending Dues",       icon:"📋",  desc:"Riders & drivers with dues"      },
-    { key:"stuckRides",   label:"Stuck Rides",        icon:"🚗",  desc:"Rides ongoing for 30+ minutes"   },
+    { key:"operations",      label:"Operations Report",     icon:"⚙️",  desc:"Rides, drivers, cancellations"   },
+    { key:"financial",       label:"Financial Report",      icon:"💰",  desc:"Earnings, GST, subscriptions"    },
+    { key:"errors",          label:"Error Report",          icon:"🔴",  desc:"Failed payments, app errors"     },
+    { key:"anomalies",       label:"Anomalies Report",      icon:"⚠️",  desc:"High-risk incidents, flagged"    },
+    { key:"pendingDues",     label:"Pending Dues",          icon:"📋",  desc:"Riders & drivers with dues"      },
+    { key:"stuckRides",      label:"Stuck Rides",           icon:"🚗",  desc:"Rides ongoing for 30+ minutes"   },
+    { key:"infrastructure",  label:"Infrastructure Report", icon:"🖥️",  desc:"Server health, Redis, DB metrics" },
   ];
 
   const handleRunReport = async (reportType) => {
@@ -85,6 +86,24 @@ export default function RevenueAnalyticsPage() {
   const avgFare      = totalRides > 0 ? totalRevenue / totalRides : 0;
   const bestDay      = byDay.reduce((b, d) => (!b || Number(d.totalRevenue) > Number(b.totalRevenue)) ? d : b, null);
 
+  // Growth: compare first half vs second half of period
+  const growth = (() => {
+    if (byDay.length < 4) return null;
+    const half = Math.floor(byDay.length / 2);
+    const first  = byDay.slice(0, half).reduce((s,d) => s + Number(d.totalRevenue||0), 0);
+    const second = byDay.slice(half).reduce((s,d) => s + Number(d.totalRevenue||0), 0);
+    if (!first) return null;
+    return Math.round(((second - first) / first) * 100);
+  })();
+  const rideGrowth = (() => {
+    if (byDay.length < 4) return null;
+    const half = Math.floor(byDay.length / 2);
+    const first  = byDay.slice(0, half).reduce((s,d) => s + Number(d.totalRides||0), 0);
+    const second = byDay.slice(half).reduce((s,d) => s + Number(d.totalRides||0), 0);
+    if (!first) return null;
+    return Math.round(((second - first) / first) * 100);
+  })();
+
   const pieData = byVehicle.map((v, i) => ({
     name:    v.vehicleType,
     value:   Number(v.totalRides)   || 0,
@@ -92,11 +111,25 @@ export default function RevenueAnalyticsPage() {
     color:   VEHICLE_COLORS[v.vehicleType] || PIE_COLORS[i % PIE_COLORS.length],
   }));
 
+  const GrowthBadge = ({ pct }) => {
+    if (pct == null) return null;
+    const up = pct >= 0;
+    return (
+      <span style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 7px", borderRadius:20, fontSize:11, fontWeight:700,
+        background: up ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)",
+        color: up ? "#34D399" : "#F87171",
+        border: `1px solid ${up ? "rgba(52,211,153,0.25)" : "rgba(248,113,113,0.25)"}`,
+      }}>
+        {up ? "↑" : "↓"} {Math.abs(pct)}%
+      </span>
+    );
+  };
+
   const STATS = [
-    { label:"Total Revenue", value:fmtRupee(totalRevenue), color:"#D4AF37", icon:"💰" },
-    { label:"Total Rides",   value:totalRides.toLocaleString("en-IN"), color:"#60a5fa", icon:"🚗" },
-    { label:"Avg Fare",      value:fmtRupee(avgFare),      color:"#4ade80", icon:"📊" },
-    { label:"Best Day",      value:bestDay ? fmtRupee(bestDay.totalRevenue) : "—", color:"#f59e0b", icon:"🏆" },
+    { label:"Total Revenue", value:fmtRupee(totalRevenue), color:"#D4AF37", icon:"💰", badge: <GrowthBadge pct={growth} /> },
+    { label:"Total Rides",   value:totalRides.toLocaleString("en-IN"), color:"#60a5fa", icon:"🚗", badge: <GrowthBadge pct={rideGrowth} /> },
+    { label:"Avg Fare",      value:fmtRupee(avgFare),      color:"#4ade80", icon:"📊", badge: null },
+    { label:"Best Day",      value:bestDay ? fmtRupee(bestDay.totalRevenue) : "—", color:"#f59e0b", icon:"🏆", badge: bestDay ? <span style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>{fmtDay(bestDay.date)}</span> : null },
   ];
 
   return (
@@ -124,9 +157,12 @@ export default function RevenueAnalyticsPage() {
 
       {/* Stats row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(175px,1fr))", gap:14, marginBottom:24 }}>
-        {STATS.map(({ label, value, color, icon }) => (
+        {STATS.map(({ label, value, color, icon, badge }) => (
           <div key={label} style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:14, padding:"18px 20px" }}>
-            <div style={{ fontSize:22, marginBottom:8 }}>{icon}</div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+              <span style={{ fontSize:22 }}>{icon}</span>
+              {!loading && badge}
+            </div>
             <div style={{ fontSize:21, fontWeight:700, color, fontFamily:"Cinzel,serif", lineHeight:1 }}>
               {loading ? <span style={{ opacity:0.35 }}>—</span> : value}
             </div>
