@@ -1,1508 +1,837 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
-  useToast,
-  ToastProvider,
-  PageWrapper,
-  Modal,
-  FormGroup,
-  Toggle,
-  Badge,
-  MiniStatRow,
-  GlobalStyles,
-  Card,
-  TableCard,
-  AlertBox,
-  GoldTooltip,
+  useToast, ToastProvider, PageWrapper, Modal, FormGroup,
+  Toggle, GlobalStyles, Card, AlertBox,
 } from "../../components/ui/index.jsx";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { MapPin, Plus, Edit3, RefreshCw, Loader, Search, Upload, Navigation, BarChart2, Users, Car, TrendingUp } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
-import {
-  MapPin,
-  Plus,
-  Edit3,
-  Trash2,
-  Shield,
-  TrendingUp,
-  Layers,
-  Activity,
-} from "lucide-react";
+  getCities, getCityDetail, getCityStats,
+  createCity, updateCity, toggleCityVehicle,
+  setCityEnforcement, resolveCity,
+} from "../../api/admin";
 
-// ─────────────────────────────────────────────
-// Static Data
-// ─────────────────────────────────────────────
+const VEHICLE_TYPES = ["AUTO", "BIKE", "CAR", "TEMPO", "TRUCK"];
 
-const INIT_CITIES = [
-  { id: 1,  name: "Patna",      state: "Bihar",           x: 520, y: 210, active: true,  zones: 8,  drivers: 387,  rides: 1248, revenue: 284750,  status: "live"     },
-  { id: 2,  name: "Delhi",      state: "Delhi",           x: 390, y: 158, active: true,  zones: 15, drivers: 820,  rides: 4200, revenue: 890000,  status: "live"     },
-  { id: 3,  name: "Mumbai",     state: "Maharashtra",     x: 280, y: 295, active: true,  zones: 18, drivers: 1240, rides: 6800, revenue: 1420000, status: "live"     },
-  { id: 4,  name: "Bangalore",  state: "Karnataka",       x: 330, y: 380, active: true,  zones: 14, drivers: 960,  rides: 5100, revenue: 1180000, status: "live"     },
-  { id: 5,  name: "Kolkata",    state: "West Bengal",     x: 572, y: 245, active: true,  zones: 12, drivers: 680,  rides: 3200, revenue: 720000,  status: "live"     },
-  { id: 6,  name: "Chennai",    state: "Tamil Nadu",      x: 380, y: 400, active: true,  zones: 11, drivers: 540,  rides: 2900, revenue: 640000,  status: "live"     },
-  { id: 7,  name: "Hyderabad",  state: "Telangana",       x: 370, y: 335, active: true,  zones: 13, drivers: 720,  rides: 3800, revenue: 850000,  status: "live"     },
-  { id: 8,  name: "Lucknow",    state: "Uttar Pradesh",   x: 462, y: 186, active: true,  zones: 9,  drivers: 420,  rides: 1800, revenue: 380000,  status: "live"     },
-  { id: 9,  name: "Guwahati",   state: "Assam",           x: 620, y: 185, active: true,  zones: 6,  drivers: 180,  rides: 680,  revenue: 142000,  status: "live"     },
-  { id: 10, name: "Jaipur",     state: "Rajasthan",       x: 330, y: 196, active: true,  zones: 8,  drivers: 310,  rides: 1200, revenue: 260000,  status: "live"     },
-  { id: 11, name: "Ahmedabad",  state: "Gujarat",         x: 270, y: 246, active: false, zones: 0,  drivers: 0,    rides: 0,    revenue: 0,       status: "planned"  },
-  { id: 12, name: "Pune",       state: "Maharashtra",     x: 296, y: 310, active: false, zones: 0,  drivers: 0,    rides: 0,    revenue: 0,       status: "planned"  },
-  { id: 13, name: "Chandigarh", state: "Punjab",          x: 366, y: 140, active: false, zones: 0,  drivers: 0,    rides: 0,    revenue: 0,       status: "upcoming" },
-  { id: 14, name: "Bhopal",     state: "Madhya Pradesh",  x: 385, y: 242, active: false, zones: 0,  drivers: 0,    rides: 0,    revenue: 0,       status: "upcoming" },
-];
-
-const PATNA_ZONES = [
-  { id: 1, name: "Patna Junction Area",  type: "pickup",  lat: 25.6122, lng: 85.0511, radius: 2.5, drivers: 42, rides: 180, revenue: 38000, demand: "High",   geoFence: true  },
-  { id: 2, name: "Gandhi Maidan Zone",   type: "hotspot", lat: 25.6020, lng: 85.1228, radius: 2.0, drivers: 28, rides: 124, revenue: 26000, demand: "High",   geoFence: true  },
-  { id: 3, name: "Bailey Road Corridor", type: "pickup",  lat: 25.6290, lng: 85.0960, radius: 3.0, drivers: 35, rides: 156, revenue: 32000, demand: "Medium", geoFence: true  },
-  { id: 4, name: "Boring Road Zone",     type: "drop",    lat: 25.6069, lng: 85.0944, radius: 1.5, drivers: 18, rides: 88,  revenue: 18500, demand: "Medium", geoFence: false },
-  { id: 5, name: "AIIMS Patna Zone",     type: "medical", lat: 25.5700, lng: 85.0890, radius: 1.8, drivers: 22, rides: 102, revenue: 21000, demand: "High",   geoFence: true  },
-  { id: 6, name: "Kankarbagh Zone",      type: "drop",    lat: 25.5960, lng: 85.1220, radius: 2.2, drivers: 15, rides: 74,  revenue: 15600, demand: "Low",    geoFence: false },
-  { id: 7, name: "Rajendra Nagar",       type: "pickup",  lat: 25.6100, lng: 85.1050, radius: 1.8, drivers: 20, rides: 94,  revenue: 19800, demand: "Medium", geoFence: true  },
-  { id: 8, name: "Ashiana Nagar Zone",   type: "drop",    lat: 25.6380, lng: 85.0780, radius: 2.0, drivers: 16, rides: 82,  revenue: 17200, demand: "Low",    geoFence: false },
-];
-
-// ─────────────────────────────────────────────
-// Config Maps
-// ─────────────────────────────────────────────
-
-const ZONE_TYPES = {
-  pickup:     { color: "#D4AF37", label: "Pickup Zone",  icon: "📍" },
-  drop:       { color: "#60A5FA", label: "Drop Zone",    icon: "🎯" },
-  hotspot:    { color: "#F87171", label: "Hotspot Zone", icon: "🔥" },
-  medical:    { color: "#34D399", label: "Medical Zone", icon: "🏥" },
-  airport:    { color: "#A78BFA", label: "Airport Zone", icon: "✈️" },
-  restricted: { color: "#F59E0B", label: "Restricted",   icon: "🚫" },
-};
-
-const DEMAND_COLOR = {
-  High:   "#F87171",
-  Medium: "#F59E0B",
-  Low:    "#34D399",
-};
-
-const CHART_COLORS = ["#D4AF37", "#60A5FA", "#F87171", "#34D399", "#A78BFA", "#F59E0B"];
-
-// ─────────────────────────────────────────────
-// India SVG path
-// ─────────────────────────────────────────────
-
-const INDIA_PATH =
-  "M340 60 L355 55 L375 58 L395 52 L415 55 L435 50 L460 58 L480 52 L500 58 " +
-  "L520 55 L540 62 L555 70 L565 82 L575 95 L585 108 L590 122 L595 138 L598 152 " +
-  "L592 165 L588 178 L600 188 L612 195 L625 205 L632 218 L628 232 L618 240 " +
-  "L622 252 L618 265 L608 272 L598 278 L590 270 L578 268 L568 275 L558 285 " +
-  "L548 298 L540 310 L530 320 L518 325 L505 330 L492 338 L480 348 L468 358 " +
-  "L458 370 L450 382 L442 395 L432 408 L418 418 L405 425 L392 428 L380 432 " +
-  "L368 428 L358 420 L350 410 L342 400 L335 388 L330 375 L325 362 L322 348 " +
-  "L320 335 L318 322 L315 308 L312 295 L308 282 L302 270 L295 258 L290 245 " +
-  "L285 232 L280 220 L275 208 L272 195 L268 182 L265 170 L262 158 L258 145 " +
-  "L255 132 L252 118 L250 105 L255 92 L262 80 L272 70 L285 62 L300 58 L315 55 L330 58 Z";
-
-// Map grid lines helper
-const H_LINES = [...Array(8)].map((_, i) => i);
-const V_LINES = [...Array(9)].map((_, i) => i);
-
-// Tooltip rows for city hover
-const CITY_TIP_ROWS = (c) => [
-  ["Drivers",  c.drivers,                         "#60A5FA"],
-  ["Rides",    c.rides.toLocaleString(),           "#D4AF37"],
-  ["Revenue",  `Rs${(c.revenue / 1000).toFixed(0)}K`, "#34D399"],
-  ["Zones",    c.zones,                            "#A78BFA"],
-];
-
-// Zone heatmap scatter offsets (same as original)
-const HEATMAP_OFFSETS = [
-  [-4, 0], [0, -4], [4, 0], [0, 4],
-  [-2, -2], [2, -2], [-2, 2], [2, 2],
-  [-4, -2], [4, -2], [-3, 3], [3, 3], [0, 0],
-];
-
-// Map legend items
-const MAP_LEGEND = [
-  { c: "#34D399", l: "Live"     },
-  { c: "#60A5FA", l: "Planned"  },
-  { c: "#F59E0B", l: "Upcoming" },
-  { c: "#D4AF37", l: "Selected" },
-];
-
-// ─────────────────────────────────────────────
-// Default form states
-// ─────────────────────────────────────────────
-
-const EMPTY_CITY = { name: "", state: "", lat: "", lng: "" };
-
-const EMPTY_ZONE = {
-  name:     "",
-  type:     "pickup",
-  radius:   "2.0",
-  lat:      "",
-  lng:      "",
-  geoFence: false,
-  demand:   "Medium",
-};
-
-// ─────────────────────────────────────────────
-// View mode definitions
-// ─────────────────────────────────────────────
-
-const VIEW_MODES = [
-  { id: "zones",    l: "Zones",    Icon: Layers                                     },
-  { id: "heatmap",  l: "Heatmap",  Icon: Activity                                   },
-  { id: "drivers",  l: "Drivers",  Icon: () => <span style={{ fontSize: 11 }}>🧑‍✈️</span> },
-  { id: "revenue",  l: "Revenue",  Icon: TrendingUp                                 },
-  { id: "geofence", l: "Geo-fence",Icon: Shield                                     },
-];
-
-// ─────────────────────────────────────────────
-// IndiaMap Component
-// ─────────────────────────────────────────────
-
-function IndiaMap({ cities, selCity, onCityClick, viewMode, zones }) {
-  const [tip, setTip] = useState(null);
-
-  const pinColor = (c) => {
-    if (selCity?.id === c.id) return "#D4AF37";
-    if (c.status === "live")  return "#34D399";
-    if (c.status === "planned") return "#60A5FA";
-    return "#F59E0B";
-  };
-
-  const maxRevenue = Math.max(...cities.map((c) => c.revenue));
-
+const ChartTooltip = ({ active, payload, label, prefix = "", suffix = "" }) => {
+  if (!active || !payload?.length) return null;
   return (
-    <div style={{
-      position: "relative",
-      width: "100%",
-      height: "100%",
-      background: "rgba(0,0,0,0.25)",
-      borderRadius: 14,
-      overflow: "hidden",
-    }}>
-      <svg
-        viewBox="230 45 400 420"
-        style={{ width: "100%", height: "100%" }}
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          {/* Glow filter */}
-          <filter id="gmGlow">
-            <feGaussianBlur stdDeviation="2.5" result="b" />
-            <feMerge>
-              <feMergeNode in="b" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+    <div style={{ background: "rgba(4,8,26,0.97)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
+      <div style={{ color: "#D4AF37", fontWeight: 700, marginBottom: 4 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ color: p.color || "rgba(255,255,255,0.8)" }}>{prefix}{p.value?.toLocaleString("en-IN")}{suffix}</div>
+      ))}
+    </div>
+  );
+};
+const VEHICLE_COLORS = { AUTO: "#D4AF37", BIKE: "#60A5FA", CAR: "#34D399", TEMPO: "#A78BFA", TRUCK: "#F59E0B" };
+const EMPTY_CITY = { name: "", state_id: "", center_latitude: "", center_longitude: "" };
 
-          {/* Revenue gradient */}
-          <radialGradient id="gmRevGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%"   stopColor="#D4AF37" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="#D4AF37" stopOpacity="0"    />
-          </radialGradient>
+// ─── Custom marker icon ───────────────────────────────────────────────────────
+const makeIcon = (color, selected) => L.divIcon({
+  className: "",
+  html: `<div style="width:${selected?20:14}px;height:${selected?20:14}px;background:${color};border:2.5px solid ${selected?"#fff":"rgba(255,255,255,0.6)"};border-radius:50%;box-shadow:0 0 ${selected?18:8}px ${color};transition:all .2s;${selected?"transform:scale(1.25);":""}"></div>`,
+  iconSize: [selected?20:14, selected?20:14],
+  iconAnchor: [selected?10:7, selected?10:7],
+  popupAnchor: [0, -12],
+});
 
-          {/* Driver gradient */}
-          <radialGradient id="gmDrvGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%"   stopColor="#60A5FA" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#60A5FA" stopOpacity="0"   />
-          </radialGradient>
+// ─── Fly to city on select ────────────────────────────────────────────────────
+function MapFlyTo({ city }) {
+  const map = useMap();
+  useEffect(() => {
+    if (city?.center_latitude && city?.center_longitude)
+      map.flyTo([parseFloat(city.center_latitude), parseFloat(city.center_longitude)], 10, { duration: 1.2 });
+  }, [city, map]);
+  return null;
+}
 
-          {/* Heatmap gradient */}
-          <radialGradient id="gmHotGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%"   stopColor="#F87171" stopOpacity="0.6" />
-            <stop offset="100%" stopColor="#F87171" stopOpacity="0"   />
-          </radialGradient>
-        </defs>
-
-        {/* ── Grid lines ── */}
-        {H_LINES.map((_, i) => (
-          <line key={`h${i}`} x1="230" y1={90 + i * 50} x2="630" y2={90 + i * 50}
-            stroke="rgba(212,175,55,0.04)" strokeWidth="0.5" />
-        ))}
-        {V_LINES.map((_, i) => (
-          <line key={`v${i}`} x1={230 + i * 50} y1="45" x2={230 + i * 50} y2="465"
-            stroke="rgba(212,175,55,0.04)" strokeWidth="0.5" />
-        ))}
-
-        {/* ── India outline ── */}
-        <path
-          d={INDIA_PATH}
-          fill="rgba(212,175,55,0.04)"
-          stroke="rgba(212,175,55,0.28)"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
+// ─── Leaflet Map ──────────────────────────────────────────────────────────────
+function IndiaMap({ cities, selCity, onCityClick, boundaries }) {
+  return (
+    <div style={{ width: "100%", height: "100%", borderRadius: 14, overflow: "hidden" }}>
+      <style>{`
+        .leaflet-container { background:#0a0f1e !important; font-family:Outfit,sans-serif; }
+        .leaflet-popup-content-wrapper { background:rgba(4,8,26,0.97)!important; border:1px solid rgba(212,175,55,0.3)!important; border-radius:12px!important; box-shadow:0 8px 32px rgba(0,0,0,0.6)!important; color:#fff!important; backdrop-filter:blur(12px); }
+        .leaflet-popup-tip { background:rgba(4,8,26,0.97)!important; }
+        .leaflet-popup-close-button { color:rgba(255,255,255,0.5)!important; font-size:16px!important; }
+        .leaflet-control-zoom a { background:rgba(4,8,26,0.9)!important; border-color:rgba(212,175,55,0.2)!important; color:#D4AF37!important; }
+        .leaflet-control-zoom a:hover { background:rgba(212,175,55,0.15)!important; }
+        .leaflet-control-attribution { background:rgba(0,0,0,0.5)!important; color:rgba(255,255,255,0.3)!important; font-size:9px!important; }
+        .leaflet-control-attribution a { color:rgba(255,255,255,0.4)!important; }
+      `}</style>
+      <MapContainer center={[22.5, 80]} zoom={5} style={{ width: "100%", height: "100%" }} scrollWheelZoom>
+        <TileLayer
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          subdomains="abcd" maxZoom={19}
         />
+        <MapFlyTo city={selCity} />
 
-        {/* ── Revenue bubbles ── */}
-        {viewMode === "revenue" &&
-          cities.filter((c) => c.active).map((c) => {
-            const pct = c.revenue / maxRevenue;
-            return (
-              <circle
-                key={`rv${c.id}`}
-                cx={c.x} cy={c.y}
-                r={8 + pct * 28}
-                fill={`rgba(212,175,55,${0.08 + pct * 0.25})`}
-                stroke={`rgba(212,175,55,${0.15 + pct * 0.4})`}
-                strokeWidth="1"
-              />
-            );
-          })}
-
-        {/* ── Driver availability ── */}
-        {viewMode === "drivers" &&
-          cities.filter((c) => c.active).map((c) => (
-            <circle
-              key={`dv${c.id}`}
-              cx={c.x} cy={c.y}
-              r={Math.sqrt(c.drivers / 4) * 3}
-              fill="url(#gmDrvGrad)"
-            />
-          ))}
-
-        {/* ── Heatmap scatter ── */}
-        {viewMode === "heatmap" &&
-          cities.filter((c) => c.active).map((c) =>
-            HEATMAP_OFFSETS.map((d, j) => (
-              <circle
-                key={`ht${c.id}${j}`}
-                cx={c.x + d[0] * 6}
-                cy={c.y + d[1] * 6}
-                r={8}
-                fill="url(#gmHotGrad)"
-                opacity={0.3 + Math.random() * 0.4}
-              />
-            ))
-          )}
-
-        {/* ── Zone circles for selected city ── */}
-        {selCity && viewMode === "zones" &&
-          zones.map((z, i) => {
-            const angle = (i / zones.length) * Math.PI * 2;
-            const dist  = 20 + i * 3;
-            const zx    = selCity.x + Math.cos(angle) * dist;
-            const zy    = selCity.y + Math.sin(angle) * dist;
-            const conf  = ZONE_TYPES[z.type] || ZONE_TYPES.pickup;
-            const r     = z.radius * 5;
-            return (
-              <g key={z.id}>
-                <circle
-                  cx={zx} cy={zy} r={r}
-                  fill={`${conf.color}18`}
-                  stroke={conf.color}
-                  strokeWidth="1.5"
-                  strokeDasharray={z.geoFence ? "none" : "4 3"}
-                  opacity="0.9"
-                />
-                <circle
-                  cx={zx} cy={zy} r={r + 4}
-                  fill="none"
-                  stroke={conf.color}
-                  strokeWidth="0.4"
-                  opacity="0.25"
-                />
-                <text
-                  x={zx} y={zy + 1}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  style={{ fontSize: 8, fill: conf.color, fontFamily: "Outfit,sans-serif", fontWeight: 700, pointerEvents: "none" }}
-                >
-                  {z.drivers}
-                </text>
-                <text
-                  x={zx} y={zy + r + 7}
-                  textAnchor="middle"
-                  style={{ fontSize: 5.5, fill: "rgba(255,255,255,0.45)", fontFamily: "Outfit,sans-serif", pointerEvents: "none" }}
-                >
-                  {z.name.split(" ")[0]}
-                </text>
-              </g>
-            );
-          })}
-
-        {/* ── Geo-fence rings for selected city ── */}
-        {selCity && viewMode === "geofence" && (
-          <>
-            <circle
-              cx={selCity.x} cy={selCity.y} r="48"
-              fill="rgba(212,175,55,0.05)"
-              stroke="rgba(212,175,55,0.5)"
-              strokeWidth="2"
-              strokeDasharray="6 4"
-            />
-            <circle
-              cx={selCity.x} cy={selCity.y} r="62"
-              fill="none"
-              stroke="rgba(248,113,113,0.35)"
-              strokeWidth="1.5"
-              strokeDasharray="3 6"
-            />
-            <text
-              x={selCity.x + 50} y={selCity.y - 42}
-              style={{ fontSize: 7, fill: "rgba(212,175,55,0.65)", fontFamily: "Outfit,sans-serif" }}
-            >
-              Service Zone
-            </text>
-            <text
-              x={selCity.x + 64} y={selCity.y - 56}
-              style={{ fontSize: 7, fill: "rgba(248,113,113,0.65)", fontFamily: "Outfit,sans-serif" }}
-            >
-              Geo-fence Limit
-            </text>
-          </>
-        )}
-
-        {/* ── City pins ── */}
-        {cities.map((c) => {
-          const isSel = selCity?.id === c.id;
-          const pc    = pinColor(c);
-          const ps    = isSel ? 9 : c.active ? 7 : 5;
+        {/* Boundary polygons */}
+        {Object.entries(boundaries).map(([cityId, geoJson]) => {
+          if (!geoJson) return null;
+          const isSelected = selCity?.id === parseInt(cityId);
           return (
-            <g
-              key={c.id}
-              style={{ cursor: "pointer" }}
-              onClick={() => onCityClick(c)}
-              onMouseEnter={(e) => setTip({ x: e.clientX, y: e.clientY, c })}
-              onMouseLeave={() => setTip(null)}
-            >
-              {c.active && (
-                <circle
-                  cx={c.x} cy={c.y} r={ps + 9}
-                  fill="none"
-                  stroke={pc}
-                  strokeWidth="1"
-                  opacity="0.25"
-                  style={{ animation: `gmPing 2s ease-in-out ${c.id * 0.35}s infinite` }}
-                />
-              )}
-              <circle
-                cx={c.x} cy={c.y} r={ps}
-                fill={isSel ? "#D4AF37" : c.active ? pc : "rgba(255,255,255,0.14)"}
-                stroke={pc}
-                strokeWidth={isSel ? 2.5 : 1.5}
-                filter={isSel ? "url(#gmGlow)" : undefined}
-              />
-              <circle
-                cx={c.x} cy={c.y}
-                r={isSel ? 3 : 2}
-                fill={isSel ? "#04081A" : "rgba(255,255,255,0.8)"}
-              />
-              <text
-                x={c.x} y={c.y - ps - 4}
-                textAnchor="middle"
-                style={{
-                  fontSize:       isSel ? 9 : 7.5,
-                  fill:           isSel ? "#D4AF37" : "rgba(255,255,255,0.7)",
-                  fontFamily:     "Outfit,sans-serif",
-                  fontWeight:     isSel ? 700 : 400,
-                  pointerEvents:  "none",
-                }}
-              >
-                {c.name}
-              </text>
-            </g>
+            <GeoJSON
+              key={`boundary-${cityId}-${isSelected}`}
+              data={geoJson}
+              style={{
+                color: isSelected ? "#D4AF37" : "#34D399",
+                weight: isSelected ? 2.5 : 1.5,
+                opacity: isSelected ? 0.9 : 0.5,
+                fillColor: isSelected ? "#D4AF37" : "#34D399",
+                fillOpacity: isSelected ? 0.1 : 0.06,
+              }}
+            />
           );
         })}
 
-        {/* ── Compass ── */}
-        <g transform="translate(612,70)">
-          <circle cx="0" cy="0" r="14" fill="rgba(0,0,0,0.55)" stroke="rgba(212,175,55,0.28)" strokeWidth="1" />
-          <text x="0" y="-5"  textAnchor="middle" style={{ fontSize: 7, fill: "rgba(212,175,55,0.75)", fontWeight: 700, fontFamily: "Outfit,sans-serif" }}>N</text>
-          <text x="0" y="10"  textAnchor="middle" style={{ fontSize: 6, fill: "rgba(255,255,255,0.35)", fontFamily: "Outfit,sans-serif" }}>S</text>
-          <text x="9" y="3"   textAnchor="middle" style={{ fontSize: 6, fill: "rgba(255,255,255,0.35)", fontFamily: "Outfit,sans-serif" }}>E</text>
-          <text x="-9" y="3"  textAnchor="middle" style={{ fontSize: 6, fill: "rgba(255,255,255,0.35)", fontFamily: "Outfit,sans-serif" }}>W</text>
-          <line x1="0" y1="-10" x2="0" y2="-4" stroke="rgba(212,175,55,0.75)" strokeWidth="1.5" />
-        </g>
-      </svg>
-
-      <style>{`@keyframes gmPing { 0%, 100% { opacity: 0.3; transform-origin: center } 50% { opacity: 0.7 } }`}</style>
-
-      {/* ── Hover Tooltip ── */}
-      {tip && (
-        <div style={{
-          position:       "fixed",
-          left:           tip.x + 14,
-          top:            tip.y - 10,
-          background:     "rgba(4,8,26,0.97)",
-          border:         "1px solid rgba(212,175,55,0.3)",
-          borderRadius:   10,
-          padding:        "10px 14px",
-          zIndex:         1000,
-          minWidth:       160,
-          backdropFilter: "blur(8px)",
-          pointerEvents:  "none",
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.9)", fontFamily: "Cinzel,serif", marginBottom: 4 }}>
-            {tip.c.name}
-          </div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>
-            {tip.c.state}
-          </div>
-          {tip.c.active ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {CITY_TIP_ROWS(tip.c).map(([label, val, color], i) => (
-                <span key={i} style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>
-                  {label}: <strong style={{ color }}>{val}</strong>
-                </span>
-              ))}
-            </div>
-          ) : (
-            <span style={{
-              display:    "inline-flex",
-              padding:    "3px 8px",
-              borderRadius: 100,
-              fontSize:   10.5,
-              fontWeight: 600,
-              background: "rgba(96,165,250,0.1)",
-              border:     "1px solid rgba(96,165,250,0.24)",
-              color:      "#60A5FA",
-            }}>
-              {tip.c.status}
-            </span>
-          )}
-        </div>
-      )}
+        {/* City center markers */}
+        {cities.map((c) => {
+          if (!c.center_latitude || !c.center_longitude) return null;
+          const isSel = selCity?.id === c.id;
+          return (
+            <Marker
+              key={c.id}
+              position={[parseFloat(c.center_latitude), parseFloat(c.center_longitude)]}
+              icon={makeIcon(isSel ? "#D4AF37" : "#34D399", isSel)}
+              eventHandlers={{ click: () => onCityClick(c) }}
+            >
+              <Popup>
+                <div style={{ minWidth: 190, padding: "4px 2px" }}>
+                  <div style={{ fontFamily: "Cinzel,serif", fontSize: 15, fontWeight: 700, color: "#D4AF37", marginBottom: 3 }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>{c.state_name}</div>
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+                    {Object.entries(c.vehicle_matrix || {}).filter(([, v]) => v).map(([vt]) => (
+                      <span key={vt} style={{ padding: "2px 7px", borderRadius: 100, fontSize: 10, fontWeight: 700, background: `${VEHICLE_COLORS[vt]}20`, color: VEHICLE_COLORS[vt], border: `1px solid ${VEHICLE_COLORS[vt]}40` }}>{vt}</span>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>
+                    {parseFloat(c.center_latitude).toFixed(4)}°N, {parseFloat(c.center_longitude).toFixed(4)}°E
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+      </MapContainer>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// ZoneCard Component
-// ─────────────────────────────────────────────
-
-const ZONE_STAT_ROWS = (zone) => [
-  { l: "Drivers", v: zone.drivers,                              c: "#60A5FA" },
-  { l: "Rides",   v: zone.rides,                               c: "#D4AF37" },
-  { l: "Revenue", v: `Rs${(zone.revenue / 1000).toFixed(0)}K`, c: "#34D399" },
-];
-
-function ZoneCard({ zone, onEdit, onDelete, onToggleFence }) {
-  const conf = ZONE_TYPES[zone.type] || ZONE_TYPES.pickup;
-
-  const handleMouseEnter = (e) => {
-    e.currentTarget.style.borderColor = `${conf.color}45`;
-    e.currentTarget.style.background  = "rgba(255,255,255,0.045)";
-  };
-  const handleMouseLeave = (e) => {
-    e.currentTarget.style.borderColor = `${conf.color}22`;
-    e.currentTarget.style.background  = "rgba(255,255,255,0.028)";
-  };
-
+// ─── Vehicle Matrix ───────────────────────────────────────────────────────────
+function VehicleMatrix({ city, onToggle, toggling }) {
+  const matrix = city.vehicle_matrix || {};
   return (
-    <div
-      style={{
-        background:  "rgba(255,255,255,0.028)",
-        border:      `1px solid ${conf.color}22`,
-        borderRadius: 14,
-        padding:     "14px 16px",
-        transition:  "all .2s",
-      }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {/* ── Header row ── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-
-        {/* Name + badges */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
-            <span style={{ fontSize: 15 }}>{conf.icon}</span>
-            <div style={{
-              fontSize:     13,
-              fontWeight:   700,
-              color:        "rgba(255,255,255,0.88)",
-              overflow:     "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace:   "nowrap",
-            }}>
-              {zone.name}
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {/* Type badge */}
-            <span style={{
-              display:      "inline-flex",
-              padding:      "2px 7px",
-              borderRadius: 100,
-              fontSize:     10,
-              fontWeight:   600,
-              background:   `${conf.color}14`,
-              border:       `1px solid ${conf.color}28`,
-              color:        conf.color,
-            }}>
-              {conf.label}
-            </span>
-
-            {/* Demand badge */}
-            <span style={{
-              display:      "inline-flex",
-              padding:      "2px 7px",
-              borderRadius: 100,
-              fontSize:     10,
-              fontWeight:   600,
-              background:   `${DEMAND_COLOR[zone.demand]}14`,
-              border:       `1px solid ${DEMAND_COLOR[zone.demand]}28`,
-              color:        DEMAND_COLOR[zone.demand],
-            }}>
-              {zone.demand} Demand
-            </span>
-
-            {/* Geo-fence badge */}
-            {zone.geoFence && (
-              <span style={{
-                display:      "inline-flex",
-                padding:      "2px 7px",
-                borderRadius: 100,
-                fontSize:     10,
-                fontWeight:   600,
-                background:   "rgba(52,211,153,0.1)",
-                border:       "1px solid rgba(52,211,153,0.24)",
-                color:        "#34D399",
-              }}>
-                Geo-Fenced
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Edit / Delete buttons */}
-        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-          <button
-            onClick={() => onEdit(zone)}
-            style={{
-              background:     "rgba(212,175,55,0.07)",
-              border:         "1px solid rgba(212,175,55,0.2)",
-              borderRadius:   7,
-              color:          "#D4AF37",
-              width:          28,
-              height:         28,
-              cursor:         "pointer",
-              display:        "flex",
-              alignItems:     "center",
-              justifyContent: "center",
-            }}
-          >
-            <Edit3 size={12} />
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+      {VEHICLE_TYPES.map((vt) => {
+        const enabled = matrix[vt] === true;
+        const color = VEHICLE_COLORS[vt];
+        const isLoading = toggling === `${city.id}-${vt}`;
+        return (
+          <button key={vt} disabled={isLoading} onClick={() => onToggle(city.id, vt, !enabled)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 11px", borderRadius: 100, fontSize: 11, fontWeight: 700, cursor: isLoading ? "wait" : "pointer", background: enabled ? `${color}18` : "rgba(255,255,255,0.04)", border: `1px solid ${enabled ? color + "40" : "rgba(255,255,255,0.12)"}`, color: enabled ? color : "rgba(255,255,255,0.3)", transition: "all .2s" }}>
+            {isLoading ? <Loader size={9} style={{ animation: "spin 1s linear infinite" }} /> : <span style={{ width: 6, height: 6, borderRadius: "50%", background: enabled ? color : "rgba(255,255,255,0.2)", display: "inline-block" }} />}
+            {vt}
           </button>
-          <button
-            onClick={() => onDelete(zone.id)}
-            style={{
-              background:     "rgba(248,113,113,0.07)",
-              border:         "1px solid rgba(248,113,113,0.2)",
-              borderRadius:   7,
-              color:          "#F87171",
-              width:          28,
-              height:         28,
-              cursor:         "pointer",
-              display:        "flex",
-              alignItems:     "center",
-              justifyContent: "center",
-            }}
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Stats grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7, marginBottom: 10 }}>
-        {ZONE_STAT_ROWS(zone).map((s, i) => (
-          <div key={i} style={{ background: "rgba(0,0,0,0.2)", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: s.c, fontFamily: "monospace" }}>{s.v}</div>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.32)", marginTop: 1 }}>{s.l}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Footer: coords + geo-fence toggle ── */}
-      <div style={{
-        display:       "flex",
-        alignItems:    "center",
-        justifyContent:"space-between",
-        paddingTop:    10,
-        borderTop:     "1px solid rgba(212,175,55,0.07)",
-      }}>
-        <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.32)" }}>
-          R:{zone.radius}km · {zone.lat.toFixed(3)},{zone.lng.toFixed(3)}
-        </span>
-        <Toggle checked={zone.geoFence} onChange={() => onToggleFence(zone.id)} label="Geo-fence" />
-      </div>
+        );
+      })}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// ZoneCityPage (main content)
-// ─────────────────────────────────────────────
+// ─── Custom Chart Tooltip ─────────────────────────────────────────────────────
 
-function ZoneCityPage() {
+// ─── Main Page ────────────────────────────────────────────────────────────────
+function CityPage() {
   const toast = useToast();
 
-  // ── State ──────────────────────────────────
-  const [cities,   setCities]   = useState(INIT_CITIES);
-  const [selCity,  setSelCity]  = useState(INIT_CITIES[0]);
-  const [zones,    setZones]    = useState(PATNA_ZONES);
-  const [viewMode, setViewMode] = useState("zones");
+  const [cities, setCities]           = useState([]);
+  const [selCity, setSelCity]         = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [reloading, setReloading]     = useState(false);
+  const [toggling, setToggling]       = useState(null);
+  const [enforcement, setEnforcement] = useState(false);
+  const [enfLoading, setEnfLoading]   = useState(false);
 
-  // Modal open/close
-  const [addCityM,  setAddCityM]  = useState(false);
-  const [addZoneM,  setAddZoneM]  = useState(false);
-  const [editZoneM, setEditZoneM] = useState(false);
-  const [geoFenceM, setGeoFenceM] = useState(false);
+  // Boundaries: { [cityId]: GeoJSON | null }
+  const [boundaries, setBoundaries]   = useState({});
 
-  // Form state
-  const [editZone, setEditZone] = useState(null);
-  const [nc, setNc] = useState(EMPTY_CITY);
-  const [nz, setNz] = useState(EMPTY_ZONE);
+  // Per-city stats (selected city)
+  const [cityStats, setCityStats]     = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  // All active cities stats for analytics
+  const [allStats, setAllStats]       = useState([]);
+  const [allStatsLoading, setAllStatsLoading] = useState(false);
 
-  // ── Helpers ────────────────────────────────
+  // Search/filter
+  const [search, setSearch]           = useState("");
+  const [showAll, setShowAll]         = useState(false);
 
-  const setNcField = (key) => (e) => setNc((prev) => ({ ...prev, [key]: e.target.value }));
-  const setNzField = (key) => (e) => setNz((prev) => ({ ...prev, [key]: e.target.value }));
+  // Modals
+  const [addModal, setAddModal]       = useState(false);
+  const [editModal, setEditModal]     = useState(false);
+  const [editCity, setEditCity]       = useState(null);
+  const [resolveModal, setResolveModal] = useState(false);
+  const [nc, setNc]                   = useState(EMPTY_CITY);
+  const [saving, setSaving]           = useState(false);
 
-  // ── Actions ────────────────────────────────
+  // GeoJSON upload for edit
+  const [uploadedGeoJson, setUploadedGeoJson] = useState(null);
+  const [uploadError, setUploadError] = useState("");
 
-  const handleCityClick = (city) => {
+  // Resolve debug
+  const [resolveLat, setResolveLat]   = useState("");
+  const [resolveLng, setResolveLng]   = useState("");
+  const [resolveResult, setResolveResult] = useState(null);
+  const [resolveLoading, setResolveLoading] = useState(false);
+
+  const fetchCities = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true); else setReloading(true);
+    try {
+      const res = await getCities();
+      const data = res.data?.data || res.data || [];
+      setCities(data);
+      if (data.length > 0 && !selCity) setSelCity(data[0]);
+      if (silent) toast("Cities refreshed", "success");
+      // Load boundaries for active cities
+      const activeCities = data.filter((c) => c.is_active && c.has_boundary);
+      activeCities.forEach(async (c) => {
+        try {
+          const r = await getCityDetail(c.id);
+          const detail = r.data?.data || r.data;
+          if (detail?.boundary_geojson)
+            setBoundaries((prev) => ({ ...prev, [c.id]: detail.boundary_geojson }));
+        } catch {}
+      });
+      // Fetch stats for all active cities
+      const active = data.filter((c) => c.is_active);
+      if (active.length > 0) {
+        setAllStatsLoading(true);
+        try {
+          const results = await Promise.allSettled(active.map((c) => getCityStats(c.id)));
+          const statsData = results
+            .map((r, i) => r.status === "fulfilled" ? { ...( r.value?.data?.data || r.value?.data), city_name: active[i].name } : null)
+            .filter(Boolean);
+          setAllStats(statsData);
+        } catch {}
+        finally { setAllStatsLoading(false); }
+      }
+    } catch (err) {
+      toast(err.response?.data?.message || "Failed to load cities", "error");
+    } finally {
+      setLoading(false);
+      setReloading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchCities(); }, [fetchCities]);
+
+  // Fetch stats when city selected
+  useEffect(() => {
+    if (!selCity) return;
+    setStatsLoading(true);
+    setCityStats(null);
+    getCityStats(selCity.id)
+      .then((r) => setCityStats(r.data?.data || r.data))
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
+  }, [selCity?.id]);
+
+  const handleSelectCity = (city) => {
     setSelCity(city);
-    if (city.id === 1) {
-      setZones(PATNA_ZONES);
-    } else {
-      setZones(
-        Array.from({ length: city.zones || 3 }, (_, i) => ({
-          id:       i + 1,
-          name:     `${city.name} Zone ${i + 1}`,
-          type:     ["pickup", "drop", "hotspot", "medical"][i % 4],
-          lat:      25.5 + i * 0.04,
-          lng:      85.0 + i * 0.05,
-          radius:   1.5 + i * 0.4,
-          drivers:  8 + i * 7,
-          rides:    35 + i * 18,
-          revenue:  7000 + i * 4000,
-          demand:   ["High", "Medium", "Low"][i % 3],
-          geoFence: i % 2 === 0,
-        }))
-      );
+    // Load boundary if not loaded yet
+    if (city.has_boundary && !boundaries[city.id]) {
+      getCityDetail(city.id)
+        .then((r) => {
+          const detail = r.data?.data || r.data;
+          if (detail?.boundary_geojson)
+            setBoundaries((prev) => ({ ...prev, [city.id]: detail.boundary_geojson }));
+        }).catch(() => {});
     }
   };
 
-  const addCity = () => {
-    if (!nc.name || !nc.state) {
-      toast("Fill required fields", "error");
-      return;
+  const handleToggleActive = async (city) => {
+    if (!city.has_boundary && !city.is_active) {
+      toast("Cannot activate — no boundary polygon set", "error"); return;
     }
-    setCities((prev) => [
-      ...prev,
-      {
-        id:       prev.length + 1,
-        name:     nc.name,
-        state:    nc.state,
-        x:        390 + Math.random() * 80 - 40,
-        y:        250 + Math.random() * 80 - 40,
-        active:   false,
-        zones:    0,
-        drivers:  0,
-        rides:    0,
-        revenue:  0,
-        status:   "planned",
-      },
-    ]);
-    toast(`${nc.name} added as planned city!`, "success");
-    setAddCityM(false);
-    setNc(EMPTY_CITY);
+    try {
+      const res = await updateCity(city.id, { is_active: !city.is_active });
+      const updated = res.data?.data || res.data;
+      setCities((prev) => prev.map((c) => c.id === city.id ? { ...c, ...updated } : c));
+      if (selCity?.id === city.id) setSelCity((prev) => ({ ...prev, ...updated }));
+      toast(`${city.name} ${city.is_active ? "deactivated" : "activated"}`, city.is_active ? "error" : "success");
+    } catch (err) { toast(err.response?.data?.message || "Failed to update city", "error"); }
   };
 
-  const addZone = () => {
-    if (!nz.name) {
-      toast("Zone name required", "error");
-      return;
-    }
-    setZones((prev) => [
-      ...prev,
-      {
-        id:       prev.length + 1,
-        ...nz,
-        radius:   parseFloat(nz.radius) || 2,
-        lat:      parseFloat(nz.lat)    || 25.61,
-        lng:      parseFloat(nz.lng)    || 85.09,
-        drivers:  0,
-        rides:    0,
-        revenue:  0,
-      },
-    ]);
-    toast(`Zone "${nz.name}" added to ${selCity?.name}!`, "success");
-    setAddZoneM(false);
-    setNz(EMPTY_ZONE);
+  const handleVehicleToggle = async (cityId, vehicleType, isEnabled) => {
+    setToggling(`${cityId}-${vehicleType}`);
+    try {
+      const res = await toggleCityVehicle(cityId, vehicleType, isEnabled);
+      const updated = res.data?.data || res.data;
+      setCities((prev) => prev.map((c) => c.id === cityId ? { ...c, ...updated } : c));
+      if (selCity?.id === cityId) setSelCity((prev) => ({ ...prev, ...updated }));
+      toast(`${vehicleType} ${isEnabled ? "enabled" : "disabled"}`, isEnabled ? "success" : "error");
+    } catch (err) { toast(err.response?.data?.message || "Failed to update vehicle", "error"); }
+    finally { setToggling(null); }
   };
 
-  const saveEdit = () => {
-    setZones((prev) => prev.map((z) => (z.id === editZone.id ? editZone : z)));
-    toast("Zone updated!", "success");
-    setEditZoneM(false);
+  const handleEnforcementToggle = async (val) => {
+    setEnfLoading(true);
+    try {
+      await setCityEnforcement(val);
+      setEnforcement(val);
+      toast(`Enforcement ${val ? "enabled" : "disabled"}`, val ? "success" : "error");
+    } catch (err) { toast(err.response?.data?.message || "Failed", "error"); }
+    finally { setEnfLoading(false); }
   };
 
-  const delZone = (id) => {
-    setZones((prev) => prev.filter((z) => z.id !== id));
-    toast("Zone removed", "error");
+  const handleAddCity = async () => {
+    if (!nc.name || !nc.state_id) { toast("City name and State ID required", "error"); return; }
+    setSaving(true);
+    try {
+      const res = await createCity({
+        name: nc.name.trim(), state_id: parseInt(nc.state_id),
+        center_latitude:  nc.center_latitude  ? parseFloat(nc.center_latitude)  : undefined,
+        center_longitude: nc.center_longitude ? parseFloat(nc.center_longitude) : undefined,
+        is_active: false,
+      });
+      const created = res.data?.data || res.data;
+      setCities((prev) => [...prev, created]);
+      toast(`${nc.name} added`, "success");
+      setAddModal(false); setNc(EMPTY_CITY);
+    } catch (err) { toast(err.response?.data?.message || "Failed to create city", "error"); }
+    finally { setSaving(false); }
   };
 
-  const toggleFence = (id) => {
-    const z = zones.find((x) => x.id === id);
-    setZones((prev) => prev.map((x) => (x.id === id ? { ...x, geoFence: !x.geoFence } : x)));
-    toast(
-      `Geo-fence ${z?.geoFence ? "disabled" : "enabled"} for "${z?.name}"`,
-      z?.geoFence ? "error" : "success"
+  const handleEditCity = async () => {
+    if (!editCity?.name) { toast("City name required", "error"); return; }
+    setSaving(true);
+    try {
+      const patch = {
+        name:             editCity.name,
+        center_latitude:  editCity.center_latitude  ? parseFloat(editCity.center_latitude)  : undefined,
+        center_longitude: editCity.center_longitude ? parseFloat(editCity.center_longitude) : undefined,
+        fallback_radius_km: editCity.fallback_radius_km ? parseFloat(editCity.fallback_radius_km) : undefined,
+        resolve_priority:   editCity.resolve_priority   ? parseInt(editCity.resolve_priority)     : undefined,
+      };
+      if (uploadedGeoJson) patch.boundary = uploadedGeoJson;
+      const res = await updateCity(editCity.id, patch);
+      const updated = res.data?.data || res.data;
+      setCities((prev) => prev.map((c) => c.id === editCity.id ? { ...c, ...updated } : c));
+      if (selCity?.id === editCity.id) setSelCity((prev) => ({ ...prev, ...updated }));
+      if (uploadedGeoJson) setBoundaries((prev) => ({ ...prev, [editCity.id]: uploadedGeoJson }));
+      toast("City updated", "success");
+      setEditModal(false); setUploadedGeoJson(null); setUploadError("");
+    } catch (err) { toast(err.response?.data?.message || "Failed to update", "error"); }
+    finally { setSaving(false); }
+  };
+
+  const handleGeoJsonUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError("");
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        const geo = parsed.type === "FeatureCollection" ? parsed.features[0]?.geometry
+                  : parsed.type === "Feature"           ? parsed.geometry
+                  : parsed;
+        if (!geo?.type || !["Polygon","MultiPolygon"].includes(geo.type)) {
+          setUploadError("File must be a Polygon or MultiPolygon GeoJSON"); return;
+        }
+        setUploadedGeoJson(geo);
+      } catch { setUploadError("Invalid JSON file"); }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleResolve = async () => {
+    const lat = parseFloat(resolveLat), lng = parseFloat(resolveLng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) { toast("Enter valid lat/lng", "error"); return; }
+    setResolveLoading(true); setResolveResult(null);
+    try {
+      const res = await resolveCity(lat, lng);
+      setResolveResult(res.data?.data || res.data);
+    } catch (err) { toast(err.response?.data?.message || "Resolve failed", "error"); }
+    finally { setResolveLoading(false); }
+  };
+
+  const activeCities   = cities.filter((c) => c.is_active);
+  const inactiveCities = cities.filter((c) => !c.is_active);
+
+  const filteredActive = search
+    ? activeCities.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.state_name?.toLowerCase().includes(search.toLowerCase()))
+    : activeCities;
+
+  const displayCities = showAll
+    ? (search ? cities.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.state_name?.toLowerCase().includes(search.toLowerCase())) : cities)
+    : filteredActive;
+
+  const stateOptions = [...new Map(cities.map((c) => [c.state_id, { id: c.state_id, name: c.state_name }])).values()].sort((a, b) => a.name.localeCompare(b.name));
+
+  if (loading) {
+    return (
+      <PageWrapper title="City Management" subtitle="Loading...">
+        <GlobalStyles />
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: 300, color: "rgba(255,255,255,0.3)", gap: 10 }}>
+          <Loader size={20} style={{ animation: "spin 1s linear infinite" }} /> Loading cities...
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </PageWrapper>
     );
-  };
-
-  const toggleCity = (id) => {
-    const city = cities.find((c) => c.id === id);
-    setCities((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? { ...c, active: !c.active, status: c.active ? "planned" : "live" }
-          : c
-      )
-    );
-    toast(
-      `${city?.name} ${city?.active ? "deactivated" : "activated"}!`,
-      city?.active ? "error" : "success"
-    );
-  };
-
-  // ── Derived values ─────────────────────────
-
-  const actCities = cities.filter((c) => c.active);
-  const chartData = zones.slice(0, 6).map((z) => ({
-    name:    z.name.split(" ")[0],
-    rev:     z.revenue,
-    drivers: z.drivers,
-  }));
-
-  // ─────────────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────────────
+  }
 
   return (
     <PageWrapper
-      title="Zone & City Management"
-      subtitle="Live map · zone configuration · geo-fencing · driver heatmap"
+      title="City Management"
+      subtitle="Manage cities, vehicle availability and geo-enforcement"
       actions={
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn-outline btn-sm" onClick={() => setGeoFenceM(true)}>
-            <Shield size={13} /> Geo-Fence Rules
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Toggle checked={enforcement} onChange={handleEnforcementToggle} label={enfLoading ? "Saving…" : "Enforcement"} />
+          <button className="btn-outline btn-sm" onClick={() => setResolveModal(true)} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <Navigation size={13} /> Resolve Debug
           </button>
-          <button className="btn-outline btn-sm" onClick={() => setAddZoneM(true)}>
-            <Plus size={13} /> Add Zone
+          <button className="btn-outline btn-sm" onClick={() => fetchCities(true)} disabled={reloading} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <RefreshCw size={13} style={reloading ? { animation: "spin 1s linear infinite" } : {}} />
+            {reloading ? "Refreshing…" : "Reload"}
           </button>
-          <button className="btn-gold btn-sm" onClick={() => setAddCityM(true)}>
+          <button className="btn-gold btn-sm" onClick={() => setAddModal(true)} style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <Plus size={13} /> Add City
           </button>
         </div>
       }
     >
       <GlobalStyles />
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
 
-      {/* ── Summary Stats ── */}
-      <MiniStatRow
-        items={[
-          { label: "Active Cities",  value: String(actCities.length),                                         icon: "🏙️", color: "#D4AF37" },
-          { label: "Total Zones",    value: String(actCities.reduce((a, b) => a + b.zones, 0)),               icon: "🗺️", color: "#60A5FA" },
-          { label: "Active Drivers", value: actCities.reduce((a, b) => a + b.drivers, 0).toLocaleString(),    icon: "🧑‍✈️", color: "#34D399" },
-          { label: "Rides Today",    value: actCities.reduce((a, b) => a + b.rides, 0).toLocaleString(),      icon: "🚗", color: "#A78BFA" },
-          { label: "Total Revenue",  value: `Rs${(actCities.reduce((a, b) => a + b.revenue, 0) / 100000).toFixed(1)}L`, icon: "💰", color: "#D4AF37" },
-          { label: "Planned Cities", value: String(cities.filter((c) => !c.active).length),                  icon: "📍", color: "#F59E0B" },
-        ]}
-      />
+      {/* ── Stats Strip ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px,1fr))", gap: 12, marginBottom: 18 }}>
+        {[
+          { label: "Total Cities",  value: cities.length,                           color: "#D4AF37", icon: "🏙️" },
+          { label: "Active",        value: activeCities.length,                     color: "#34D399", icon: "✅" },
+          { label: "Inactive",      value: inactiveCities.length,                   color: "#60A5FA", icon: "📍" },
+          { label: "With Boundary", value: cities.filter((c) => c.has_boundary).length, color: "#A78BFA", icon: "🗺️" },
+          { label: "No Boundary",   value: cities.filter((c) => !c.has_boundary).length, color: "#F59E0B", icon: "⚠️" },
+        ].map((s, i) => (
+          <div key={i} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(212,175,55,0.1)", borderRadius: 14, padding: "14px 16px" }}>
+            <div style={{ fontSize: 20, marginBottom: 6 }}>{s.icon}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: s.color, fontFamily: "monospace" }}>{s.value}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
 
-      {/* ══════════════════════════════════════
-          Map + City List
-      ══════════════════════════════════════ */}
+      {/* ── Search Bar ── */}
+      <div style={{ marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ flex: 1, position: "relative" }}>
+          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
+          <input
+            className="gm-input"
+            style={{ paddingLeft: 36, width: "100%", boxSizing: "border-box" }}
+            placeholder="Search cities or states…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          style={{ background: showAll ? "rgba(212,175,55,0.12)" : "rgba(255,255,255,0.04)", border: `1px solid ${showAll ? "rgba(212,175,55,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: 10, color: showAll ? "#D4AF37" : "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 600, cursor: "pointer", padding: "8px 14px", fontFamily: "Outfit,sans-serif", whiteSpace: "nowrap" }}
+        >
+          {showAll ? `Active Only (${activeCities.length})` : `Show All (${cities.length})`}
+        </button>
+      </div>
+
+      {/* ── Map + City List ── */}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,2fr) minmax(0,1fr)", gap: 16, marginBottom: 18 }}>
 
-        {/* ── Map card ── */}
+        {/* Map */}
         <Card style={{ padding: 0, overflow: "hidden" }}>
-
-          {/* Map header */}
-          <div style={{
-            padding:       "14px 18px",
-            borderBottom:  "1px solid rgba(212,175,55,0.1)",
-            display:       "flex",
-            alignItems:    "center",
-            justifyContent:"space-between",
-            flexWrap:      "wrap",
-            gap:           10,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <MapPin size={15} color="#D4AF37" />
-              <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>
-                India Map{selCity ? ` — ${selCity.name}` : ""}
-              </span>
-            </div>
-
-            {/* View mode switcher */}
-            <div style={{ display: "flex", gap: 3, background: "rgba(0,0,0,0.3)", padding: 3, borderRadius: 10 }}>
-              {VIEW_MODES.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => setViewMode(v.id)}
-                  style={{
-                    display:        "flex",
-                    alignItems:     "center",
-                    gap:            4,
-                    padding:        "5px 10px",
-                    borderRadius:   7,
-                    border:         "none",
-                    background:     viewMode === v.id ? "rgba(212,175,55,0.15)" : "transparent",
-                    color:          viewMode === v.id ? "#D4AF37" : "rgba(255,255,255,0.4)",
-                    fontSize:       11,
-                    fontWeight:     600,
-                    cursor:         "pointer",
-                    fontFamily:     "Outfit,sans-serif",
-                    transition:     "all .2s",
-                    whiteSpace:     "nowrap",
-                  }}
-                >
-                  <v.Icon size={12} /> {v.l}
-                </button>
-              ))}
-            </div>
+          <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(212,175,55,0.1)", display: "flex", alignItems: "center", gap: 8 }}>
+            <MapPin size={15} color="#D4AF37" />
+            <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>
+              India Map{selCity ? ` — ${selCity.name}` : ""}
+            </span>
+            {selCity?.has_boundary && boundaries[selCity.id] && (
+              <span style={{ marginLeft: "auto", fontSize: 10, color: "#34D399", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.24)", borderRadius: 100, padding: "2px 8px" }}>✓ Boundary visible</span>
+            )}
           </div>
-
-          {/* Map canvas */}
-          <div style={{ height: 380, padding: 4 }}>
-            <IndiaMap
-              cities={cities}
-              selCity={selCity}
-              onCityClick={handleCityClick}
-              viewMode={viewMode}
-              zones={zones}
-            />
+          <div style={{ height: 520 }}>
+            <IndiaMap cities={filteredActive} selCity={selCity} onCityClick={handleSelectCity} boundaries={boundaries} />
           </div>
-
-          {/* Legend */}
-          <div style={{
-            padding:   "9px 18px",
-            borderTop: "1px solid rgba(212,175,55,0.08)",
-            display:   "flex",
-            gap:       14,
-            flexWrap:  "wrap",
-          }}>
-            {MAP_LEGEND.map((it, i) => (
+          <div style={{ padding: "9px 18px", borderTop: "1px solid rgba(212,175,55,0.08)", display: "flex", gap: 14, flexWrap: "wrap" }}>
+            {[{ c: "#34D399", l: "Active" }, { c: "#D4AF37", l: "Selected" }, { c: "rgba(52,211,153,0.3)", l: "Boundary" }].map((it, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: "rgba(255,255,255,0.4)" }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: it.c }} />
-                {it.l}
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: it.c }} /> {it.l}
               </div>
             ))}
-            {viewMode === "zones" &&
-              Object.entries(ZONE_TYPES).slice(0, 4).map(([k, v]) => (
-                <div key={k} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "rgba(255,255,255,0.4)" }}>
-                  <div style={{ width: 12, height: 3, borderRadius: 2, background: v.color }} />
-                  {v.label}
-                </div>
-              ))}
+            <div style={{ marginLeft: "auto", fontSize: 10.5, color: "rgba(255,255,255,0.3)" }}>Click pin to select · Scroll to zoom</div>
           </div>
         </Card>
 
-        {/* ── City List card ── */}
-        <Card style={{ overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: 474 }}>
-          <div style={{
-            padding:        "14px 16px",
-            borderBottom:   "1px solid rgba(212,175,55,0.1)",
-            display:        "flex",
-            alignItems:     "center",
-            justifyContent: "space-between",
-          }}>
+        {/* City List */}
+        <Card style={{ overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: 610 }}>
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(212,175,55,0.1)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>
-              All Cities ({cities.length})
+              {showAll ? `All Cities (${displayCities.length})` : `Active (${displayCities.length})`}
             </span>
             <div style={{ display: "flex", gap: 5 }}>
-              <span style={{ display: "inline-flex", padding: "2px 7px", borderRadius: 100, fontSize: 10, fontWeight: 600, background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.24)", color: "#34D399" }}>
-                {actCities.length} Live
-              </span>
-              <span style={{ display: "inline-flex", padding: "2px 7px", borderRadius: 100, fontSize: 10, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.24)", color: "#F59E0B" }}>
-                {cities.filter((c) => !c.active).length} Planned
-              </span>
+              <span style={{ display: "inline-flex", padding: "2px 7px", borderRadius: 100, fontSize: 10, fontWeight: 600, background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.24)", color: "#34D399" }}>{activeCities.length} Live</span>
             </div>
           </div>
-
           <div style={{ overflowY: "auto", flex: 1 }}>
-            {cities.map((city) => (
-              <div
-                key={city.id}
-                onClick={() => handleCityClick(city)}
-                style={{
-                  padding:       "11px 14px",
-                  borderBottom:  "1px solid rgba(212,175,55,0.07)",
-                  cursor:        "pointer",
-                  background:    selCity?.id === city.id ? "rgba(212,175,55,0.06)" : "transparent",
-                  transition:    "all .2s",
-                  display:       "flex",
-                  alignItems:    "center",
-                  gap:           10,
-                }}
+            {displayCities.length === 0 && (
+              <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)" }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🏙️</div>
+                {search ? "No cities match search" : "No active cities"}
+              </div>
+            )}
+            {displayCities.map((city) => (
+              <div key={city.id} onClick={() => handleSelectCity(city)}
+                style={{ padding: "11px 14px", borderBottom: "1px solid rgba(212,175,55,0.07)", cursor: "pointer", background: selCity?.id === city.id ? "rgba(212,175,55,0.06)" : "transparent", transition: "all .2s", display: "flex", alignItems: "center", gap: 10 }}
                 onMouseEnter={(e) => { if (selCity?.id !== city.id) e.currentTarget.style.background = "rgba(255,255,255,0.025)"; }}
                 onMouseLeave={(e) => { if (selCity?.id !== city.id) e.currentTarget.style.background = "transparent"; }}
               >
-                {/* Status dot */}
-                <div style={{
-                  width:      7,
-                  height:     7,
-                  borderRadius:"50%",
-                  background: city.status === "live" ? "#34D399" : city.status === "planned" ? "#60A5FA" : "#F59E0B",
-                  flexShrink: 0,
-                  boxShadow:  city.status === "live" ? "0 0 5px rgba(52,211,153,0.6)" : "none",
-                }} />
-
-                {/* City info */}
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: city.is_active ? "#34D399" : "#60A5FA", flexShrink: 0, boxShadow: city.is_active ? "0 0 5px rgba(52,211,153,0.6)" : "none" }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: selCity?.id === city.id ? "#D4AF37" : "rgba(255,255,255,0.8)" }}>
-                      {city.name}
-                    </div>
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.28)" }}>{city.state}</span>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: selCity?.id === city.id ? "#D4AF37" : "rgba(255,255,255,0.8)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{city.name}</div>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", flexShrink: 0, marginLeft: 6 }}>{city.state_name}</span>
                   </div>
-                  {city.active && (
-                    <div style={{ display: "flex", gap: 9, marginTop: 2, fontSize: 10.5 }}>
-                      <span style={{ color: "rgba(255,255,255,0.38)" }}>{city.drivers} drv</span>
-                      <span style={{ color: "rgba(255,255,255,0.38)" }}>{city.zones} zones</span>
-                      <span style={{ color: "#34D399" }}>Rs{(city.revenue / 1000).toFixed(0)}K</span>
-                    </div>
-                  )}
+                  <div style={{ display: "flex", gap: 8, marginTop: 2, fontSize: 10 }}>
+                    {!city.has_boundary && <span style={{ color: "#F59E0B" }}>⚠ No boundary</span>}
+                    {city.center_latitude && <span style={{ color: "rgba(255,255,255,0.3)" }}>{parseFloat(city.center_latitude).toFixed(2)}°N</span>}
+                  </div>
                 </div>
-
-                {/* Activate / Deactivate */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleCity(city.id); }}
-                  style={{
-                    background:   city.active ? "rgba(248,113,113,0.08)" : "rgba(52,211,153,0.08)",
-                    border:       `1px solid ${city.active ? "rgba(248,113,113,0.28)" : "rgba(52,211,153,0.28)"}`,
-                    borderRadius: 7,
-                    color:        city.active ? "#F87171" : "#34D399",
-                    fontSize:     10,
-                    fontWeight:   600,
-                    cursor:       "pointer",
-                    padding:      "3px 8px",
-                    whiteSpace:   "nowrap",
-                    fontFamily:   "Outfit,sans-serif",
-                  }}
-                >
-                  {city.active ? "Deact." : "Activate"}
-                </button>
+                <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                  <button onClick={(e) => { e.stopPropagation(); setEditCity({ ...city }); setUploadedGeoJson(null); setUploadError(""); setEditModal(true); }}
+                    style={{ background: "rgba(212,175,55,0.07)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 6, color: "#D4AF37", width: 26, height: 26, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Edit3 size={10} />
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); handleToggleActive(city); }}
+                    style={{ background: city.is_active ? "rgba(248,113,113,0.08)" : "rgba(52,211,153,0.08)", border: `1px solid ${city.is_active ? "rgba(248,113,113,0.28)" : "rgba(52,211,153,0.28)"}`, borderRadius: 6, color: city.is_active ? "#F87171" : "#34D399", fontSize: 10, fontWeight: 600, cursor: "pointer", padding: "3px 7px", whiteSpace: "nowrap", fontFamily: "Outfit,sans-serif" }}>
+                    {city.is_active ? "Deactivate" : "Activate"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </Card>
       </div>
 
-      {/* ══════════════════════════════════════
-          Zone Section (only when city selected)
-      ══════════════════════════════════════ */}
+      {/* ── Selected City Detail + Stats ── */}
       {selCity && (
-        <>
-          {/* ── Charts Row ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
+        <Card style={{ marginBottom: 18, padding: 20 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
+            <div>
+              <div style={{ fontFamily: "Cinzel,serif", fontSize: 18, fontWeight: 700, color: "#D4AF37" }}>{selCity.name}</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 3 }}>
+                {selCity.state_name} &nbsp;·&nbsp;
+                {selCity.center_latitude ? `${parseFloat(selCity.center_latitude).toFixed(4)}°N, ${parseFloat(selCity.center_longitude).toFixed(4)}°E` : "No coords"}
+                &nbsp;·&nbsp; Priority: {selCity.resolve_priority} &nbsp;·&nbsp; Fallback: {selCity.fallback_radius_km}km
+                &nbsp;·&nbsp; {selCity.has_boundary ? <span style={{ color: "#34D399" }}>✓ Boundary set</span> : <span style={{ color: "#F59E0B" }}>⚠ No boundary</span>}
+              </div>
+            </div>
+            <span style={{ display: "inline-flex", padding: "5px 12px", borderRadius: 100, fontSize: 11, fontWeight: 700, background: selCity.is_active ? "rgba(52,211,153,0.1)" : "rgba(96,165,250,0.1)", border: `1px solid ${selCity.is_active ? "rgba(52,211,153,0.3)" : "rgba(96,165,250,0.3)"}`, color: selCity.is_active ? "#34D399" : "#60A5FA" }}>
+              {selCity.is_active ? "● Active" : "○ Inactive"}
+            </span>
+          </div>
 
-            {/* Zone Revenue Chart */}
-            <Card style={{ padding: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 3 }}>
-                Zone-wise Revenue — {selCity.name}
+          {!selCity.has_boundary && (
+            <AlertBox type="warning" style={{ marginBottom: 12 }}>
+              No boundary polygon — city cannot be activated. Upload GeoJSON via Edit button.
+            </AlertBox>
+          )}
+
+          <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Vehicle Availability</div>
+          <VehicleMatrix city={selCity} onToggle={handleVehicleToggle} toggling={toggling} />
+
+          {/* City live stats */}
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(212,175,55,0.08)" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Live Stats — {selCity.name}</div>
+            {statsLoading ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
+                <Loader size={12} style={{ animation: "spin 1s linear infinite" }} /> Loading stats…
               </div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginBottom: 14 }}>
-                Revenue per zone (top 6)
+            ) : cityStats ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px,1fr))", gap: 10 }}>
+                {[
+                  { label: "Available Drivers", value: cityStats.active_drivers,  color: "#34D399", icon: <Users size={14} /> },
+                  { label: "On Duty",           value: cityStats.on_duty_drivers, color: "#D4AF37", icon: <Car size={14} /> },
+                  { label: "Ongoing Rides",     value: cityStats.ongoing_rides,   color: "#60A5FA", icon: <Navigation size={14} /> },
+                  { label: "Rides Today",       value: cityStats.rides_today,     color: "#A78BFA", icon: <BarChart2 size={14} /> },
+                  { label: "Revenue Today",     value: `₹${Number(cityStats.revenue_today).toLocaleString("en-IN")}`, color: "#F59E0B", icon: <TrendingUp size={14} /> },
+                ].map((s, i) => (
+                  <div key={i} style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${s.color}22`, borderRadius: 12, padding: "12px 14px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, color: s.color, marginBottom: 6 }}>{s.icon}<span style={{ fontSize: 10, fontWeight: 600 }}>{s.label}</span></div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: "monospace" }}>{s.value}</div>
+                  </div>
+                ))}
               </div>
-              <ResponsiveContainer width="100%" height={170}>
-                <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="rgba(212,175,55,0.07)" strokeDasharray="4 6" vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 9 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 9 }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `Rs${(v / 1000).toFixed(0)}K`}
-                  />
-                  <Tooltip content={<GoldTooltip />} />
-                  <Bar dataKey="rev" name="Revenue" radius={[5, 5, 0, 0]}>
-                    {chartData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} fillOpacity={0.85} />
-                    ))}
+            ) : null}
+          </div>
+        </Card>
+      )}
+
+      {/* ── Analytics Section ── */}
+      {allStats.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <BarChart2 size={15} color="#D4AF37" /> City Analytics — All Active Cities
+            {allStatsLoading && <Loader size={12} style={{ animation: "spin 1s linear infinite", color: "rgba(255,255,255,0.3)" }} />}
+          </div>
+
+          {/* Total across all cities */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px,1fr))", gap: 12, marginBottom: 16 }}>
+            {[
+              { label: "Total Active Drivers", value: allStats.reduce((s, c) => s + (c.active_drivers || 0), 0), color: "#34D399", icon: <Users size={16} /> },
+              { label: "Total On Duty",        value: allStats.reduce((s, c) => s + (c.on_duty_drivers || 0), 0), color: "#D4AF37", icon: <Car size={16} /> },
+              { label: "Ongoing Rides",        value: allStats.reduce((s, c) => s + (c.ongoing_rides || 0), 0),  color: "#60A5FA", icon: <Navigation size={16} /> },
+              { label: "Total Rides Today",    value: allStats.reduce((s, c) => s + (c.rides_today || 0), 0),    color: "#A78BFA", icon: <BarChart2 size={16} /> },
+              { label: "Revenue Today",        value: `₹${allStats.reduce((s, c) => s + (Number(c.revenue_today) || 0), 0).toLocaleString("en-IN")}`, color: "#F59E0B", icon: <TrendingUp size={16} /> },
+            ].map((s, i) => (
+              <div key={i} style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${s.color}22`, borderRadius: 14, padding: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, color: s.color, marginBottom: 8 }}>{s.icon}<span style={{ fontSize: 11, fontWeight: 600 }}>{s.label}</span></div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: s.color, fontFamily: "monospace" }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Charts */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+
+            {/* Drivers per city */}
+            <Card style={{ padding: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.6)", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                <Users size={13} color="#34D399" /> Drivers per City
+              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={allStats} barCategoryGap="30%">
+                  <XAxis dataKey="city_name" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} width={28} />
+                  <Tooltip content={<ChartTooltip suffix=" drivers" />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+                  <Bar dataKey="active_drivers" name="Available" radius={[4,4,0,0]}>
+                    {allStats.map((_, i) => <Cell key={i} fill="#34D399" opacity={0.8} />)}
+                  </Bar>
+                  <Bar dataKey="on_duty_drivers" name="On Duty" radius={[4,4,0,0]}>
+                    {allStats.map((_, i) => <Cell key={i} fill="#D4AF37" opacity={0.8} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </Card>
-
-            {/* Driver Availability Heatmap */}
-            <Card style={{ padding: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)", marginBottom: 3 }}>
-                Driver Availability Heatmap
-              </div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginBottom: 14 }}>
-                Driver count per zone — {selCity.name}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(88px,1fr))", gap: 8 }}>
-                {zones.slice(0, 8).map((zone, i) => {
-                  const maxD = Math.max(...zones.map((z) => z.drivers));
-                  const pct  = maxD > 0 ? zone.drivers / maxD : 0;
-                  const col  = pct > 0.7 ? "#F87171" : pct > 0.4 ? "#F59E0B" : "#34D399";
-                  const rgb  = pct > 0.7 ? "248,113,113" : pct > 0.4 ? "245,158,11" : "52,211,153";
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        background:   `rgba(${rgb},${0.07 + pct * 0.18})`,
-                        border:       `1px solid rgba(${rgb},${0.12 + pct * 0.3})`,
-                        borderRadius: 10,
-                        padding:      "9px 7px",
-                        textAlign:    "center",
-                      }}
-                    >
-                      <div style={{ fontSize: 17, fontWeight: 800, color: col, fontFamily: "monospace", marginBottom: 3 }}>
-                        {zone.drivers}
-                      </div>
-                      <div style={{ height: 4, borderRadius: 100, background: "rgba(255,255,255,0.07)", marginBottom: 4, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct * 100}%`, background: col, borderRadius: 100 }} />
-                      </div>
-                      <div style={{ fontSize: 9, color: "rgba(255,255,255,0.38)", lineHeight: 1.3 }}>
-                        {zone.name.split(" ")[0]}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          </div>
-
-          {/* ── Zone Cards Grid ── */}
-          <div style={{ marginBottom: 18 }}>
-            {/* Section header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
-              <div>
-                <div style={{ fontFamily: "Cinzel,serif", fontSize: 16, fontWeight: 700, color: "#D4AF37" }}>
-                  {selCity.name} — Zones ({zones.length})
-                </div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
-                  Toggle geo-fence per zone · Dashed border = no geo-fence
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn-outline btn-sm" onClick={() => setGeoFenceM(true)}>
-                  <Shield size={13} /> Geo-Fence Rules
-                </button>
-                <button className="btn-gold btn-sm" onClick={() => setAddZoneM(true)}>
-                  <Plus size={13} /> Add Zone
-                </button>
-              </div>
-            </div>
-
-            {/* Zone type chips */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-              {Object.entries(ZONE_TYPES).map(([k, v]) => (
-                <span
-                  key={k}
-                  style={{
-                    display:      "inline-flex",
-                    alignItems:   "center",
-                    gap:          4,
-                    padding:      "3px 10px",
-                    borderRadius: 100,
-                    fontSize:     10.5,
-                    fontWeight:   600,
-                    background:   `${v.color}10`,
-                    border:       `1px solid ${v.color}22`,
-                    color:        v.color,
-                  }}
-                >
-                  {v.icon} {v.label}{" "}
-                  <span style={{ color: "rgba(255,255,255,0.35)" }}>
-                    ({zones.filter((z) => z.type === k).length})
-                  </span>
-                </span>
-              ))}
-            </div>
-
-            {/* Zone card grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(340px,1fr))", gap: 12 }}>
-              {zones.map((zone) => (
-                <ZoneCard
-                  key={zone.id}
-                  zone={zone}
-                  onEdit={(z) => { setEditZone({ ...z }); setEditZoneM(true); }}
-                  onDelete={delZone}
-                  onToggleFence={toggleFence}
-                />
-              ))}
-
-              {/* Empty state */}
-              {zones.length === 0 && (
-                <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.3)", gridColumn: "1/-1" }}>
-                  <div style={{ fontSize: 36, marginBottom: 10 }}>🗺️</div>
-                  No zones for {selCity.name}
-                  <div style={{ marginTop: 12 }}>
-                    <button className="btn-gold btn-sm" onClick={() => setAddZoneM(true)}>
-                      Add First Zone
-                    </button>
+              <div style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 8 }}>
+                {[{ c: "#34D399", l: "Available" }, { c: "#D4AF37", l: "On Duty" }].map((it, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: "rgba(255,255,255,0.4)" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: it.c }} /> {it.l}
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
+                ))}
+              </div>
+            </Card>
 
-          {/* ── Zone Performance Table ── */}
-          <TableCard
-            title={`Zone Performance — ${selCity.name}`}
-            icon="📊"
-            actions={
-              <button className="btn-outline btn-sm" onClick={() => toast("Zone report exported!", "success")}>
-                Export
-              </button>
-            }
-          >
-            <table className="gm-table">
-              <thead>
-                <tr>
-                  <th>Zone Name</th>
-                  <th>Type</th>
-                  <th>Drivers</th>
-                  <th>Rides</th>
-                  <th>Revenue</th>
-                  <th>Demand</th>
-                  <th>Geo-fence</th>
-                  <th>Radius</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {zones.map((z, i) => {
-                  const conf = ZONE_TYPES[z.type] || ZONE_TYPES.pickup;
-                  return (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 600 }}>{z.name}</td>
-                      <td>
-                        <span style={{
-                          display:      "inline-flex",
-                          alignItems:   "center",
-                          gap:          4,
-                          padding:      "3px 8px",
-                          borderRadius: 100,
-                          fontSize:     10.5,
-                          fontWeight:   600,
-                          background:   `${conf.color}14`,
-                          border:       `1px solid ${conf.color}28`,
-                          color:        conf.color,
-                        }}>
-                          {conf.icon} {conf.label}
-                        </span>
-                      </td>
-                      <td style={{ color: "#60A5FA", fontFamily: "monospace", fontWeight: 700 }}>{z.drivers}</td>
-                      <td style={{ color: "#D4AF37", fontFamily: "monospace" }}>{z.rides}</td>
-                      <td style={{ color: "#34D399", fontFamily: "monospace" }}>Rs{z.revenue.toLocaleString()}</td>
-                      <td>
-                        <span style={{
-                          display:      "inline-flex",
-                          padding:      "3px 8px",
-                          borderRadius: 100,
-                          fontSize:     10.5,
-                          fontWeight:   600,
-                          background:   `${DEMAND_COLOR[z.demand]}14`,
-                          border:       `1px solid ${DEMAND_COLOR[z.demand]}28`,
-                          color:        DEMAND_COLOR[z.demand],
-                        }}>
-                          {z.demand}
-                        </span>
-                      </td>
-                      <td>
-                        {z.geoFence
-                          ? <span style={{ color: "#34D399" }}>✅</span>
-                          : <span style={{ color: "rgba(255,255,255,0.25)" }}>—</span>}
-                      </td>
-                      <td style={{ fontFamily: "monospace", color: "rgba(255,255,255,0.5)" }}>{z.radius} km</td>
-                      <td>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button
-                            className="btn-outline btn-xs"
-                            onClick={() => { setEditZone({ ...z }); setEditZoneM(true); }}
-                          >
-                            <Edit3 size={10} />
-                          </button>
-                          <button className="btn-danger btn-xs" onClick={() => delZone(z.id)}>
-                            <Trash2 size={10} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </TableCard>
-        </>
+            {/* Rides & Revenue per city */}
+            <Card style={{ padding: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.6)", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                <TrendingUp size={13} color="#F59E0B" /> Rides & Revenue Today
+              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={allStats} barCategoryGap="30%">
+                  <XAxis dataKey="city_name" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} width={28} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+                  <Bar dataKey="rides_today" name="Rides" radius={[4,4,0,0]}>
+                    {allStats.map((_, i) => <Cell key={i} fill="#60A5FA" opacity={0.8} />)}
+                  </Bar>
+                  <Bar dataKey="ongoing_rides" name="Ongoing" radius={[4,4,0,0]}>
+                    {allStats.map((_, i) => <Cell key={i} fill="#A78BFA" opacity={0.8} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 8 }}>
+                {[{ c: "#60A5FA", l: "Rides Today" }, { c: "#A78BFA", l: "Ongoing" }].map((it, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: "rgba(255,255,255,0.4)" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: it.c }} /> {it.l}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
 
-      {/* ══════════════════════════════════════
-          Modal: Add City
-      ══════════════════════════════════════ */}
-      <Modal open={addCityM} onClose={() => setAddCityM(false)} title="🏙️ Add New City">
-        <AlertBox type="info">
-          City added as "Planned". Activate it once drivers are onboarded.
-        </AlertBox>
-
-        <FormGroup label="City Name">
-          <input className="gm-input" placeholder="e.g. Muzaffarpur" value={nc.name} onChange={setNcField("name")} />
-        </FormGroup>
-        <FormGroup label="State">
-          <input className="gm-input" placeholder="e.g. Bihar" value={nc.state} onChange={setNcField("state")} />
-        </FormGroup>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <FormGroup label="Latitude" hint="e.g. 26.1209">
-            <input className="gm-input" placeholder="26.1209" value={nc.lat} onChange={setNcField("lat")} />
-          </FormGroup>
-          <FormGroup label="Longitude" hint="e.g. 85.3647">
-            <input className="gm-input" placeholder="85.3647" value={nc.lng} onChange={setNcField("lng")} />
-          </FormGroup>
+      {/* ── Cities Table ── */}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(212,175,55,0.1)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>
+            {showAll ? `All Cities (${displayCities.length})` : `Active Cities (${displayCities.length})`}
+            {search && <span style={{ marginLeft: 8, fontSize: 11, color: "rgba(255,255,255,0.4)" }}>— filtered by "{search}"</span>}
+          </span>
         </div>
-
-        <FormGroup label="Target Launch Date">
-          <input type="date" className="gm-input" />
-        </FormGroup>
-        <FormGroup label="Target Drivers at Launch">
-          <input type="number" className="gm-input" placeholder="50" />
-        </FormGroup>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn-outline" onClick={() => setAddCityM(false)}>Cancel</button>
-          <button className="btn-gold" onClick={addCity}>Add City</button>
+        <div style={{ overflowX: "auto" }}>
+          <table className="gm-table">
+            <thead>
+              <tr><th>ID</th><th>City</th><th>State</th><th>Status</th><th>Boundary</th><th>Coordinates</th><th>Vehicles</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              {displayCities.map((c) => {
+                const enabledV = VEHICLE_TYPES.filter((vt) => c.vehicle_matrix?.[vt]);
+                return (
+                  <tr key={c.id} style={{ cursor: "pointer" }} onClick={() => handleSelectCity(c)}>
+                    <td style={{ fontFamily: "monospace", color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{c.id}</td>
+                    <td style={{ fontWeight: 600, color: selCity?.id === c.id ? "#D4AF37" : "rgba(255,255,255,0.85)" }}>{c.name}</td>
+                    <td style={{ color: "rgba(255,255,255,0.5)" }}>{c.state_name}</td>
+                    <td>
+                      <span style={{ display: "inline-flex", padding: "3px 8px", borderRadius: 100, fontSize: 10.5, fontWeight: 600, background: c.is_active ? "rgba(52,211,153,0.1)" : "rgba(96,165,250,0.1)", border: `1px solid ${c.is_active ? "rgba(52,211,153,0.28)" : "rgba(96,165,250,0.28)"}`, color: c.is_active ? "#34D399" : "#60A5FA" }}>
+                        {c.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td>{c.has_boundary ? <span style={{ color: "#34D399", fontSize: 11 }}>✓ Set</span> : <span style={{ color: "#F59E0B", fontSize: 11 }}>⚠ Missing</span>}</td>
+                    <td style={{ fontFamily: "monospace", fontSize: 10.5, color: "rgba(255,255,255,0.4)" }}>
+                      {c.center_latitude ? `${parseFloat(c.center_latitude).toFixed(3)}, ${parseFloat(c.center_longitude).toFixed(3)}` : "—"}
+                    </td>
+                    <td>
+                      {enabledV.length === 0 ? <span style={{ color: "rgba(255,255,255,0.25)", fontSize: 11 }}>None</span>
+                        : enabledV.map((vt) => (
+                          <span key={vt} style={{ display: "inline-flex", padding: "2px 6px", borderRadius: 100, fontSize: 9.5, fontWeight: 700, background: `${VEHICLE_COLORS[vt]}14`, color: VEHICLE_COLORS[vt], border: `1px solid ${VEHICLE_COLORS[vt]}28`, marginRight: 3 }}>{vt}</span>
+                        ))}
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button className="btn-outline btn-xs" onClick={(e) => { e.stopPropagation(); setEditCity({ ...c }); setUploadedGeoJson(null); setUploadError(""); setEditModal(true); }}><Edit3 size={10} /></button>
+                        <button className={c.is_active ? "btn-danger btn-xs" : "btn-outline btn-xs"} style={{ fontSize: 10 }} onClick={(e) => { e.stopPropagation(); handleToggleActive(c); }}>
+                          {c.is_active ? "Deactivate" : "Activate"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      </Modal>
+      </Card>
 
-      {/* ══════════════════════════════════════
-          Modal: Add Zone
-      ══════════════════════════════════════ */}
-      <Modal open={addZoneM} onClose={() => setAddZoneM(false)} title="📍 Add Zone">
-        <div style={{
-          fontSize:   12,
-          color:      "rgba(255,255,255,0.4)",
-          marginBottom: 12,
-          padding:    "7px 11px",
-          background: "rgba(212,175,55,0.05)",
-          borderRadius: 8,
-        }}>
-          Adding zone to: <strong style={{ color: "#D4AF37" }}>{selCity?.name}</strong>
-        </div>
-
-        <FormGroup label="Zone Name">
-          <input
-            className="gm-input"
-            placeholder="e.g. Railway Station Zone"
-            value={nz.name}
-            onChange={setNzField("name")}
-          />
+      {/* ── Modal: Add City ── */}
+      <Modal open={addModal} onClose={() => { setAddModal(false); setNc(EMPTY_CITY); }} title="🏙️ Add New City">
+        <AlertBox type="info">New cities start as Inactive. Activate only after attaching a boundary polygon.</AlertBox>
+        <FormGroup label="City Name *">
+          <input className="gm-input" placeholder="e.g. Muzaffarpur" value={nc.name} onChange={(e) => setNc((p) => ({ ...p, name: e.target.value }))} />
         </FormGroup>
-
-        <FormGroup label="Zone Type">
-          <select className="gm-input" value={nz.type} onChange={setNzField("type")}>
-            {Object.entries(ZONE_TYPES).map(([k, v]) => (
-              <option key={k} value={k}>{v.icon} {v.label}</option>
-            ))}
-          </select>
-        </FormGroup>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <FormGroup label="Latitude">
-            <input className="gm-input" placeholder="25.6122" value={nz.lat} onChange={setNzField("lat")} />
-          </FormGroup>
-          <FormGroup label="Longitude">
-            <input className="gm-input" placeholder="85.0511" value={nz.lng} onChange={setNzField("lng")} />
-          </FormGroup>
-          <FormGroup label="Radius (km)">
-            <input type="number" className="gm-input" placeholder="2.0" step="0.5" value={nz.radius} onChange={setNzField("radius")} />
-          </FormGroup>
-          <FormGroup label="Demand Level">
-            <select className="gm-input" value={nz.demand} onChange={setNzField("demand")}>
-              <option>High</option>
-              <option>Medium</option>
-              <option>Low</option>
-            </select>
-          </FormGroup>
-        </div>
-
-        <FormGroup label="Enable Geo-Fence">
-          <div style={{ paddingTop: 6 }}>
-            <Toggle
-              checked={nz.geoFence}
-              onChange={(v) => setNz({ ...nz, geoFence: v })}
-              label="Enable geo-fence for this zone"
-            />
-          </div>
-        </FormGroup>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn-outline" onClick={() => setAddZoneM(false)}>Cancel</button>
-          <button className="btn-gold" onClick={addZone}>Add Zone</button>
-        </div>
-      </Modal>
-
-      {/* ══════════════════════════════════════
-          Modal: Edit Zone
-      ══════════════════════════════════════ */}
-      {editZone && (
-        <Modal open={editZoneM} onClose={() => setEditZoneM(false)} title="✏️ Edit Zone">
-          <FormGroup label="Zone Name">
-            <input
-              className="gm-input"
-              value={editZone.name}
-              onChange={(e) => setEditZone({ ...editZone, name: e.target.value })}
-            />
-          </FormGroup>
-
-          <FormGroup label="Zone Type">
-            <select
-              className="gm-input"
-              value={editZone.type}
-              onChange={(e) => setEditZone({ ...editZone, type: e.target.value })}
-            >
-              {Object.entries(ZONE_TYPES).map(([k, v]) => (
-                <option key={k} value={k}>{v.icon} {v.label}</option>
-              ))}
-            </select>
-          </FormGroup>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormGroup label="Radius (km)">
-              <input
-                type="number"
-                className="gm-input"
-                value={editZone.radius}
-                step="0.5"
-                onChange={(e) => setEditZone({ ...editZone, radius: parseFloat(e.target.value) })}
-              />
-            </FormGroup>
-            <FormGroup label="Demand Level">
-              <select
-                className="gm-input"
-                value={editZone.demand}
-                onChange={(e) => setEditZone({ ...editZone, demand: e.target.value })}
-              >
-                <option>High</option>
-                <option>Medium</option>
-                <option>Low</option>
+        <FormGroup label="State *">
+          {stateOptions.length > 0
+            ? <select className="gm-input" value={nc.state_id} onChange={(e) => setNc((p) => ({ ...p, state_id: e.target.value }))}>
+                <option value="">Select state…</option>
+                {stateOptions.map((s) => <option key={s.id} value={s.id}>{s.name} (ID: {s.id})</option>)}
               </select>
+            : <input className="gm-input" type="number" placeholder="State ID" value={nc.state_id} onChange={(e) => setNc((p) => ({ ...p, state_id: e.target.value }))} />}
+        </FormGroup>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <FormGroup label="Latitude"><input className="gm-input" placeholder="26.1209" value={nc.center_latitude} onChange={(e) => setNc((p) => ({ ...p, center_latitude: e.target.value }))} /></FormGroup>
+          <FormGroup label="Longitude"><input className="gm-input" placeholder="85.3647" value={nc.center_longitude} onChange={(e) => setNc((p) => ({ ...p, center_longitude: e.target.value }))} /></FormGroup>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn-outline" onClick={() => { setAddModal(false); setNc(EMPTY_CITY); }}>Cancel</button>
+          <button className="btn-gold" onClick={handleAddCity} disabled={saving}>{saving ? "Adding…" : "Add City"}</button>
+        </div>
+      </Modal>
+
+      {/* ── Modal: Edit City ── */}
+      {editCity && (
+        <Modal open={editModal} onClose={() => { setEditModal(false); setUploadedGeoJson(null); setUploadError(""); }} title="✏️ Edit City">
+          <FormGroup label="City Name">
+            <input className="gm-input" value={editCity.name} onChange={(e) => setEditCity((p) => ({ ...p, name: e.target.value }))} />
+          </FormGroup>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormGroup label="Center Latitude">
+              <input className="gm-input" value={editCity.center_latitude || ""} onChange={(e) => setEditCity((p) => ({ ...p, center_latitude: e.target.value }))} />
             </FormGroup>
-            <FormGroup label="Latitude">
-              <input
-                className="gm-input"
-                value={editZone.lat}
-                onChange={(e) => setEditZone({ ...editZone, lat: parseFloat(e.target.value) })}
-              />
+            <FormGroup label="Center Longitude">
+              <input className="gm-input" value={editCity.center_longitude || ""} onChange={(e) => setEditCity((p) => ({ ...p, center_longitude: e.target.value }))} />
             </FormGroup>
-            <FormGroup label="Longitude">
-              <input
-                className="gm-input"
-                value={editZone.lng}
-                onChange={(e) => setEditZone({ ...editZone, lng: parseFloat(e.target.value) })}
-              />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormGroup label="Fallback Radius (km)">
+              <input type="number" className="gm-input" value={editCity.fallback_radius_km || ""} onChange={(e) => setEditCity((p) => ({ ...p, fallback_radius_km: e.target.value }))} />
+            </FormGroup>
+            <FormGroup label="Resolve Priority">
+              <input type="number" className="gm-input" value={editCity.resolve_priority || ""} onChange={(e) => setEditCity((p) => ({ ...p, resolve_priority: e.target.value }))} />
             </FormGroup>
           </div>
 
-          <FormGroup label="Geo-fence">
-            <div style={{ paddingTop: 6 }}>
-              <Toggle
-                checked={editZone.geoFence}
-                onChange={(v) => setEditZone({ ...editZone, geoFence: v })}
-                label="Geo-fence enabled"
-              />
-            </div>
+          {/* GeoJSON boundary upload */}
+          <FormGroup label="Boundary GeoJSON" hint="Upload .geojson file — Polygon or MultiPolygon">
+            <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(255,255,255,0.04)", border: `1px dashed ${uploadedGeoJson ? "rgba(52,211,153,0.4)" : "rgba(212,175,55,0.25)"}`, borderRadius: 10, cursor: "pointer" }}>
+              <Upload size={14} color={uploadedGeoJson ? "#34D399" : "#D4AF37"} />
+              <span style={{ fontSize: 12, color: uploadedGeoJson ? "#34D399" : "rgba(255,255,255,0.5)" }}>
+                {uploadedGeoJson ? "✓ GeoJSON loaded — will be saved" : "Click to upload .geojson file"}
+              </span>
+              <input type="file" accept=".geojson,.json" style={{ display: "none" }} onChange={handleGeoJsonUpload} />
+            </label>
+            {uploadError && <div style={{ fontSize: 11, color: "#F87171", marginTop: 5 }}>{uploadError}</div>}
+            {!editCity.has_boundary && !uploadedGeoJson && (
+              <div style={{ fontSize: 11, color: "#F59E0B", marginTop: 5 }}>⚠ No boundary — city cannot be activated until a GeoJSON is uploaded</div>
+            )}
           </FormGroup>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn-outline" onClick={() => setEditZoneM(false)}>Cancel</button>
-            <button className="btn-gold" onClick={saveEdit}>Save Changes</button>
+            <button className="btn-outline" onClick={() => { setEditModal(false); setUploadedGeoJson(null); setUploadError(""); }}>Cancel</button>
+            <button className="btn-gold" onClick={handleEditCity} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</button>
           </div>
         </Modal>
       )}
 
-      {/* ══════════════════════════════════════
-          Modal: Geo-Fence Rules
-      ══════════════════════════════════════ */}
-      <Modal open={geoFenceM} onClose={() => setGeoFenceM(false)} title="🛡️ Geo-Fence Rules" maxWidth={560}>
-        <AlertBox type="info">
-          Rules apply city-wide. Drivers outside boundary are auto-marked offline.
-        </AlertBox>
+      {/* ── Modal: Resolve Debug ── */}
+      <Modal open={resolveModal} onClose={() => { setResolveModal(false); setResolveResult(null); setResolveLat(""); setResolveLng(""); }} title="🧭 Resolve Debug">
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+          Enter coordinates to see which city they resolve to (polygon match → fallback → unresolved).
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <FormGroup label="Latitude">
+            <input className="gm-input" placeholder="e.g. 28.6139" value={resolveLat} onChange={(e) => setResolveLat(e.target.value)} />
+          </FormGroup>
+          <FormGroup label="Longitude">
+            <input className="gm-input" placeholder="e.g. 77.2090" value={resolveLng} onChange={(e) => setResolveLng(e.target.value)} />
+          </FormGroup>
+        </div>
+        <button className="btn-gold" onClick={handleResolve} disabled={resolveLoading} style={{ width: "100%", marginBottom: 16 }}>
+          {resolveLoading ? <><Loader size={13} style={{ animation: "spin 1s linear infinite", display: "inline", marginRight: 6 }} /> Resolving…</> : "Resolve City"}
+        </button>
 
-        {selCity && (
-          <div style={{
-            marginBottom: 14,
-            padding:      "10px 14px",
-            background:   "rgba(212,175,55,0.05)",
-            border:       "1px solid rgba(212,175,55,0.15)",
-            borderRadius: 10,
-          }}>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Configuring for</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#D4AF37", fontFamily: "Cinzel,serif" }}>
-              {selCity.name}, {selCity.state}
-            </div>
+        {resolveResult && (
+          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(212,175,55,0.15)", borderRadius: 14, padding: 16 }}>
+            {resolveResult.resolved ? (
+              <>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>Resolved City</div>
+                <div style={{ fontFamily: "Cinzel,serif", fontSize: 18, fontWeight: 700, color: "#D4AF37", marginBottom: 4 }}>{resolveResult.resolved.name}</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>{resolveResult.resolved.state_name}</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ padding: "4px 10px", borderRadius: 100, fontSize: 11, fontWeight: 600, background: "rgba(96,165,250,0.1)", border: "1px solid rgba(96,165,250,0.28)", color: "#60A5FA" }}>
+                    Source: {resolveResult.source}
+                  </span>
+                  {resolveResult.distanceKm != null && (
+                    <span style={{ padding: "4px 10px", borderRadius: 100, fontSize: 11, fontWeight: 600, background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.28)", color: "#D4AF37" }}>
+                      Distance: {parseFloat(resolveResult.distanceKm).toFixed(2)} km
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: "center", padding: "20px 0", color: "rgba(255,255,255,0.4)" }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>❓</div>
+                <div>Coordinates did not resolve to any city</div>
+                <div style={{ fontSize: 11, marginTop: 4, color: "rgba(255,255,255,0.3)" }}>Outside all boundaries and fallback radius</div>
+              </div>
+            )}
           </div>
         )}
-
-        <FormGroup label="Outer Geo-fence Radius (km)" hint="Drivers outside this go offline automatically">
-          <input type="number" className="gm-input" defaultValue="25" />
-        </FormGroup>
-        <FormGroup label="Warning Zone Radius (km)" hint="Alert shown to driver when approaching boundary">
-          <input type="number" className="gm-input" defaultValue="20" />
-        </FormGroup>
-        <FormGroup label="Auto-offline Outside Boundary">
-          <div style={{ paddingTop: 6 }}>
-            <Toggle checked={true} onChange={() => {}} label="Auto-mark driver offline when outside zone" />
-          </div>
-        </FormGroup>
-        <FormGroup label="Block Ride Booking Outside Zone">
-          <div style={{ paddingTop: 6 }}>
-            <Toggle checked={true} onChange={() => {}} label="Block booking outside service area" />
-          </div>
-        </FormGroup>
-        <FormGroup label="Driver Grace Period (minutes)" hint="Time before offline triggers after leaving zone">
-          <input type="number" className="gm-input" defaultValue="5" />
-        </FormGroup>
-        <FormGroup label="Driver Alert Message">
-          <textarea
-            className="gm-input"
-            rows="2"
-            defaultValue="You are approaching the service zone boundary. Please return to service area."
-            style={{ resize: "vertical" }}
-          />
-        </FormGroup>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn-outline" onClick={() => setGeoFenceM(false)}>Cancel</button>
-          <button
-            className="btn-gold"
-            onClick={() => { setGeoFenceM(false); toast("Geo-fence rules saved!", "success"); }}
-          >
-            Save Rules
-          </button>
-        </div>
       </Modal>
     </PageWrapper>
   );
 }
 
-// ─────────────────────────────────────────────
-// Root export
-// ─────────────────────────────────────────────
-
 export default function CityManagementPage() {
-  return (
-    <ToastProvider>
-      <ZoneCityPage />
-    </ToastProvider>
-  );
+  return <ToastProvider><CityPage /></ToastProvider>;
 }

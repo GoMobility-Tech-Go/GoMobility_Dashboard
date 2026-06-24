@@ -141,3 +141,13 @@ export const grantReferralBonus = (data) => api.post('/wallet/referral-bonus', d
 
 // ── Support Categories ────────────────────────────────────────────────────────
 export const getSupportCategories = () => api.get('/support/categories');
+
+// ── Cities ────────────────────────────────────────────────────────────────────
+export const getCities              = ()                              => api.get('/admin/cities');
+export const getCityDetail          = (id)                            => api.get(`/admin/cities/${id}`);
+export const getCityStats           = (id)                            => api.get(`/admin/cities/${id}/stats`);
+export const createCity             = (data)                          => api.post('/admin/cities', data);
+export const updateCity             = (id, data)                      => api.patch(`/admin/cities/${id}`, data);
+export const toggleCityVehicle      = (id, vehicle_type, is_enabled)  => api.patch(`/admin/cities/${id}/vehicles`, { vehicle_type, is_enabled });
+export const setCityEnforcement     = (enabled)                       => api.patch('/admin/cities/enforcement', { enabled });
+export const resolveCity            = (lat, lng)                      => api.get(`/admin/cities/resolve?lat=${lat}&lng=${lng}`);

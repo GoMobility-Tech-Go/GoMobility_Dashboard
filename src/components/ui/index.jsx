@@ -1,4 +1,5 @@
 import { useState, useCallback, createContext, useContext, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
 const ToastCtx = createContext(null);
@@ -31,8 +32,8 @@ export const useToast = () => useContext(ToastCtx);
 export function Modal({ open, onClose, title, children, maxWidth = 520 }) {
   useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [open]);
   if (!open) return null;
-  return (
-    <div onClick={e => e.target === e.currentTarget && onClose()} style={{ position:"fixed",inset:0,background:"rgba(1,9,23,0.88)",backdropFilter:"blur(8px)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"gmFadeIn .2s ease" }}>
+  return createPortal(
+    <div onClick={e => e.target === e.currentTarget && onClose()} style={{ position:"fixed",inset:0,background:"rgba(1,9,23,0.88)",backdropFilter:"blur(8px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"gmFadeIn .2s ease" }}>
       <div style={{ background:"linear-gradient(145deg,rgba(255,255,255,0.065),rgba(255,255,255,0.018))",border:"1px solid rgba(212,175,55,0.25)",borderRadius:22,width:"100%",maxWidth,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 32px 80px rgba(0,0,0,0.6)",animation:"gmSlideUp .25s ease",position:"relative" }}>
         <div style={{ position:"absolute",top:0,left:0,right:0,height:1,background:"linear-gradient(90deg,transparent,rgba(212,175,55,0.4),transparent)",borderRadius:"22px 22px 0 0" }}/>
         <div style={{ padding:"20px 24px",borderBottom:"1px solid rgba(212,175,55,0.12)",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
@@ -42,7 +43,8 @@ export function Modal({ open, onClose, title, children, maxWidth = 520 }) {
         <div style={{ padding:24 }}>{children}</div>
       </div>
       <style>{`@keyframes gmFadeIn{from{opacity:0}to{opacity:1}}@keyframes gmSlideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}`}</style>
-    </div>
+    </div>,
+    document.body
   );
 }
 
