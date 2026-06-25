@@ -6,7 +6,6 @@ import LoginPage from "../pages/auth/LoginPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import CityManagementPage from "../pages/city-management/CityManagementPage";
 import PricingEnginePage from "../pages/pricing-engine/PricingEnginePage";
-import DispatchSettingsPage from "../pages/dispatch-settings/DispatchSettingsPage";
 import DriverOnboardingPage from "../pages/driver-onboarding/DriverOnboardingPage";
 import RideMonitoringPage from "../pages/ride-monitoring/RideMonitoringPage";
 import ComplaintsSupportPage from "../pages/complaints-support/ComplaintsSupportPage";
@@ -52,7 +51,6 @@ const routes = [
         { path:"payouts", element:<PayoutsPage/> },
         { path:"city-management", element:<CityManagementPage/> },
         { path:"pricing-engine", element:<PricingEnginePage/> },
-        { path:"dispatch-settings", element:<DispatchSettingsPage/> },
         { path:"subscriptions", element:<SubscriptionsPage/> },
         { path:"driver-incentives", element:<DriverIncentivesPage/> },
         { path:"reviews", element:<ReviewsPage/> },

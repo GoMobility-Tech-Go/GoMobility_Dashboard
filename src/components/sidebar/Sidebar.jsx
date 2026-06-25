@@ -31,7 +31,6 @@ const ADMIN_MENU = [
     { label:"Pricing Engine",     to:"/pricing-engine",       icon:TrendingUp  },
     { label:"Subscriptions",      to:"/subscriptions",        icon:Ticket      },
     { label:"City Management",    to:"/city-management",      icon:Map         },
-    { label:"Dispatch Settings",  to:"/dispatch-settings",    icon:SlidersHorizontal },
   ]},
   { label:"Operations", items:[
     { label:"Driver Incentives",  to:"/driver-incentives",    icon:Star        },
