@@ -30,9 +30,6 @@ import EmergencySafetyPage from "../pages/emergency-safety/EmergencySafetyPage";
 import AppConfigPage from "../pages/app-config/AppConfigPage";
 import DriverTiersPage from "../pages/driver-tiers/DriverTiersPage";
 import BroadcastMessagingPage from "../pages/broadcast-messaging/BroadcastMessagingPage";
-import SystemHealthPage from "../pages/system-health/SystemHealthPage";
-import CampaignsPage from "../pages/campaigns/CampaignsPage";
-import UserSegmentsPage from "../pages/user-segments/UserSegmentsPage";
 
 const routes = [
   { path:"/signup", element:<SignupPage/> },
@@ -69,9 +66,6 @@ const routes = [
             { path:"app-config", element:<AppConfigPage/> },
             { path:"driver-tiers", element:<DriverTiersPage/> },
             { path:"broadcast-messaging", element:<BroadcastMessagingPage/> },
-            { path:"system-health", element:<SystemHealthPage/> },
-            { path:"campaigns", element:<CampaignsPage/> },
-            { path:"user-segments", element:<UserSegmentsPage/> },
             { path:"fraud-detection", element:<FraudDetectionPage/> },
             { path:"promo-codes", element:<PromoCodesPage/> },
             { path:"roles-access", element:<RolesAccessPage/> },
