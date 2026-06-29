@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Users, Car, MapPin, IndianRupee, TrendingUp, UserCheck, AlertCircle, Activity,
   ShieldAlert, BarChart2, Receipt, Megaphone, Zap, MessageCircle, Bell, Settings,
-  FileText, Star, RotateCcw, Wallet, CheckCircle, Server, Database, List,
+  FileText, Star, RotateCcw, Wallet, CheckCircle,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import {
   getDashboard, getRevenueAnalytics, getFraudAlerts,
-  getSosHistory, getRides, getQueueStats, getRedisStats,
+  getSosHistory, getRides,
 } from "../../api/admin";
 import { useAuth } from "../../context/AuthContext";
 
@@ -81,72 +81,11 @@ const QuickLink = ({ icon:Icon, label, sub, to, color="#D4AF37", badge, onClick 
   </div>
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  PLATFORM HEALTH STRIP
-// ─────────────────────────────────────────────────────────────────────────────
-function HealthStrip({ infra }) {
-  const { queues, redis, loading } = infra;
-
-  const queueList   = queues ? (Array.isArray(queues.queues) ? queues.queues : []) : [];
-  const totalFailed = queueList.reduce((s,q) => s + (q.failed ?? q.failedCount ?? 0), 0);
-  const totalActive = queueList.reduce((s,q) => s + (q.active ?? q.activeCount ?? 0), 0);
-  const redisStatus = redis?.stats?.status || redis?.stats?.connected ? "connected" : redis ? "connected" : null;
-
-  const items = [
-    {
-      label: "Server",
-      icon: <Server size={13}/>,
-      color: "#34D399",
-      value: "Online",
-      ok: true,
-    },
-    {
-      label: "Redis",
-      icon: <Database size={13}/>,
-      color: redisStatus === "connected" ? "#34D399" : loading ? "#D4AF37" : "#f87171",
-      value: loading ? "Checking…" : redisStatus === "connected" ? "Connected" : redis ? "Issue" : "Unknown",
-      ok: redisStatus === "connected",
-    },
-    {
-      label: "Job Queues",
-      icon: <List size={13}/>,
-      color: totalFailed > 0 ? "#f87171" : totalActive > 0 ? "#f59e0b" : "#34D399",
-      value: loading ? "Checking…" : `${queueList.length} queues${totalFailed > 0 ? ` · ${totalFailed} failed` : ""}`,
-      ok: totalFailed === 0,
-    },
-    {
-      label: "Memory",
-      icon: <Activity size={13}/>,
-      color: "#60a5fa",
-      value: redis?.stats?.used_memory
-        ? `${((redis.stats.used_memory || 0) / 1048576).toFixed(1)} MB`
-        : "—",
-      ok: true,
-    },
-  ];
-
-  return (
-    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:22 }}>
-      {items.map((item) => (
-        <div key={item.label} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${item.color}25`, borderRadius:12, padding:"12px 16px", display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:28, height:28, borderRadius:8, background:`${item.color}15`, display:"flex", alignItems:"center", justifyContent:"center", color:item.color, flexShrink:0 }}>
-            {item.icon}
-          </div>
-          <div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginBottom:2 }}>{item.label}</div>
-            <div style={{ fontSize:12, fontWeight:600, color:item.color }}>{item.value}</div>
-          </div>
-          <div style={{ marginLeft:"auto", width:6, height:6, borderRadius:"50%", background:item.color, animation:!item.ok?"gmPulse 1.5s ease-in-out infinite":undefined }} />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SUPER ADMIN DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBreakdown, infra, loadingStats, loadingChart, loadingAlerts, days, setDays, error }) {
+function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBreakdown, loadingStats, loadingChart, loadingAlerts, days, setDays, error }) {
   const nav = useNavigate();
   const totalRev = (analytics?.byDay || []).reduce((s,d) => s + Number(d.totalRevenue||0), 0);
   const totalRid = (analytics?.byVehicle || []).reduce((s,v) => s + Number(v.totalRides||0), 0);
@@ -206,9 +145,6 @@ function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBre
           <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, margin:0 }}>Full platform overview — revenue, operations & infrastructure</p>
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          <button onClick={()=>nav("/system-health")} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", background:"rgba(52,211,153,0.08)", border:"1px solid rgba(52,211,153,0.2)", borderRadius:10, color:"#34D399", fontSize:12, cursor:"pointer", fontWeight:600 }}>
-            <Activity size={13}/> System Health
-          </button>
           <button onClick={()=>nav("/revenue-analytics")} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", background:"rgba(212,175,55,0.08)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, color:"#D4AF37", fontSize:12, cursor:"pointer", fontWeight:600 }}>
             <BarChart2 size={13}/> Revenue Analytics
           </button>
@@ -218,9 +154,6 @@ function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBre
       {error && (
         <div style={{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:10, padding:"10px 16px", color:"#fca5a5", marginBottom:20, fontSize:13 }}>{error}</div>
       )}
-
-      {/* Platform Health Strip */}
-      <HealthStrip infra={infra} />
 
       {/* KPI Row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:14, marginBottom:22 }}>
@@ -411,7 +344,6 @@ function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBre
         <div style={{ fontFamily:"Cinzel,serif", fontSize:13, fontWeight:600, color:"rgba(212,175,55,0.8)", marginBottom:16, textTransform:"uppercase", letterSpacing:"1px" }}>👑 Super Admin Quick Access</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:10 }}>
           {[
-            { icon:Activity,      label:"System Health",      sub:"Server, Redis, queues",    to:"/system-health",       color:"#34D399", badge:0 },
             { icon:ShieldAlert,   label:"Fraud Detection",    sub:"Alerts & risk management", to:"/fraud-detection",     color:"#F87171", badge:fraudCount },
             { icon:BarChart2,     label:"Revenue Analytics",  sub:"Deep financial reports",   to:"/revenue-analytics",   color:"#D4AF37", badge:0 },
             { icon:Receipt,       label:"Tax & Compliance",   sub:"GST, TDS reports",         to:"/tax-reports",         color:"#60A5FA", badge:0 },
@@ -553,7 +485,7 @@ function AdminDashboard({ stats, loadingStats, error }) {
 
       <div style={{ marginTop:16, padding:"12px 18px", background:"rgba(96,165,250,0.04)", border:"1px solid rgba(96,165,250,0.12)", borderRadius:12, display:"flex", alignItems:"center", gap:10 }}>
         <ShieldAlert size={14} color="rgba(96,165,250,0.5)" />
-        <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>Revenue analytics, tax reports, system health, emergency controls and fraud detection are accessible to Super Admins only.</span>
+        <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>Revenue analytics, tax reports, emergency controls and fraud detection are accessible to Super Admins only.</span>
       </div>
     </>
   );
@@ -579,7 +511,6 @@ export default function DashboardPage() {
   const [fraudAlerts, setFraudAlerts]       = useState([]);
   const [sosAlerts, setSosAlerts]           = useState([]);
   const [rideBreakdown, setRideBreakdown]   = useState({ completed:0, cancelled:0, loading:true });
-  const [infra, setInfra]                   = useState({ queues:null, redis:null, loading:true });
   const [loadingAlerts, setLoadingAlerts]   = useState(true);
 
   useEffect(() => {
@@ -646,15 +577,6 @@ export default function DashboardPage() {
       setRideBreakdown({ completed: getTotal(comp), cancelled: getTotal(canc), loading: false });
     });
 
-    // Infra health
-    setInfra(p => ({ ...p, loading:true }));
-    Promise.allSettled([getQueueStats(), getRedisStats()]).then(([q, r]) => {
-      setInfra({
-        queues:  q.status === "fulfilled" ? (q.value.data?.data || q.value.data) : null,
-        redis:   r.status === "fulfilled" ? (r.value.data?.data || r.value.data) : null,
-        loading: false,
-      });
-    });
   }, [isSA]);
 
   return (
@@ -675,7 +597,7 @@ export default function DashboardPage() {
         ? <SuperAdminDashboard
             stats={stats} analytics={analytics}
             fraudAlerts={fraudAlerts} sosAlerts={sosAlerts}
-            rideBreakdown={rideBreakdown} infra={infra}
+            rideBreakdown={rideBreakdown}
             loadingStats={loadingStats} loadingChart={loadingChart}
             loadingAlerts={loadingAlerts}
             days={days} setDays={setDays} error={error}
