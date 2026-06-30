@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search, ShieldCheck, ShieldX, UserCheck, UserX,
   X, FileCheck, FileX, AlertTriangle, Eye, Car, Star, MapPin, Phone,
@@ -100,6 +101,108 @@ const DocStatusBadge = ({ status }) => {
   return                            <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(148,163,184,0.10)", color:"#94a3b8", border:"1px solid rgba(148,163,184,0.2)" }}><Clock size={10}/>Pending</span>;
 };
 
+// ── Extracted data section ─────────────────────────────────────────────────────
+const ExtractedField = ({ label, value, mono }) => {
+  if (value === null || value === undefined || value === "") return null;
+  return (
+    <div style={{ background:"rgba(255,255,255,0.025)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"6px 10px" }}>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textTransform:"uppercase", letterSpacing:"0.7px", marginBottom:2 }}>{label}</div>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.78)", fontWeight:500, fontFamily: mono ? "monospace" : "inherit", wordBreak:"break-all" }}>{String(value)}</div>
+    </div>
+  );
+};
+
+const ExtractedDataSection = ({ doc }) => {
+  const ext = (() => {
+    try {
+      const raw = doc.extracted_data;
+      if (!raw) return {};
+      return typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch { return {}; }
+  })();
+
+  if (!ext || Object.keys(ext).filter(k => k !== "cashfree_ocr").length === 0) return null;
+
+  const type = (doc.document_type || doc.type || "").toUpperCase();
+  const fmtBool = v => v === true ? "✓ Yes" : v === false ? "✗ No" : null;
+
+  let fields = [];
+  if (type === "AADHAAR") {
+    fields = [
+      { label:"Name",             value: ext.name },
+      { label:"Aadhaar (masked)", value: ext.masked,        mono: true },
+      { label:"Date of Birth",    value: ext.dob },
+      { label:"Gender",           value: ext.gender },
+      { label:"Father / Husband", value: ext.father },
+      { label:"Address",          value: ext.address },
+      { label:"Govt Verified",    value: fmtBool(ext.govt_verified) },
+    ];
+  } else if (type === "PAN") {
+    fields = [
+      { label:"Name",           value: ext.name },
+      { label:"PAN (masked)",   value: ext.masked,          mono: true },
+      { label:"Date of Birth",  value: ext.dob },
+      { label:"PAN Status",     value: ext.pan_status },
+      { label:"Govt Verified",  value: fmtBool(ext.govt_verified) },
+      { label:"Name Match",     value: ext.name_match },
+      { label:"Aadhaar Linked", value: fmtBool(ext.aadhaar_linked) },
+    ];
+  } else if (type === "DRIVING_LICENCE") {
+    fields = [
+      { label:"Name",              value: ext.full_name },
+      { label:"DL No (masked)",    value: ext.masked,        mono: true },
+      { label:"Date of Birth",     value: ext.dob },
+      { label:"Issue Date",        value: ext.issue_date },
+      { label:"Expiry Date",       value: ext.expiry_date },
+      { label:"Issuing Authority", value: ext.issuing_authority },
+      { label:"DL Status",         value: ext.dl_status },
+      { label:"Blood Group",       value: ext.blood_group },
+      { label:"Govt Verified",     value: fmtBool(ext.govt_verified) },
+    ];
+  } else if (type === "VEHICLE_RC") {
+    fields = [
+      { label:"Registration No",   value: ext.registration_number || ext.masked, mono: true },
+      { label:"Owner Name",        value: ext.owner || ext.owner_name },
+      { label:"Chassis No",        value: ext.chassis_number,  mono: true },
+      { label:"Engine No",         value: ext.engine_number,   mono: true },
+      { label:"Reg Date",          value: ext.registration_date },
+      { label:"Valid Till",        value: ext.registration_validity },
+      { label:"Vehicle Model",     value: ext.vehicle_model },
+      { label:"Vehicle Type",      value: ext.vehicle_type },
+      { label:"VAHAN Verified",    value: fmtBool(ext.vahan_verified) },
+    ];
+  } else if (type === "SELFIE") {
+    fields = [
+      { label:"Face Match Score", value: ext.similarity != null ? `${ext.similarity}%` : null },
+      { label:"Status",           value: ext.status },
+    ];
+  } else if (type === "BANK_ACCOUNT") {
+    fields = [
+      { label:"Account (masked)", value: ext.account_masked,     mono: true },
+      { label:"Account Holder",   value: ext.holder_name },
+      { label:"Bank Name",        value: ext.bank_name },
+      { label:"IFSC",             value: ext.ifsc,               mono: true },
+      { label:"Branch",           value: ext.branch },
+      { label:"City",             value: ext.city },
+      { label:"Account Status",   value: ext.account_status },
+      { label:"Name Match",       value: ext.name_match_result },
+      { label:"Match Score",      value: ext.name_match_score != null ? `${ext.name_match_score}%` : null },
+    ];
+  }
+
+  const visible = fields.filter(f => f.value !== null && f.value !== undefined && f.value !== "");
+  if (visible.length === 0) return null;
+
+  return (
+    <div style={{ padding:"10px 16px 14px", borderTop:"1px solid rgba(255,255,255,0.05)", background:"rgba(0,0,0,0.18)" }}>
+      <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:8 }}>Extracted Data</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(155px, 1fr))", gap:6 }}>
+        {visible.map(f => <ExtractedField key={f.label} label={f.label} value={f.value} mono={f.mono} />)}
+      </div>
+    </div>
+  );
+};
+
 // ── Full-screen Driver Detail Panel ──────────────────────────────────────────
 const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) => {
   const [profile, setProfile]   = useState(null);
@@ -184,19 +287,26 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
         </div>
       )}
 
-      {/* Panel backdrop */}
-      <div style={{ position:"fixed", inset:0, zIndex:1010, background:"rgba(0,0,0,0.6)", backdropFilter:"blur(3px)" }} onClick={onClose} />
+      {/* Backdrop */}
+      <div style={{ position:"fixed", inset:0, zIndex:1010, background:"rgba(0,0,0,0.75)", backdropFilter:"blur(4px)" }} onClick={onClose} />
 
-      {/* Panel */}
-      <div style={{ position:"fixed", top:0, right:0, bottom:0, zIndex:1011, width:"min(680px,95vw)", background:"linear-gradient(160deg,#020c20,#030f28)", borderLeft:"1px solid rgba(212,175,55,0.2)", overflowY:"auto", display:"flex", flexDirection:"column" }}>
+      {/* Full-screen modal */}
+      <div style={{ position:"fixed", inset:"16px", zIndex:1011, background:"linear-gradient(160deg,#020c20,#030f28)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, display:"flex", flexDirection:"column", overflow:"hidden" }}>
 
         {/* Header */}
-        <div style={{ padding:"20px 24px", borderBottom:"1px solid rgba(212,175,55,0.1)", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background:"#020c20", zIndex:10 }}>
-          <span style={{ fontFamily:"Cinzel,serif", fontSize:15, fontWeight:700, color:"#D4AF37" }}>Driver Profile</span>
+        <div style={{ padding:"16px 24px", borderBottom:"1px solid rgba(212,175,55,0.1)", display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(2,12,32,0.95)", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ fontFamily:"Cinzel,serif", fontSize:16, fontWeight:700, color:"#D4AF37" }}>Driver Profile</span>
+            {p && <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>— {p.full_name||p.fullName||p.name}</span>}
+          </div>
           <button onClick={onClose} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, width:32, height:32, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}><X size={15}/></button>
         </div>
 
-        <div style={{ padding:24, flex:1 }}>
+        {/* 2-column body */}
+        <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
+
+          {/* ── LEFT: Profile info ── */}
+          <div style={{ width:"38%", minWidth:300, borderRight:"1px solid rgba(255,255,255,0.06)", overflowY:"auto", padding:20, display:"flex", flexDirection:"column", gap:16 }}>
           {pLoading ? (
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               {Array(6).fill(0).map((_,i) => <div key={i} style={{ height:56, background:"rgba(255,255,255,0.04)", borderRadius:12, animation:"gmPulse 1.5s ease-in-out infinite" }} />)}
@@ -297,7 +407,7 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
               )}
 
               {/* ── Quick Actions ── */}
-              <div style={{ display:"flex", gap:10, marginBottom:24, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
                 <button
                   onClick={() => doAct("verify", () => verifyDriver(driverId, !isVerified), `Driver ${isVerified?"unverified":"verified"}.`)}
                   disabled={acting["verify"]}
@@ -312,6 +422,13 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
                   {isActive ? "Block Driver" : "Unblock Driver"}
                 </button>
               </div>
+
+            </>
+            )}
+          </div>{/* end left column */}
+
+            {/* ── RIGHT: KYC docs + Bank ── */}
+            <div style={{ flex:1, overflowY:"auto", padding:20 }}>
 
               {/* ── KYC Documents ── */}
               <div>
@@ -338,7 +455,7 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
                   </div>
                 ) : (
                   <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-                    {docs.map((doc) => {
+                    {docs.filter(d => (d.document_type||d.type) !== "BANK_ACCOUNT").map((doc) => {
                       const docId = doc.id;
                       const status = (doc.status || "pending").toLowerCase();
                       const isPending = status === "pending" || status === "under_review" || status === "manual_review";
@@ -414,24 +531,118 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
                               )}
                             </div>
                           </div>
+                          <ExtractedDataSection doc={doc} />
                         </div>
                       );
                     })}
                   </div>
                 )}
               </div>
-            </>
-          )}
-        </div>
-      </div>
-    </>
-  );
+
+              {/* ── Bank Account Section ───────────────────────────────── */}
+              {(() => {
+                const bankDoc = docs.find(d => (d.document_type||d.type) === "BANK_ACCOUNT");
+                const bext = (() => {
+                  if (!bankDoc) return null;
+                  try {
+                    const raw = bankDoc.extracted_data;
+                    return typeof raw === "string" ? JSON.parse(raw) : (raw || null);
+                  } catch { return null; }
+                })();
+                const bStatus = bankDoc ? (bankDoc.status || "pending").toLowerCase() : null;
+                const isPending = bStatus && (bStatus === "pending" || bStatus === "manual_review");
+
+                return (
+                  <div style={{ marginTop:24 }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <CreditCard size={14} color="#D4AF37"/>
+                        <span style={{ fontSize:13, fontWeight:700, color:"rgba(255,255,255,0.85)", fontFamily:"Outfit,sans-serif" }}>Bank Account</span>
+                      </div>
+                      {bankDoc && <DocStatusBadge status={bankDoc.status} />}
+                    </div>
+
+                    {!bankDoc ? (
+                      <div style={{ padding:"24px 20px", textAlign:"center", background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.08)", borderRadius:14 }}>
+                        <CreditCard size={24} color="rgba(255,255,255,0.1)" style={{ marginBottom:8, display:"block", margin:"0 auto 8px" }}/>
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>Driver has not submitted bank details yet</div>
+                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.18)", marginTop:4 }}>Driver can add bank account from the app</div>
+                      </div>
+                    ) : (
+                      <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${bStatus==="auto_verified"||bStatus==="approved"?"rgba(34,197,94,0.2)":bStatus==="rejected"?"rgba(239,68,68,0.18)":bStatus==="manual_review"?"rgba(245,158,11,0.2)":"rgba(212,175,55,0.12)"}`, borderRadius:14, overflow:"hidden" }}>
+
+                        {/* Bank card header */}
+                        <div style={{ padding:"14px 16px", display:"flex", alignItems:"center", gap:14, background:"rgba(34,197,94,0.04)" }}>
+                          <div style={{ width:44, height:44, borderRadius:12, background:"rgba(34,197,94,0.1)", border:"1px solid rgba(34,197,94,0.2)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                            <CreditCard size={20} color="#4ade80"/>
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:700, color:"#fff", marginBottom:2 }}>
+                              {bext?.bank_name || "Bank Account"}
+                            </div>
+                            <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontFamily:"monospace" }}>
+                              {bext?.account_masked || bankDoc.document_number ? `XXXX${bankDoc.document_number}` : "••••••••"}
+                            </div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textTransform:"uppercase", letterSpacing:"0.6px", marginBottom:2 }}>Submitted</div>
+                            <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)" }}>{fmtDate(bankDoc.submitted_at || bankDoc.created_at)}</div>
+                          </div>
+                        </div>
+
+                        {/* Bank details grid */}
+                        {bext && (
+                          <div style={{ padding:"12px 16px 14px", borderTop:"1px solid rgba(255,255,255,0.05)" }}>
+                            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(155px, 1fr))", gap:6 }}>
+                              {[
+                                { label:"Account Holder",   value: bext.holder_name },
+                                { label:"Account (masked)", value: bext.account_masked,   mono: true },
+                                { label:"IFSC Code",        value: bext.ifsc,              mono: true },
+                                { label:"Bank Name",        value: bext.bank_name },
+                                { label:"Branch",           value: bext.branch },
+                                { label:"City",             value: bext.city },
+                                { label:"Account Status",   value: bext.account_status },
+                                { label:"Name Match",       value: bext.name_match_result },
+                                { label:"Match Score",      value: bext.name_match_score != null ? `${bext.name_match_score}%` : null },
+                                { label:"MICR",             value: bext.micr,              mono: true },
+                              ].filter(f => f.value).map(f => (
+                                <ExtractedField key={f.label} label={f.label} value={f.value} mono={f.mono} />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Approve / Reject if pending */}
+                        {isPending && (
+                          <div style={{ padding:"0 16px 14px", display:"flex", gap:8 }}>
+                            <button onClick={() => handleApproveDoc(bankDoc.id)} disabled={acting["doc"+bankDoc.id]}
+                              style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:"rgba(34,197,94,0.12)", border:"1px solid rgba(34,197,94,0.25)", borderRadius:8, color:"#4ade80", fontSize:11, cursor:"pointer", fontWeight:600, opacity:acting["doc"+bankDoc.id]?0.5:1 }}>
+                              <FileCheck size={11}/>{acting["doc"+bankDoc.id]?"…":"Approve"}
+                            </button>
+                            <button onClick={() => setRejectDocId(bankDoc.id)} disabled={acting["doc"+bankDoc.id]}
+                              style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:8, color:"#f87171", fontSize:11, cursor:"pointer", fontWeight:600, opacity:acting["doc"+bankDoc.id]?0.5:1 }}>
+                              <FileX size={11}/>Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+            </div>{/* end right column */}
+          </div>{/* end 2-col body */}
+        </div>{/* end modal */}
+      </>
+    );
 };
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const TABS = ["Drivers", "KYC Queue", "Fraud Alerts"];
 
 export default function DriverOnboardingPage() {
+  const navigate = useNavigate();
   const [tab, setTab]           = useState("Drivers");
   const [drivers, setDrivers]   = useState([]);
   const [total, setTotal]       = useState(0);
@@ -573,16 +784,6 @@ export default function DriverOnboardingPage() {
         />
       )}
 
-      {viewDriver && (
-        <DriverDetailPanel
-          driverId={viewDriver.driverId}
-          userId={viewDriver.userId}
-          onClose={() => setViewDriver(null)}
-          onAction={() => { loadDrivers(); if (tab === "KYC Queue") loadKyc(); }}
-          showToast={showToast}
-        />
-      )}
-
       {/* Page Header */}
       <div style={{ marginBottom:24 }}>
         <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Driver Management</h1>
@@ -673,7 +874,7 @@ export default function DriverOnboardingPage() {
                               <TD>
                                 <div style={{ display:"flex", gap:6 }}>
                                   <button
-                                    onClick={() => setViewDriver({ driverId: d.id, userId })}
+                                    onClick={() => navigate(`/driver-onboarding/${d.id}`, { state: { userId } })}
                                     style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:8, color:"#D4AF37", fontSize:11, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600 }}>
                                     <Eye size={12}/> Details
                                   </button>
