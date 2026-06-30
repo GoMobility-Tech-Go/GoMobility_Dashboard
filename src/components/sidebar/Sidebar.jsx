@@ -171,9 +171,10 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
         <SidebarHeader collapsed={desktopCollapsed} />
 
         {/* Nav */}
-        <nav className="gm-nav" style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:"12px 10px 10px" }}>
-          {groups.map(g => (
-            <div key={g.label} style={{ marginBottom:6 }}>
+        <nav className="gm-nav" style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding: desktopCollapsed ? "10px 8px 10px" : "12px 10px 10px" }}>
+          {groups.map((g, gi) => (
+            <div key={g.label} style={{ marginBottom: desktopCollapsed ? 2 : 6 }}>
+              {/* Expanded: section labels */}
               {g.crown && !desktopCollapsed && (
                 <>
                   <div style={{ height:1, background:"linear-gradient(90deg,rgba(212,175,55,0.28),transparent)", margin:"8px 8px 6px" }}/>
@@ -187,7 +188,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
                   {g.label}
                 </div>
               )}
-              <div style={{ display:"flex", flexDirection:"column", gap:1.5 }}>
+              {/* Collapsed: divider between groups */}
+              {desktopCollapsed && gi > 0 && (
+                <div style={{ height:1, background:"rgba(212,175,55,0.12)", margin:"4px 10px 6px" }}/>
+              )}
+              <div style={{ display:"flex", flexDirection:"column", gap: desktopCollapsed ? 3 : 1.5 }}>
                 {g.items.map(item => (
                   <SidebarItem
                     key={item.to + item.label}
@@ -300,19 +305,19 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
           </div>
         </div>
 
-        {/* Desktop collapse toggle button — positioned near top */}
+        {/* Desktop collapse toggle button — fixed so it's never clipped */}
         <button
           onClick={() => setDesktopCollapsed(p => !p)}
           style={{
             display:"none",
-            position:"absolute", top:16, right:-14,
+            position:"fixed", top:20, left: sidebarWidth - 14,
             width:28, height:28, borderRadius:"50%",
             background:"linear-gradient(135deg,#D4AF37,#b8920f)",
             border:"2.5px solid #020c20",
             color:"#04081A", cursor:"pointer",
             alignItems:"center", justifyContent:"center",
-            boxShadow:"0 2px 12px rgba(212,175,55,0.3)",
-            zIndex:5, transition:"all .2s",
+            boxShadow:"0 2px 14px rgba(212,175,55,0.4)",
+            zIndex:50, transition:"left 0.32s cubic-bezier(0.4,0,0.2,1)",
           }}
           id="gm-collapse-btn"
           title={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}
