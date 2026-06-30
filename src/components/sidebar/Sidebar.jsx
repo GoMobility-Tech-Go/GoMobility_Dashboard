@@ -49,15 +49,11 @@ const SA_EXTRA = [
     { label:"Zone & City Mgmt",   to:"/city-management",      icon:Map         },
     { label:"Revenue Analytics",  to:"/revenue-analytics",    icon:BarChart2   },
     { label:"Tax & Compliance",   to:"/tax-reports",          icon:Receipt     },
-    { label:"In-App Banners",     to:"/banners",              icon:Megaphone   },
     { label:"Emergency & Safety", to:"/emergency-safety",     icon:AlertTriangle},
-    { label:"App Config",         to:"/app-config",           icon:Smartphone  },
     { label:"Driver Tiers",       to:"/driver-tiers",         icon:Trophy      },
-    { label:"Broadcast Messages", to:"/broadcast-messaging",  icon:MessageCircle},
     { label:"Fraud Detection",    to:"/fraud-detection",      icon:ShieldAlert },
     { label:"Promo Codes",        to:"/promo-codes",          icon:Gift        },
     { label:"Roles & Access",     to:"/roles-access",         icon:ShieldCheck },
-    { label:"Activity Logs",      to:"/activity-logs",        icon:ScrollText  },
   ]},
 ];
 

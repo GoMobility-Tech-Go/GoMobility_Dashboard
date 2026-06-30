@@ -7,6 +7,7 @@ import DashboardPage from "../pages/dashboard/DashboardPage";
 import CityManagementPage from "../pages/city-management/CityManagementPage";
 import PricingEnginePage from "../pages/pricing-engine/PricingEnginePage";
 import DriverOnboardingPage from "../pages/driver-onboarding/DriverOnboardingPage";
+import DriverDetailPage from "../pages/driver-onboarding/DriverDetailPage";
 import RideMonitoringPage from "../pages/ride-monitoring/RideMonitoringPage";
 import ComplaintsSupportPage from "../pages/complaints-support/ComplaintsSupportPage";
 import DriverIncentivesPage from "../pages/driver-incentives/DriverIncentivesPage";
@@ -22,14 +23,10 @@ import ReviewsPage from "../pages/reviews/ReviewsPage";
 import NotificationsPage from "../pages/notifications/NotificationsPage";
 import PromoCodesPage from "../pages/promo-codes/PromoCodesPage";
 import RolesAccessPage from "../pages/roles-access/RolesAccessPage";
-import ActivityLogsPage from "../pages/activity-logs/ActivityLogsPage";
 import RevenueAnalyticsPage from "../pages/revenue-analytics/RevenueAnalyticsPage";
 import TaxReportsPage from "../pages/tax-reports/TaxReportsPage";
-import BannersPage from "../pages/banners/BannersPage";
 import EmergencySafetyPage from "../pages/emergency-safety/EmergencySafetyPage";
-import AppConfigPage from "../pages/app-config/AppConfigPage";
 import DriverTiersPage from "../pages/driver-tiers/DriverTiersPage";
-import BroadcastMessagingPage from "../pages/broadcast-messaging/BroadcastMessagingPage";
 
 const routes = [
   { path:"/signup", element:<SignupPage/> },
@@ -42,6 +39,7 @@ const routes = [
         { index:true, element:<DashboardPage/> },
         { path:"users", element:<UsersPage/> },
         { path:"driver-onboarding", element:<DriverOnboardingPage/> },
+        { path:"driver-onboarding/:driverId", element:<DriverDetailPage/> },
         { path:"ride-monitoring", element:<RideMonitoringPage/> },
         { path:"finance", element:<FinancePage/> },
         { path:"refunds", element:<RefundsPage/> },
@@ -61,15 +59,11 @@ const routes = [
           children:[
             { path:"revenue-analytics", element:<RevenueAnalyticsPage/> },
             { path:"tax-reports", element:<TaxReportsPage/> },
-            { path:"banners", element:<BannersPage/> },
             { path:"emergency-safety", element:<EmergencySafetyPage/> },
-            { path:"app-config", element:<AppConfigPage/> },
             { path:"driver-tiers", element:<DriverTiersPage/> },
-            { path:"broadcast-messaging", element:<BroadcastMessagingPage/> },
             { path:"fraud-detection", element:<FraudDetectionPage/> },
             { path:"promo-codes", element:<PromoCodesPage/> },
             { path:"roles-access", element:<RolesAccessPage/> },
-            { path:"activity-logs", element:<ActivityLogsPage/> },
           ]
         },
       ]
