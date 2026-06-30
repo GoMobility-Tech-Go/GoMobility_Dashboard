@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, User, Phone, Mail, Star, ShieldCheck, ShieldX,
@@ -11,6 +11,17 @@ import {
   verifyDriver, updateDriverStatus,
   approveDocument, rejectDocument,
 } from "../../api/admin";
+
+// ── responsive hook ───────────────────────────────────────────────────────────
+function useWidth() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+}
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) =>
@@ -183,7 +194,7 @@ const ExtractedDataSection = ({ doc }) => {
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.9px", marginBottom: 10 }}>Extracted Data</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
         {visible.map(f => <ExtractedField key={f.label} label={f.label} value={f.value} mono={f.mono} />)}
       </div>
     </div>
@@ -225,6 +236,9 @@ export default function DriverDetailPage() {
   const { driverId } = useParams();
   const { state }    = useLocation();
   const navigate     = useNavigate();
+  const width        = useWidth();
+  const isMobile     = width < 640;
+  const isTablet     = width < 900;
 
   const [profile,    setProfile]    = useState(null);
   const [docs,       setDocs]       = useState([]);
@@ -301,7 +315,7 @@ export default function DriverDetailPage() {
     let ext = rcDoc.extracted_data || {};
     if (typeof ext === "string") { try { ext = JSON.parse(ext); } catch { ext = {}; } }
     return {
-      number: rcDoc.document_number || ext.rc_number || ext.reg_number || ext.registration_number || null,
+      number: ext.registration_number || ext.rc_number || ext.reg_no || ext.reg_number || ext.vehicle_number || rcDoc.document_number || null,
       type:   ext.vehicle_type || ext.vehicle_class || ext.body_type || null,
       model:  ext.vehicle_model || ext.model || null,
       color:  ext.vehicle_color || ext.color || null,
@@ -315,8 +329,8 @@ export default function DriverDetailPage() {
     background: "rgba(255,255,255,0.025)",
     border: "1px solid rgba(255,255,255,0.08)",
     borderRadius: 18,
-    padding: 24,
-    marginBottom: 20,
+    padding: isMobile ? 16 : 24,
+    marginBottom: 16,
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -338,45 +352,47 @@ export default function DriverDetailPage() {
         position: "sticky", top: 0, zIndex: 100,
         background: "rgba(2,12,32,0.97)", backdropFilter: "blur(12px)",
         borderBottom: "1px solid rgba(212,175,55,0.12)",
-        padding: "0 32px", height: 60,
-        display: "flex", alignItems: "center", gap: 16,
+        padding: isMobile ? "0 14px" : "0 28px",
+        minHeight: 56,
+        display: "flex", alignItems: "center", gap: isMobile ? 8 : 14,
+        flexWrap: "wrap",
       }}>
         <button
           onClick={() => navigate("/driver-onboarding")}
-          style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "7px 14px", color: "rgba(255,255,255,0.7)", cursor: "pointer", fontSize: 13, fontFamily: "Outfit,sans-serif" }}>
-          <ArrowLeft size={14} /> Back
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "7px 12px", color: "rgba(255,255,255,0.7)", cursor: "pointer", fontSize: 12, fontFamily: "Outfit,sans-serif", flexShrink: 0 }}>
+          <ArrowLeft size={14} />{!isMobile && "Back"}
         </button>
 
-        <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.1)" }} />
+        {!isMobile && <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.1)" }} />}
 
-        <span style={{ fontFamily: "Cinzel,serif", fontSize: 15, fontWeight: 700, color: "#D4AF37" }}>
+        <span style={{ fontFamily: "Cinzel,serif", fontSize: isMobile ? 13 : 15, fontWeight: 700, color: "#D4AF37", flexShrink: 0 }}>
           Driver Profile
         </span>
-        {p && (
-          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
+        {p && !isMobile && (
+          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             — {p.full_name || p.fullName || p.name}
           </span>
         )}
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexShrink: 0 }}>
           <button
             onClick={() => doAct("verify", () => verifyDriver(driverId, !isVerified), `Driver ${isVerified ? "unverified" : "verified"}.`)}
             disabled={acting["verify"] || pLoading}
-            style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 18px", background: isVerified ? "rgba(239,68,68,0.1)" : "rgba(212,175,55,0.12)", border: `1px solid ${isVerified ? "rgba(239,68,68,0.3)" : "rgba(212,175,55,0.35)"}`, borderRadius: 10, color: isVerified ? "#f87171" : "#D4AF37", fontSize: 12, cursor: "pointer", fontWeight: 600, opacity: (acting["verify"] || pLoading) ? 0.5 : 1 }}>
-            <ShieldCheck size={13} />{isVerified ? "Unverify KYC" : "Verify KYC"}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: isMobile ? "7px 10px" : "8px 16px", background: isVerified ? "rgba(239,68,68,0.1)" : "rgba(212,175,55,0.12)", border: `1px solid ${isVerified ? "rgba(239,68,68,0.3)" : "rgba(212,175,55,0.35)"}`, borderRadius: 10, color: isVerified ? "#f87171" : "#D4AF37", fontSize: 11, cursor: "pointer", fontWeight: 600, opacity: (acting["verify"] || pLoading) ? 0.5 : 1 }}>
+            <ShieldCheck size={12} />{!isMobile && (isVerified ? "Unverify" : "Verify KYC")}
           </button>
           <button
             onClick={() => doAct("status", () => updateDriverStatus(driverId, !isActive), isActive ? "Driver blocked." : "Driver unblocked.")}
             disabled={acting["status"] || isSuspended || pLoading}
-            style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 18px", background: isActive ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)", border: `1px solid ${isActive ? "rgba(239,68,68,0.25)" : "rgba(34,197,94,0.25)"}`, borderRadius: 10, color: isActive ? "#f87171" : "#4ade80", fontSize: 12, cursor: isSuspended ? "not-allowed" : "pointer", fontWeight: 600, opacity: (acting["status"] || isSuspended || pLoading) ? 0.4 : 1 }}>
-            {isActive ? <UserX size={13} /> : <UserCheck size={13} />}
-            {isActive ? "Block Driver" : "Unblock Driver"}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: isMobile ? "7px 10px" : "8px 16px", background: isActive ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)", border: `1px solid ${isActive ? "rgba(239,68,68,0.25)" : "rgba(34,197,94,0.25)"}`, borderRadius: 10, color: isActive ? "#f87171" : "#4ade80", fontSize: 11, cursor: isSuspended ? "not-allowed" : "pointer", fontWeight: 600, opacity: (acting["status"] || isSuspended || pLoading) ? 0.4 : 1 }}>
+            {isActive ? <UserX size={12} /> : <UserCheck size={12} />}
+            {!isMobile && (isActive ? "Block" : "Unblock")}
           </button>
         </div>
       </div>
 
       {/* ── PAGE CONTENT ── */}
-      <div style={{ maxWidth: 860, margin: "0 auto", padding: "32px 24px 60px" }}>
+      <div style={{ maxWidth: 860, margin: "0 auto", padding: isMobile ? "20px 14px 60px" : "28px 24px 60px" }}>
 
         {pLoading ? (
           /* Loading skeleton */
@@ -393,7 +409,7 @@ export default function DriverDetailPage() {
           <>
             {/* ── PROFILE CARD ── */}
             <div style={{ ...cardStyle, background: "rgba(212,175,55,0.04)", border: "1px solid rgba(212,175,55,0.15)" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 22 }}>
+              <div style={{ display: "flex", alignItems: isMobile ? "center" : "flex-start", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 14 : 22 }}>
 
                 {/* Avatar */}
                 <div style={{ width: 80, height: 80, borderRadius: "50%", background: "rgba(212,175,55,0.12)", border: "2px solid rgba(212,175,55,0.35)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
@@ -454,7 +470,7 @@ export default function DriverDetailPage() {
             </div>
 
             {/* ── STATS ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : isTablet ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
               <StatCard icon={<Car size={16} />} label="Total Rides" value={fmtNum(p.total_rides || p.totalRides || 0)} />
               <StatCard icon={<Wallet size={16} />} label="Total Earnings" value={`₹${fmtNum(p.total_earnings || p.totalEarnings || 0)}`} color="#4ade80" />
               <StatCard icon={<XCircle size={16} />} label="Cancellation" value={(p.cancellation_rate || p.cancellationRate) ? `${p.cancellation_rate || p.cancellationRate}%` : "—"} color="#f87171" />
@@ -474,7 +490,7 @@ export default function DriverDetailPage() {
             <div style={cardStyle}>
               <SectionHead icon={<Car size={15} />} title="Vehicle Details" />
               {vehicleFromKyc ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
                   {[
                     ["Vehicle Type",   vehicleFromKyc.type],
                     ["Reg Number",     vehicleFromKyc.number],
@@ -524,7 +540,7 @@ export default function DriverDetailPage() {
 
                     return (
                       <div key={docId} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${borderColor}`, borderRadius: 16, overflow: "hidden" }}>
-                        <div style={{ padding: "16px 20px", display: "flex", gap: 16, alignItems: "flex-start" }}>
+                        <div style={{ padding: "16px 20px", display: "flex", gap: 14, alignItems: "flex-start", flexDirection: isMobile ? "column" : "row" }}>
                           {/* Doc thumbnail */}
                           {doc.file_url && (
                             <div
@@ -615,7 +631,7 @@ export default function DriverDetailPage() {
                       </div>
                       <DocStatusBadge status={bankDoc.status} />
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 8 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
                       <ExtractedField label="Bank Name"      value={ext.bank_name} />
                       <ExtractedField label="IFSC"           value={ext.ifsc} mono />
                       <ExtractedField label="Branch"         value={ext.branch} />
