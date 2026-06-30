@@ -93,10 +93,11 @@ const RejectModal = ({ onConfirm, onCancel }) => {
 // ── Doc status badge ──────────────────────────────────────────────────────────
 const DocStatusBadge = ({ status }) => {
   const s = (status || "").toLowerCase();
-  if (s === "approved") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(34,197,94,0.12)", color:"#4ade80", border:"1px solid rgba(34,197,94,0.3)" }}><CheckCircle size={10}/>Approved</span>;
-  if (s === "rejected") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(239,68,68,0.1)", color:"#f87171", border:"1px solid rgba(239,68,68,0.25)" }}><XCircle size={10}/>Rejected</span>;
-  if (s === "manual_review") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(139,92,246,0.12)", color:"#a78bfa", border:"1px solid rgba(139,92,246,0.3)" }}><Eye size={10}/>Manual Review</span>;
-  return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(245,158,11,0.1)", color:"#f59e0b", border:"1px solid rgba(245,158,11,0.3)" }}><Clock size={10}/>Pending</span>;
+  if (s === "approved")      return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(34,197,94,0.12)",  color:"#4ade80", border:"1px solid rgba(34,197,94,0.3)"  }}><CheckCircle size={10}/>Approved</span>;
+  if (s === "auto_verified") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(34,197,94,0.10)",  color:"#34d399", border:"1px solid rgba(34,197,94,0.28)" }}><CheckCircle size={10}/>Verified</span>;
+  if (s === "rejected")      return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(239,68,68,0.10)", color:"#f87171", border:"1px solid rgba(239,68,68,0.25)" }}><XCircle size={10}/>Rejected</span>;
+  if (s === "manual_review") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(245,158,11,0.12)", color:"#f59e0b", border:"1px solid rgba(245,158,11,0.35)" }}><Eye size={10}/>Needs Review</span>;
+  return                            <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:"rgba(148,163,184,0.10)", color:"#94a3b8", border:"1px solid rgba(148,163,184,0.2)" }}><Clock size={10}/>Pending</span>;
 };
 
 // ── Full-screen Driver Detail Panel ──────────────────────────────────────────
@@ -342,7 +343,7 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
                       const status = (doc.status || "pending").toLowerCase();
                       const isPending = status === "pending" || status === "under_review" || status === "manual_review";
                       return (
-                        <div key={docId} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${status==="approved"?"rgba(34,197,94,0.2)":status==="rejected"?"rgba(239,68,68,0.18)":"rgba(212,175,55,0.12)"}`, borderRadius:14, overflow:"hidden" }}>
+                        <div key={docId} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${(status==="approved"||status==="auto_verified")?"rgba(34,197,94,0.2)":status==="rejected"?"rgba(239,68,68,0.18)":status==="manual_review"?"rgba(245,158,11,0.2)":"rgba(212,175,55,0.12)"}`, borderRadius:14, overflow:"hidden" }}>
                           <div style={{ display:"flex", gap:16, padding:16 }}>
                             {/* Document Thumbnail */}
                             <div
@@ -718,8 +719,8 @@ export default function DriverOnboardingPage() {
           {/* Summary */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
             {[
-              { label:"Pending Review", count:kycDocs.filter(d=>(d.status||"").toLowerCase()==="pending").length, color:"#f59e0b", bg:"rgba(245,158,11,0.08)" },
-              { label:"Approved",       count:kycDocs.filter(d=>(d.status||"").toLowerCase()==="approved").length, color:"#4ade80", bg:"rgba(34,197,94,0.06)" },
+              { label:"Pending Review", count:kycDocs.filter(d=>["pending","manual_review"].includes((d.status||"").toLowerCase())).length, color:"#f59e0b", bg:"rgba(245,158,11,0.08)" },
+              { label:"Verified",       count:kycDocs.filter(d=>["approved","auto_verified"].includes((d.status||"").toLowerCase())).length, color:"#4ade80", bg:"rgba(34,197,94,0.06)" },
               { label:"Rejected",       count:kycDocs.filter(d=>(d.status||"").toLowerCase()==="rejected").length, color:"#f87171", bg:"rgba(239,68,68,0.06)" },
             ].map(({ label, count, color, bg }) => (
               <div key={label} style={{ background:bg, border:`1px solid ${color}30`, borderRadius:14, padding:"16px 20px", textAlign:"center" }}>
