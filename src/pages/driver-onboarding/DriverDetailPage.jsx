@@ -309,16 +309,27 @@ export default function DriverDetailPage() {
   const isSuspended= p?.is_suspended|| p?.suspended || p?.isSuspended;
   const isVerified = !!(p?.is_verified || p?.isVerified || p?.verified_at || p?.verifiedAt);
 
-  const vehicleFromKyc = (() => {
+  const vehicleInfo = (() => {
+    // Profile (driver_vehicle table) se pehle check karo — most reliable source
+    const profileNumber = p?.vehicle_number || p?.vehicleNumber || p?.rc_number || p?.rcNumber;
+    const profileType   = p?.vehicle_type   || p?.vehicleType;
+    const profileModel  = p?.vehicle_model  || p?.vehicleModel;
+    const profileColor  = p?.vehicle_color  || p?.vehicleColor;
+
+    // RC KYC doc extracted_data — backend 'masked' field mein full RC number store karta hai
     const rcDoc = docs.find(d => d.document_type === "VEHICLE_RC");
-    if (!rcDoc) return null;
-    let ext = rcDoc.extracted_data || {};
-    if (typeof ext === "string") { try { ext = JSON.parse(ext); } catch { ext = {}; } }
+    let ext = {};
+    if (rcDoc) {
+      try { ext = typeof rcDoc.extracted_data === "string" ? JSON.parse(rcDoc.extracted_data) : (rcDoc.extracted_data || {}); }
+      catch { ext = {}; }
+    }
+    const kycNumber = ext.masked || ext.registration_number || ext.rc_number || ext.reg_no || ext.reg_number || (rcDoc?.document_number || null);
+
     return {
-      number: ext.registration_number || ext.rc_number || ext.reg_no || ext.reg_number || ext.vehicle_number || rcDoc.document_number || null,
-      type:   ext.vehicle_type || ext.vehicle_class || ext.body_type || null,
-      model:  ext.vehicle_model || ext.model || null,
-      color:  ext.vehicle_color || ext.color || null,
+      number: profileNumber || kycNumber || null,
+      type:   profileType   || ext.vehicle_type  || ext.vehicle_class || ext.body_type || null,
+      model:  profileModel  || ext.vehicle_model || ext.model || null,
+      color:  profileColor  || ext.vehicle_color || ext.color || null,
     };
   })();
 
@@ -489,13 +500,13 @@ export default function DriverDetailPage() {
             {/* ── VEHICLE INFO ── */}
             <div style={cardStyle}>
               <SectionHead icon={<Car size={15} />} title="Vehicle Details" />
-              {vehicleFromKyc ? (
+              {vehicleInfo ? (
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
                   {[
-                    ["Vehicle Type",   vehicleFromKyc.type],
-                    ["Reg Number",     vehicleFromKyc.number],
-                    ["Model",          vehicleFromKyc.model],
-                    ["Color",          vehicleFromKyc.color],
+                    ["Vehicle Type",   vehicleInfo.type],
+                    ["Reg Number",     vehicleInfo.number],
+                    ["Model",          vehicleInfo.model],
+                    ["Color",          vehicleInfo.color],
                   ].map(([label, val]) => val ? (
                     <div key={label} style={{ padding: "12px 16px", background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10 }}>
                       <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 4 }}>{label}</div>
