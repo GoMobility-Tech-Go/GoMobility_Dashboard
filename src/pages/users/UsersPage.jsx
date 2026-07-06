@@ -17,8 +17,23 @@ const Badge = ({ active }) => (
 );
 
 const Skeleton = () => (
-  <tr><td colSpan={7}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }} /></td></tr>
+  <tr><td colSpan={11}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }} /></td></tr>
 );
+
+const RoleBadge = ({ role }) => {
+  const colors = {
+    driver:      { bg:"rgba(59,130,246,0.15)", fg:"#60a5fa", bd:"rgba(59,130,246,0.3)" },
+    passenger:   { bg:"rgba(168,85,247,0.15)", fg:"#c084fc", bd:"rgba(168,85,247,0.3)" },
+    super_admin: { bg:"rgba(212,175,55,0.18)", fg:"#D4AF37", bd:"rgba(212,175,55,0.35)" },
+    admin:       { bg:"rgba(212,175,55,0.15)", fg:"#D4AF37", bd:"rgba(212,175,55,0.3)" },
+  };
+  const c = colors[role] || { bg:"rgba(255,255,255,0.08)", fg:"rgba(255,255,255,0.7)", bd:"rgba(255,255,255,0.15)" };
+  return (
+    <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:c.bg, color:c.fg, border:`1px solid ${c.bd}`, textTransform:"capitalize" }}>
+      {role ? role.replace("_", " ") : "—"}
+    </span>
+  );
+};
 
 const Toast = ({ msg, type, onClose }) => (
   <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background: type==="error" ? "#7f1d1d" : "#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", maxWidth:360 }}>
@@ -39,13 +54,18 @@ const UserModal = ({ user, onClose }) => {
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           {[
-            ["ID",      user.id || "—"],
-            ["Name",    name],
-            ["Phone",   user.phone_number || "—"],
-            ["Email",   user.email || "—"],
-            ["Wallet",  fmtRupee(user.wallet_balance)],
-            ["Status",  user.is_active ? "Active" : "Inactive"],
-            ["Joined",  fmtDateTime(user.created_at)],
+            ["ID",         user.id || "—"],
+            ["Name",       name],
+            ["Role",       user.role ? user.role.replace("_"," ") : "—"],
+            ["Phone",      user.phone_number || "—"],
+            ["Email",      user.email || "—"],
+            ["Wallet ID",  user.wallet_id ?? "—"],
+            ["Balance",    fmtRupee(user.balance ?? user.wallet_balance)],
+            ["Test User",  user.is_test_user ? "Yes" : "No"],
+            ["Status",     user.is_active ? "Active" : "Inactive"],
+            ["Last Login", fmtDateTime(user.last_login)],
+            ["Updated",    fmtDateTime(user.last_updated)],
+            ["Joined",     fmtDateTime(user.created_at)],
           ].map(([l,v]) => (
             <div key={l} style={{ display:"flex", gap:12 }}>
               <span style={{ width:80, fontSize:12, color:"rgba(255,255,255,0.4)", flexShrink:0 }}>{l}</span>
@@ -156,25 +176,46 @@ export default function UsersPage() {
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr>
-              <TH>Name</TH><TH>Phone</TH><TH>Wallet</TH>
-              <TH>Status</TH><TH>Joined</TH><TH>Actions</TH>
+              <TH>Name</TH>
+              <TH>Role</TH>
+              <TH>Phone</TH>
+              <TH>Email</TH>
+              <TH>Wallet ID</TH>
+              <TH>Balance</TH>
+              <TH>Test</TH>
+              <TH>Status</TH>
+              <TH>Last Login</TH>
+              <TH>Joined</TH>
+              <TH>Actions</TH>
             </tr></thead>
             <tbody>
               {loading
                 ? Array(6).fill(0).map((_,i) => <Skeleton key={i} />)
                 : users.length === 0
-                  ? <tr><td colSpan={6} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No users found</td></tr>
+                  ? <tr><td colSpan={11} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No users found</td></tr>
                   : users.map((u) => (
                     <tr key={u.id} style={{ transition:"background .15s" }} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
-                      <TD><div style={{ fontWeight:600, color:"#fff" }}>{u.full_name || u.name || "—"}</div></TD>
+                      <TD>
+                        <div style={{ fontWeight:600, color:"#fff" }}>{u.full_name || u.name || "—"}</div>
+                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2, fontFamily:"monospace" }}>{u.id ? u.id.slice(0,8) : ""}</div>
+                      </TD>
+                      <TD><RoleBadge role={u.role} /></TD>
                       <TD>{u.phone_number || "—"}</TD>
+                      <TD style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>{u.email || "—"}</TD>
+                      <TD style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{u.wallet_id ?? "—"}</TD>
                       <TD>
                         <div style={{ display:"flex", alignItems:"center", gap:5 }}>
                           <Wallet size={12} color="#D4AF37" />
-                          <span style={{ color:"#D4AF37", fontWeight:600 }}>{fmtRupee(u.wallet_balance)}</span>
+                          <span style={{ color:"#D4AF37", fontWeight:600 }}>{fmtRupee(u.balance ?? u.wallet_balance)}</span>
                         </div>
                       </TD>
+                      <TD style={{ fontSize:12 }}>
+                        {u.is_test_user
+                          ? <span style={{ color:"#fbbf24", fontWeight:600 }}>Yes</span>
+                          : <span style={{ color:"rgba(255,255,255,0.35)" }}>No</span>}
+                      </TD>
                       <TD><Badge active={u.is_active} /></TD>
+                      <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDateTime(u.last_login)}</TD>
                       <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDate(u.created_at)}</TD>
                       <TD>
                         <div style={{ display:"flex", gap:8 }}>
