@@ -84,6 +84,7 @@ export default function UsersPage() {
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
   const [status, setStatus]     = useState("");
+  const [role,   setRole]       = useState("");
   const [offset, setOffset]     = useState(0);
   const [toast, setToast]       = useState(null);
   const [modal, setModal]       = useState(null);
@@ -100,6 +101,7 @@ export default function UsersPage() {
     const params = { limit: LIMIT, offset };
     if (search) params.search = search;
     if (status) params.status = status;
+    if (role)   params.role   = role;
     getUsers(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -108,12 +110,13 @@ export default function UsersPage() {
       })
       .catch(() => showToast("Failed to load users.", "error"))
       .finally(() => setLoading(false));
-  }, [search, status, offset]);
+  }, [search, status, role, offset]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleSearch = (e) => { setSearch(e.target.value); setOffset(0); };
   const handleStatus = (e) => { setStatus(e.target.value); setOffset(0); };
+  const handleRole   = (e) => { setRole(e.target.value);   setOffset(0); };
 
   const toggleStatus = async (user) => {
     if (!window.confirm(`${user.is_active ? "Deactivate" : "Activate"} ${user.full_name || "this user"}?`)) return;
@@ -165,6 +168,12 @@ export default function UsersPage() {
           <Search size={14} color="rgba(255,255,255,0.3)" style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)" }} />
           <input value={search} onChange={handleSearch} placeholder="Search name or phone…" style={{ width:"100%", height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, paddingLeft:36, paddingRight:12, color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }} />
         </div>
+        <select value={role} onChange={handleRole} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
+          <option value="">All Roles</option>
+          <option value="passenger">Passenger</option>
+          <option value="driver">Driver</option>
+          <option value="admin">Admin</option>
+        </select>
         <select value={status} onChange={handleStatus} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
           <option value="">All Status</option>
           <option value="active">Active</option>
