@@ -70,6 +70,8 @@ export const approveDocument = (docId) =>
   api.post(`/kyc/admin/documents/${docId}/approve`, {});
 export const rejectDocument = (docId, reason, allowRetry = true) =>
   api.post(`/kyc/admin/documents/${docId}/reject`, { reason, allowRetry });
+export const editKycDocument = (docId, formData) =>
+  api.patch(`/kyc/admin/documents/${docId}/edit`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const getFraudAlerts = (params = {}) =>
   api.get('/kyc/admin/fraud-alerts', { params });
 export const suspendDriver = (userId, reason) =>

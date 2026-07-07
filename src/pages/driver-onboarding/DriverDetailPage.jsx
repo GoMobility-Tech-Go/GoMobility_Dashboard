@@ -4,12 +4,12 @@ import {
   ArrowLeft, User, Phone, Mail, Star, ShieldCheck, ShieldX,
   UserCheck, UserX, CheckCircle, XCircle, Clock, Eye,
   Car, CreditCard, FileCheck, FileX, X, ExternalLink,
-  Calendar, Wallet, AlertTriangle
+  Calendar, Wallet, AlertTriangle, Pencil, Upload
 } from "lucide-react";
 import {
   getDriverById, getDriverKycStatus,
   verifyDriver, updateDriverStatus,
-  approveDocument, rejectDocument,
+  approveDocument, rejectDocument, editKycDocument,
 } from "../../api/admin";
 
 // ── responsive hook ───────────────────────────────────────────────────────────
@@ -72,6 +72,115 @@ const RejectModal = ({ onConfirm, onCancel }) => {
           <button onClick={() => reason.trim() && onConfirm(reason.trim(), allowRetry)} disabled={!reason.trim()}
             style={{ flex: 1, height: 40, background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 10, color: "#f87171", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: reason.trim() ? 1 : 0.5 }}>
             Reject
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Edit Document Modal ───────────────────────────────────────────────────────
+const EditDocumentModal = ({ doc, onSave, onCancel }) => {
+  const [status,   setStatus]   = useState(doc.status || "");
+  const [docNum,   setDocNum]   = useState(doc.document_number || "");
+  const [notes,    setNotes]    = useState("");
+  const [extJson,  setExtJson]  = useState(() => {
+    try {
+      const raw = typeof doc.extracted_data === "string" ? JSON.parse(doc.extracted_data) : doc.extracted_data;
+      const { cashfree_ocr, ...rest } = raw || {};
+      return JSON.stringify(rest, null, 2);
+    } catch { return "{}"; }
+  });
+  const [file,     setFile]     = useState(null);
+  const [saving,   setSaving]   = useState(false);
+  const [jsonErr,  setJsonErr]  = useState(false);
+
+  const handleSave = async () => {
+    let parsed;
+    try { parsed = JSON.parse(extJson); setJsonErr(false); }
+    catch { setJsonErr(true); return; }
+
+    setSaving(true);
+    const fd = new FormData();
+    fd.append("extracted_data",  JSON.stringify(parsed));
+    if (status)  fd.append("status",          status);
+    if (docNum)  fd.append("document_number", docNum);
+    if (notes)   fd.append("notes",           notes);
+    if (file)    fd.append("file",            file);
+    await onSave(fd);
+    setSaving(false);
+  };
+
+  const inp = { background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"8px 12px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", width:"100%", boxSizing:"border-box" };
+  const lbl = { display:"block", fontSize:11, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:6, fontFamily:"Cinzel,serif" };
+
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:2000, background:"rgba(0,0,0,0.85)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:28, width:520, maxWidth:"95vw", maxHeight:"90vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
+          <h3 style={{ fontFamily:"Cinzel,serif", color:"#fff", fontSize:15, margin:0 }}>
+            Edit — {(doc.document_type||"").replace(/_/g," ")}
+          </h3>
+          <button onClick={onCancel} style={{ background:"rgba(255,255,255,0.06)", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <X size={14}/>
+          </button>
+        </div>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          {/* Status */}
+          <div>
+            <label style={lbl}>Status</label>
+            <select value={status} onChange={e=>setStatus(e.target.value)} style={{ ...inp, cursor:"pointer" }}>
+              <option value="">— No change —</option>
+              <option value="auto_verified">Verified</option>
+              <option value="approved">Approved</option>
+              <option value="manual_review">Needs Review</option>
+              <option value="rejected">Rejected</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
+
+          {/* Document Number */}
+          <div>
+            <label style={lbl}>Document Number</label>
+            <input value={docNum} onChange={e=>setDocNum(e.target.value)} style={inp} placeholder="e.g. DL1ZD1976, MHXX1234…" />
+          </div>
+
+          {/* Extracted Data */}
+          <div>
+            <label style={{ ...lbl, color: jsonErr ? "#f87171" : "rgba(212,175,55,0.7)" }}>
+              Extracted Data (JSON){jsonErr && " — Invalid JSON!"}
+            </label>
+            <textarea value={extJson} onChange={e=>{setExtJson(e.target.value);setJsonErr(false);}} rows={8}
+              style={{ ...inp, resize:"vertical", fontFamily:"monospace", fontSize:12, border:`1px solid ${jsonErr?"rgba(239,68,68,0.5)":"rgba(212,175,55,0.15)"}` }} />
+          </div>
+
+          {/* Re-upload File */}
+          <div>
+            <label style={lbl}>Re-upload Document (optional)</label>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <label style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px", background:"rgba(212,175,55,0.08)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, cursor:"pointer", color:"#D4AF37", fontSize:12, fontWeight:600 }}>
+                <Upload size={13}/>
+                {file ? file.name : "Choose File"}
+                <input type="file" accept="image/jpeg,image/jpg,image/png,application/pdf" onChange={e=>setFile(e.target.files[0]||null)} style={{ display:"none" }} />
+              </label>
+              {file && <button onClick={()=>setFile(null)} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.4)", cursor:"pointer", fontSize:12 }}>✕ Remove</button>}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label style={lbl}>Notes (optional)</label>
+            <input value={notes} onChange={e=>setNotes(e.target.value)} style={inp} placeholder="Reason for manual edit…" />
+          </div>
+        </div>
+
+        <div style={{ display:"flex", gap:10, marginTop:24 }}>
+          <button onClick={onCancel} style={{ flex:1, height:42, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:13 }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            style={{ flex:2, height:42, background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.35)", borderRadius:10, color:"#D4AF37", cursor:"pointer", fontSize:13, fontWeight:700, opacity:saving?0.6:1 }}>
+            {saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -246,6 +355,7 @@ export default function DriverDetailPage() {
   const [dLoading,   setDLoad]      = useState(true);
   const [acting,     setActing]     = useState({});
   const [rejectDocId, setRejectDocId] = useState(null);
+  const [editDoc,    setEditDoc]    = useState(null);
   const [imgPrev,    setImgPrev]    = useState(null);
   const [toast,      setToast]      = useState(null);
 
@@ -364,6 +474,16 @@ export default function DriverDetailPage() {
         <RejectModal
           onConfirm={(r, a) => { setRejectDocId(null); doAct("doc" + rejectDocId, () => rejectDocument(rejectDocId, r, a), "Document rejected."); }}
           onCancel={() => setRejectDocId(null)}
+        />
+      )}
+      {editDoc && (
+        <EditDocumentModal
+          doc={editDoc}
+          onSave={async (fd) => {
+            await doAct("edit" + editDoc.id, () => editKycDocument(editDoc.id, fd), "Document updated successfully.");
+            setEditDoc(null);
+          }}
+          onCancel={() => setEditDoc(null)}
         />
       )}
       {imgPrev && <ImgPreview src={imgPrev} onClose={() => setImgPrev(null)} />}
@@ -649,6 +769,10 @@ export default function DriverDetailPage() {
                                   <ExternalLink size={11} />View Document
                                 </button>
                               )}
+                              <button onClick={() => setEditDoc(doc)}
+                                style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.3)", borderRadius: 8, color: "#818cf8", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+                                <Pencil size={11} />Edit
+                              </button>
                               {needsReview && (
                                 <>
                                   <button onClick={() => doAct("doc" + docId, () => approveDocument(docId), "Document approved.")}
