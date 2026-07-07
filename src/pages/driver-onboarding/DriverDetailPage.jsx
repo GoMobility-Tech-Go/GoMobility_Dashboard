@@ -316,7 +316,7 @@ export default function DriverDetailPage() {
     const profileModel  = p?.vehicle_model  || p?.vehicleModel;
     const profileColor  = p?.vehicle_color  || p?.vehicleColor;
 
-    // RC KYC doc extracted_data — backend 'masked' field mein full RC number store karta hai
+    // RC KYC doc extracted_data
     const rcDoc = docs.find(d => d.document_type === "VEHICLE_RC");
     let ext = {};
     if (rcDoc) {
@@ -325,11 +325,22 @@ export default function DriverDetailPage() {
     }
     const kycNumber = ext.masked || ext.registration_number || ext.rc_number || ext.reg_no || ext.reg_number || (rcDoc?.document_number || null);
 
+    const regValidity = ext.registration_validity || null;
+    const isExpired   = regValidity ? new Date(regValidity) < new Date() : null;
+
     return {
-      number: profileNumber || kycNumber || null,
-      type:   profileType   || ext.vehicle_type  || ext.vehicle_class || ext.body_type || null,
-      model:  profileModel  || ext.vehicle_model || ext.model || null,
-      color:  profileColor  || ext.vehicle_color || ext.color || null,
+      number:           profileNumber || kycNumber || null,
+      type:             profileType   || ext.vehicle_type  || ext.vehicle_class || ext.body_type || null,
+      model:            profileModel  || ext.vehicle_model || ext.model || null,
+      color:            profileColor  || ext.vehicle_color || ext.color || null,
+      plateColor:       ext.plate_color || null,
+      isCommercial:     ext.is_commercial_vehicle ?? null,
+      ownerName:        ext.owner || ext.owner_name || null,
+      regValidity,
+      isExpired,
+      vahanVerified:    ext.vahan_verified ?? null,
+      categories:       rcDoc?.vehicle_categories || null,
+      rcStatus:         rcDoc?.status || null,
     };
   })();
 
@@ -500,20 +511,71 @@ export default function DriverDetailPage() {
             {/* ── VEHICLE INFO ── */}
             <div style={cardStyle}>
               <SectionHead icon={<Car size={15} />} title="Vehicle Details" />
-              {vehicleInfo ? (
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-                  {[
-                    ["Vehicle Type",   vehicleInfo.type],
-                    ["Reg Number",     vehicleInfo.number],
-                    ["Model",          vehicleInfo.model],
-                    ["Color",          vehicleInfo.color],
-                  ].map(([label, val]) => val ? (
-                    <div key={label} style={{ padding: "12px 16px", background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10 }}>
-                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 14, color: "#fff", fontWeight: 600 }}>{val}</div>
+              {vehicleInfo.number || vehicleInfo.model ? (
+                <>
+                  {/* Plate + commercial badges */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+                    {vehicleInfo.plateColor && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 5,
+                        padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                        background: vehicleInfo.plateColor.toUpperCase() === "YELLOW" ? "rgba(234,179,8,0.15)" : "rgba(148,163,184,0.12)",
+                        color:      vehicleInfo.plateColor.toUpperCase() === "YELLOW" ? "#facc15" : "#94a3b8",
+                        border:     `1px solid ${vehicleInfo.plateColor.toUpperCase() === "YELLOW" ? "rgba(234,179,8,0.4)" : "rgba(148,163,184,0.25)"}`,
+                      }}>
+                        {vehicleInfo.plateColor.toUpperCase() === "YELLOW" ? "🟡" : "⬜"} {vehicleInfo.plateColor.toUpperCase()} PLATE
+                      </span>
+                    )}
+                    {vehicleInfo.isCommercial === true && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(251,146,60,0.12)", color: "#fb923c", border: "1px solid rgba(251,146,60,0.3)" }}>
+                        Commercial Vehicle
+                      </span>
+                    )}
+                    {vehicleInfo.vahanVerified === false && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.25)" }}>
+                        <AlertTriangle size={11} /> VAHAN Unverified
+                      </span>
+                    )}
+                    {vehicleInfo.vahanVerified === true && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(34,197,94,0.1)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.25)" }}>
+                        <CheckCircle size={11} /> VAHAN Verified
+                      </span>
+                    )}
+                    {vehicleInfo.rcStatus && (
+                      <DocStatusBadge status={vehicleInfo.rcStatus} />
+                    )}
+                  </div>
+
+                  {/* Expired registration warning */}
+                  {vehicleInfo.isExpired && (
+                    <div style={{ marginBottom: 14, padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                      <AlertTriangle size={14} color="#f87171" />
+                      <span style={{ fontSize: 13, color: "#f87171", fontWeight: 600 }}>Registration EXPIRED — Valid till {vehicleInfo.regValidity}</span>
                     </div>
-                  ) : null)}
-                </div>
+                  )}
+
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+                    {[
+                      ["Vehicle Type",    Array.isArray(vehicleInfo.type) ? vehicleInfo.type.join(", ") : vehicleInfo.type],
+                      ["Reg Number",      vehicleInfo.number],
+                      ["Model",           vehicleInfo.model],
+                      ["Color",           vehicleInfo.color],
+                      ["RC Owner",        vehicleInfo.ownerName],
+                      ["Valid Till",      vehicleInfo.regValidity],
+                      ["Categories",      vehicleInfo.categories ? vehicleInfo.categories.join(", ") : null],
+                    ].map(([label, val]) => val ? (
+                      <div key={label} style={{
+                        padding: "12px 16px",
+                        background: label === "Valid Till" && vehicleInfo.isExpired ? "rgba(239,68,68,0.06)" : "rgba(255,255,255,0.025)",
+                        border: `1px solid ${label === "Valid Till" && vehicleInfo.isExpired ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.06)"}`,
+                        borderRadius: 10,
+                      }}>
+                        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 4 }}>{label}</div>
+                        <div style={{ fontSize: 14, color: label === "Valid Till" && vehicleInfo.isExpired ? "#f87171" : "#fff", fontWeight: 600 }}>{val}</div>
+                      </div>
+                    ) : null)}
+                  </div>
+                </>
               ) : (
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", padding: "12px 0" }}>
                   {dLoading ? "Loading vehicle info…" : "Vehicle RC not submitted yet."}

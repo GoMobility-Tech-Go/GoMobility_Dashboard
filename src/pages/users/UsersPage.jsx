@@ -38,8 +38,13 @@ const UserModal = ({ user, onClose }) => {
           <button onClick={onClose} style={{ background:"rgba(255,255,255,0.06)", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}><X size={14}/></button>
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          {user.go_id && (
+            <div style={{ background:"rgba(212,175,55,0.08)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:8, padding:"8px 12px", display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+              <span style={{ fontSize:11, color:"rgba(212,175,55,0.7)", fontWeight:700, letterSpacing:"0.5px" }}>GO ID</span>
+              <span style={{ fontSize:14, color:"#D4AF37", fontWeight:700, fontFamily:"monospace" }}>{user.go_id}</span>
+            </div>
+          )}
           {[
-            ["ID",      user.id || "—"],
             ["Name",    name],
             ["Phone",   user.phone_number || "—"],
             ["Email",   user.email || "—"],
@@ -143,7 +148,7 @@ export default function UsersPage() {
       <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
         <div style={{ position:"relative", flex:1, minWidth:200 }}>
           <Search size={14} color="rgba(255,255,255,0.3)" style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)" }} />
-          <input value={search} onChange={handleSearch} placeholder="Search name or phone…" style={{ width:"100%", height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, paddingLeft:36, paddingRight:12, color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }} />
+          <input value={search} onChange={handleSearch} placeholder="Search name, phone or GO ID…" style={{ width:"100%", height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, paddingLeft:36, paddingRight:12, color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }} />
         </div>
         <select value={status} onChange={handleStatus} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
           <option value="">All Status</option>
@@ -156,16 +161,17 @@ export default function UsersPage() {
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr>
-              <TH>Name</TH><TH>Phone</TH><TH>Wallet</TH>
+              <TH>GO ID</TH><TH>Name</TH><TH>Phone</TH><TH>Wallet</TH>
               <TH>Status</TH><TH>Joined</TH><TH>Actions</TH>
             </tr></thead>
             <tbody>
               {loading
                 ? Array(6).fill(0).map((_,i) => <Skeleton key={i} />)
                 : users.length === 0
-                  ? <tr><td colSpan={6} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No users found</td></tr>
+                  ? <tr><td colSpan={7} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No users found</td></tr>
                   : users.map((u) => (
                     <tr key={u.id} style={{ transition:"background .15s" }} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
+                      <TD><span style={{ color:"#D4AF37", fontWeight:700, fontFamily:"monospace", fontSize:12 }}>{u.go_id || "—"}</span></TD>
                       <TD><div style={{ fontWeight:600, color:"#fff" }}>{u.full_name || u.name || "—"}</div></TD>
                       <TD>{u.phone_number || "—"}</TD>
                       <TD>
