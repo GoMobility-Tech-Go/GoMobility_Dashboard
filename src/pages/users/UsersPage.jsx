@@ -54,7 +54,7 @@ const UserModal = ({ user, onClose }) => {
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           {[
-            ["ID",         user.id || "—"],
+            ["GO ID",      user.go_id || "—"],
             ["Name",       name],
             ["Role",       user.role ? user.role.replace("_"," ") : "—"],
             ["Phone",      user.phone_number || "—"],
@@ -206,7 +206,7 @@ export default function UsersPage() {
                     <tr key={u.id} style={{ transition:"background .15s" }} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
                       <TD>
                         <div style={{ fontWeight:600, color:"#fff" }}>{u.full_name || u.name || "—"}</div>
-                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2, fontFamily:"monospace" }}>{u.id ? u.id.slice(0,8) : ""}</div>
+                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2, fontFamily:"monospace" }}>{u.go_id || ""}</div>
                       </TD>
                       <TD><RoleBadge role={u.role} /></TD>
                       <TD>{u.phone_number || "—"}</TD>
