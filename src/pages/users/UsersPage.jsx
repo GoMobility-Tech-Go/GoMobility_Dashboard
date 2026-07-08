@@ -1,17 +1,25 @@
-import { useState, useEffect, useCallback } from "react";
-import { Search, UserCheck, UserX, Eye, X, Wallet } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { UserCheck, UserX, Eye, X, Wallet, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { getUsers, updateUserStatus, getUserById } from "../../api/admin";
 import { Pagination } from "../../components/ui/index.jsx";
 
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+const fmtDate     = (d) => d ? new Date(d).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—";
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "—";
-const fmtRupee = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").format(n) : "—";
+const fmtRupee    = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").format(n) : "—";
+
+const ISTR = {
+  width:"100%", height:26, background:"rgba(255,255,255,0.04)",
+  border:"1px solid rgba(212,175,55,0.12)", borderRadius:6,
+  padding:"0 8px", color:"#fff", fontSize:11, outline:"none",
+  fontFamily:"Outfit,sans-serif", boxSizing:"border-box",
+};
+const ISEL = { ...ISTR, cursor:"pointer" };
 
 const Badge = ({ active }) => (
   <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600,
     background: active ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.12)",
     color: active ? "#4ade80" : "#f87171",
-    border: `1px solid ${active ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.25)"}` }}>
+    border:`1px solid ${active ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.25)"}` }}>
     {active ? "Active" : "Inactive"}
   </span>
 );
@@ -22,21 +30,21 @@ const Skeleton = () => (
 
 const RoleBadge = ({ role }) => {
   const colors = {
-    driver:      { bg:"rgba(59,130,246,0.15)", fg:"#60a5fa", bd:"rgba(59,130,246,0.3)" },
-    passenger:   { bg:"rgba(168,85,247,0.15)", fg:"#c084fc", bd:"rgba(168,85,247,0.3)" },
-    super_admin: { bg:"rgba(212,175,55,0.18)", fg:"#D4AF37", bd:"rgba(212,175,55,0.35)" },
-    admin:       { bg:"rgba(212,175,55,0.15)", fg:"#D4AF37", bd:"rgba(212,175,55,0.3)" },
+    driver:      { bg:"rgba(59,130,246,0.15)",  fg:"#60a5fa", bd:"rgba(59,130,246,0.3)" },
+    passenger:   { bg:"rgba(168,85,247,0.15)",  fg:"#c084fc", bd:"rgba(168,85,247,0.3)" },
+    super_admin: { bg:"rgba(212,175,55,0.18)",  fg:"#D4AF37", bd:"rgba(212,175,55,0.35)" },
+    admin:       { bg:"rgba(212,175,55,0.15)",  fg:"#D4AF37", bd:"rgba(212,175,55,0.3)" },
   };
   const c = colors[role] || { bg:"rgba(255,255,255,0.08)", fg:"rgba(255,255,255,0.7)", bd:"rgba(255,255,255,0.15)" };
   return (
     <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600, background:c.bg, color:c.fg, border:`1px solid ${c.bd}`, textTransform:"capitalize" }}>
-      {role ? role.replace("_", " ") : "—"}
+      {role ? role.replace("_"," ") : "—"}
     </span>
   );
 };
 
 const Toast = ({ msg, type, onClose }) => (
-  <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background: type==="error" ? "#7f1d1d" : "#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", maxWidth:360 }}>
+  <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background:type==="error"?"#7f1d1d":"#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", maxWidth:360 }}>
     <span style={{ flex:1 }}>{msg}</span>
     <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer", padding:0 }}><X size={14}/></button>
   </div>
@@ -78,20 +86,41 @@ const UserModal = ({ user, onClose }) => {
   );
 };
 
+// ─── Sort icon ────────────────────────────────────────────────────────────────
+function SortIcon({ col, sort }) {
+  if (sort.col !== col) return <ChevronsUpDown size={11} style={{ opacity:0.3, flexShrink:0 }} />;
+  return sort.dir === "asc"
+    ? <ChevronUp   size={11} style={{ color:"#D4AF37", flexShrink:0 }} />
+    : <ChevronDown size={11} style={{ color:"#D4AF37", flexShrink:0 }} />;
+}
+
 export default function UsersPage() {
-  const [users, setUsers]       = useState([]);
-  const [total, setTotal]       = useState(0);
-  const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState("");
-  const [status, setStatus]     = useState("");
-  const [role,   setRole]       = useState("");
-  const [offset, setOffset]     = useState(0);
-  const [toast, setToast]       = useState(null);
-  const [modal, setModal]       = useState(null);
+  const [users,    setUsers]    = useState([]);
+  const [total,    setTotal]    = useState(0);
+  const [loading,  setLoading]  = useState(true);
+  const [offset,   setOffset]   = useState(0);
+  const [toast,    setToast]    = useState(null);
+  const [modal,    setModal]    = useState(null);
   const [toggling, setToggling] = useState({});
   const LIMIT = 10;
 
-  const showToast = (msg, type="success") => {
+  // ── Server-side filters ────────────────────────────────────────────────────
+  const [search, setSearch] = useState("");   // name/phone → backend search
+  const [role,   setRole]   = useState("");
+  const [status, setStatus] = useState("");
+
+  // ── Client-side filters (applied to loaded page rows) ─────────────────────
+  const [fPhone,  setFPhone]  = useState("");
+  const [fEmail,  setFEmail]  = useState("");
+  const [fWallet, setFWallet] = useState("");
+  const [fBalMin, setFBalMin] = useState("");
+  const [fBalMax, setFBalMax] = useState("");
+  const [fTest,   setFTest]   = useState("");  // ""|"yes"|"no"
+
+  // ── Sort ──────────────────────────────────────────────────────────────────
+  const [sort, setSort] = useState({ col: null, dir: "asc" });
+
+  const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
@@ -114,9 +143,50 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleSearch = (e) => { setSearch(e.target.value); setOffset(0); };
-  const handleStatus = (e) => { setStatus(e.target.value); setOffset(0); };
-  const handleRole   = (e) => { setRole(e.target.value);   setOffset(0); };
+  // ── Client-side filter + sort applied to loaded rows ──────────────────────
+  const displayedUsers = useMemo(() => {
+    let list = [...users];
+    if (fPhone)        list = list.filter(u => (u.phone_number||"").includes(fPhone));
+    if (fEmail)        list = list.filter(u => (u.email||"").toLowerCase().includes(fEmail.toLowerCase()));
+    if (fWallet)       list = list.filter(u => String(u.wallet_id??""  ).includes(fWallet));
+    if (fBalMin !== "") list = list.filter(u => (u.balance??0) >= Number(fBalMin));
+    if (fBalMax !== "") list = list.filter(u => (u.balance??0) <= Number(fBalMax));
+    if (fTest === "yes") list = list.filter(u =>  u.is_test_user);
+    if (fTest === "no")  list = list.filter(u => !u.is_test_user);
+
+    if (sort.col) {
+      list.sort((a, b) => {
+        const vals = {
+          name:    [a.full_name||"",    b.full_name||""],
+          phone:   [a.phone_number||"", b.phone_number||""],
+          email:   [a.email||"",        b.email||""],
+          wallet:  [a.wallet_id??0,     b.wallet_id??0],
+          balance: [a.balance??0,       b.balance??0],
+          login:   [a.last_login||"",   b.last_login||""],
+          joined:  [a.created_at||"",   b.created_at||""],
+        };
+        const [av, bv] = vals[sort.col] || ["",""];
+        if (av < bv) return sort.dir === "asc" ? -1 : 1;
+        if (av > bv) return sort.dir === "asc" ?  1 : -1;
+        return 0;
+      });
+    }
+    return list;
+  }, [users, fPhone, fEmail, fWallet, fBalMin, fBalMax, fTest, sort]);
+
+  const toggleSort = (col) =>
+    setSort(s => s.col === col
+      ? { col, dir: s.dir === "asc" ? "desc" : "asc" }
+      : { col, dir: "asc" });
+
+  const clearAll = () => {
+    setSearch(""); setRole(""); setStatus(""); setOffset(0);
+    setFPhone(""); setFEmail(""); setFWallet("");
+    setFBalMin(""); setFBalMax(""); setFTest("");
+    setSort({ col: null, dir: "asc" });
+  };
+
+  const anyFilter = search||role||status||fPhone||fEmail||fWallet||fBalMin||fBalMax||fTest;
 
   const toggleStatus = async (user) => {
     if (!window.confirm(`${user.is_active ? "Deactivate" : "Activate"} ${user.full_name || "this user"}?`)) return;
@@ -141,69 +211,166 @@ export default function UsersPage() {
     }
   };
 
-  const totalPages = Math.ceil(total / LIMIT);
+  const totalPages  = Math.ceil(total / LIMIT);
   const currentPage = Math.floor(offset / LIMIT) + 1;
 
-  const TH = ({ children }) => (
-    <th style={{ padding:"12px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", borderBottom:"1px solid rgba(212,175,55,0.1)", whiteSpace:"nowrap" }}>{children}</th>
-  );
+  // ── Styles ────────────────────────────────────────────────────────────────
+  const thBase = {
+    padding:"10px 12px", textAlign:"left", fontSize:11, fontWeight:700,
+    color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase",
+    borderBottom:"1px solid rgba(212,175,55,0.1)", whiteSpace:"nowrap",
+    cursor:"pointer", userSelect:"none", background:"rgba(0,0,0,0.15)",
+  };
+  const thSort = (col) => ({
+    ...thBase,
+    color: sort.col === col ? "#D4AF37" : "rgba(212,175,55,0.7)",
+  });
+  const thNoSort = { ...thBase, cursor:"default" };
+  const fdCell = {
+    padding:"5px 8px", borderBottom:"1px solid rgba(212,175,55,0.08)",
+    background:"rgba(0,0,0,0.2)", verticalAlign:"middle",
+  };
   const TD = ({ children, style }) => (
-    <td style={{ padding:"14px 16px", fontSize:13, color:"rgba(255,255,255,0.8)", borderBottom:"1px solid rgba(255,255,255,0.04)", ...style }}>{children}</td>
+    <td style={{ padding:"13px 12px", fontSize:13, color:"rgba(255,255,255,0.8)", borderBottom:"1px solid rgba(255,255,255,0.04)", ...style }}>{children}</td>
   );
 
   return (
     <div style={{ fontFamily:"Outfit,sans-serif" }}>
-      <style>{`@keyframes gmPulse{0%,100%{opacity:1}50%{opacity:0.45}}`}</style>
+      <style>{`@keyframes gmPulse{0%,100%{opacity:1}50%{opacity:0.45}} input::placeholder,select option{color:rgba(255,255,255,0.3)} input:focus,select:focus{border-color:rgba(212,175,55,0.4)!important}`}</style>
 
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       <UserModal user={modal} onClose={() => setModal(null)} />
 
-      <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Users</h1>
-        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Total: {total} users</p>
-      </div>
-
-      <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
-        <div style={{ position:"relative", flex:1, minWidth:200 }}>
-          <Search size={14} color="rgba(255,255,255,0.3)" style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)" }} />
-          <input value={search} onChange={handleSearch} placeholder="Search name or phone…" style={{ width:"100%", height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, paddingLeft:36, paddingRight:12, color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }} />
+      {/* Header */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+        <div>
+          <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Users</h1>
+          <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>
+            Total: {total} users
+            {displayedUsers.length !== users.length && (
+              <span style={{ color:"#D4AF37", marginLeft:8 }}>· {displayedUsers.length} filtered</span>
+            )}
+          </p>
         </div>
-        <select value={role} onChange={handleRole} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
-          <option value="">All Roles</option>
-          <option value="passenger">Passenger</option>
-          <option value="driver">Driver</option>
-          <option value="admin">Admin</option>
-        </select>
-        <select value={status} onChange={handleStatus} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
-          <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
+        {anyFilter && (
+          <button onClick={clearAll} style={{ display:"flex", alignItems:"center", gap:6, height:34, padding:"0 14px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:8, color:"#f87171", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
+            <X size={12} /> Clear filters
+          </button>
+        )}
       </div>
 
+      {/* Table */}
       <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr>
-              <TH>Name</TH>
-              <TH>Role</TH>
-              <TH>Phone</TH>
-              <TH>Email</TH>
-              <TH>Wallet ID</TH>
-              <TH>Balance</TH>
-              <TH>Test</TH>
-              <TH>Status</TH>
-              <TH>Last Login</TH>
-              <TH>Joined</TH>
-              <TH>Actions</TH>
-            </tr></thead>
+            <thead>
+              {/* ── Row 1: Column headers with sort ───────────────────────── */}
+              <tr>
+                <th style={thSort("name")} onClick={() => toggleSort("name")}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>Name <SortIcon col="name" sort={sort} /></div>
+                </th>
+                <th style={thNoSort}>Role</th>
+                <th style={thSort("phone")} onClick={() => toggleSort("phone")}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>Phone <SortIcon col="phone" sort={sort} /></div>
+                </th>
+                <th style={thSort("email")} onClick={() => toggleSort("email")}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>Email <SortIcon col="email" sort={sort} /></div>
+                </th>
+                <th style={thSort("wallet")} onClick={() => toggleSort("wallet")}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>Wallet ID <SortIcon col="wallet" sort={sort} /></div>
+                </th>
+                <th style={thSort("balance")} onClick={() => toggleSort("balance")}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>Balance <SortIcon col="balance" sort={sort} /></div>
+                </th>
+                <th style={thNoSort}>Test</th>
+                <th style={thNoSort}>Status</th>
+                <th style={thSort("login")} onClick={() => toggleSort("login")}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>Last Login <SortIcon col="login" sort={sort} /></div>
+                </th>
+                <th style={thSort("joined")} onClick={() => toggleSort("joined")}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>Joined <SortIcon col="joined" sort={sort} /></div>
+                </th>
+                <th style={thNoSort}>Actions</th>
+              </tr>
+
+              {/* ── Row 2: Filter row ─────────────────────────────────────── */}
+              <tr>
+                {/* Name → server search */}
+                <td style={fdCell}>
+                  <input value={search} onChange={e => { setSearch(e.target.value); setOffset(0); }}
+                    placeholder="Search name…" style={ISTR} />
+                </td>
+                {/* Role → server role */}
+                <td style={fdCell}>
+                  <select value={role} onChange={e => { setRole(e.target.value); setOffset(0); }} style={ISEL}>
+                    <option value="">All</option>
+                    <option value="passenger">Passenger</option>
+                    <option value="driver">Driver</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </td>
+                {/* Phone → client-side */}
+                <td style={fdCell}>
+                  <input value={fPhone} onChange={e => setFPhone(e.target.value)}
+                    placeholder="Filter phone…" style={ISTR} />
+                </td>
+                {/* Email → client-side */}
+                <td style={fdCell}>
+                  <input value={fEmail} onChange={e => setFEmail(e.target.value)}
+                    placeholder="Filter email…" style={ISTR} />
+                </td>
+                {/* Wallet ID → client-side */}
+                <td style={fdCell}>
+                  <input value={fWallet} onChange={e => setFWallet(e.target.value)}
+                    placeholder="Wallet ID…" style={ISTR} />
+                </td>
+                {/* Balance min–max → client-side */}
+                <td style={fdCell}>
+                  <div style={{ display:"flex", gap:4 }}>
+                    <input value={fBalMin} onChange={e => setFBalMin(e.target.value)}
+                      placeholder="Min ₹" style={{ ...ISTR, width:"50%" }} type="number" min={0} />
+                    <input value={fBalMax} onChange={e => setFBalMax(e.target.value)}
+                      placeholder="Max ₹" style={{ ...ISTR, width:"50%" }} type="number" min={0} />
+                  </div>
+                </td>
+                {/* Test → client-side */}
+                <td style={fdCell}>
+                  <select value={fTest} onChange={e => setFTest(e.target.value)} style={ISEL}>
+                    <option value="">All</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </td>
+                {/* Status → server status */}
+                <td style={fdCell}>
+                  <select value={status} onChange={e => { setStatus(e.target.value); setOffset(0); }} style={ISEL}>
+                    <option value="">All</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </td>
+                {/* Last Login — sort only, no filter */}
+                <td style={{ ...fdCell, textAlign:"center" }}>
+                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.2)" }}>sort ↑↓</span>
+                </td>
+                {/* Joined — sort only, no filter */}
+                <td style={{ ...fdCell, textAlign:"center" }}>
+                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.2)" }}>sort ↑↓</span>
+                </td>
+                {/* Actions — no filter */}
+                <td style={fdCell} />
+              </tr>
+            </thead>
+
             <tbody>
               {loading
                 ? Array(6).fill(0).map((_,i) => <Skeleton key={i} />)
-                : users.length === 0
+                : displayedUsers.length === 0
                   ? <tr><td colSpan={11} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No users found</td></tr>
-                  : users.map((u) => (
-                    <tr key={u.id} style={{ transition:"background .15s" }} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
+                  : displayedUsers.map((u) => (
+                    <tr key={u.id} style={{ transition:"background .15s" }}
+                      onMouseEnter={e => e.currentTarget.style.background="rgba(212,175,55,0.03)"}
+                      onMouseLeave={e => e.currentTarget.style.background=""}>
                       <TD>
                         <div style={{ fontWeight:600, color:"#fff" }}>{u.full_name || u.name || "—"}</div>
                         <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2, fontFamily:"monospace" }}>{u.go_id || ""}</div>
@@ -231,7 +398,7 @@ export default function UsersPage() {
                           <button onClick={() => openModal(u.id)} title="View Details" style={{ width:32, height:32, borderRadius:8, border:"1px solid rgba(212,175,55,0.2)", background:"transparent", cursor:"pointer", color:"#D4AF37", display:"flex", alignItems:"center", justifyContent:"center" }}>
                             <Eye size={14} />
                           </button>
-                          <button onClick={() => toggleStatus(u)} disabled={toggling[u.id]} title={u.is_active ? "Deactivate" : "Activate"} style={{ width:32, height:32, borderRadius:8, border:"none", background: u.is_active ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)", cursor:"pointer", color: u.is_active ? "#f87171" : "#4ade80", display:"flex", alignItems:"center", justifyContent:"center", opacity:toggling[u.id]?0.5:1 }}>
+                          <button onClick={() => toggleStatus(u)} disabled={toggling[u.id]} title={u.is_active ? "Deactivate" : "Activate"} style={{ width:32, height:32, borderRadius:8, border:"none", background:u.is_active?"rgba(239,68,68,0.15)":"rgba(34,197,94,0.15)", cursor:"pointer", color:u.is_active?"#f87171":"#4ade80", display:"flex", alignItems:"center", justifyContent:"center", opacity:toggling[u.id]?0.5:1 }}>
                             {u.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
                           </button>
                         </div>
