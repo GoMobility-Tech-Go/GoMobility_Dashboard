@@ -8,6 +8,7 @@ import CityManagementPage from "../pages/city-management/CityManagementPage";
 import PricingEnginePage from "../pages/pricing-engine/PricingEnginePage";
 import DriverOnboardingPage from "../pages/driver-onboarding/DriverOnboardingPage";
 import DriverDetailPage from "../pages/driver-onboarding/DriverDetailPage";
+import PassengerOnboardingPage from "../pages/passenger-onboarding/PassengerOnboardingPage";
 import RideMonitoringPage from "../pages/ride-monitoring/RideMonitoringPage";
 import ComplaintsSupportPage from "../pages/complaints-support/ComplaintsSupportPage";
 import DriverIncentivesPage from "../pages/driver-incentives/DriverIncentivesPage";
@@ -40,6 +41,7 @@ const routes = [
         { path:"users", element:<UsersPage/> },
         { path:"driver-onboarding", element:<DriverOnboardingPage/> },
         { path:"driver-onboarding/:driverId", element:<DriverDetailPage/> },
+        { path:"passenger-onboarding", element:<PassengerOnboardingPage/> },
         { path:"ride-monitoring", element:<RideMonitoringPage/> },
         { path:"finance", element:<FinancePage/> },
         { path:"refunds", element:<RefundsPage/> },

@@ -19,7 +19,8 @@ const ADMIN_MENU = [
   ]},
   { label:"Management", items:[
     { label:"Users",              to:"/users",                icon:Users       },
-    { label:"Driver Onboarding",  to:"/driver-onboarding",   icon:UserPlus    },
+    { label:"Driver Onboarding",   to:"/driver-onboarding",    icon:UserPlus    },
+    { label:"Passenger Onboarding",to:"/passenger-onboarding",icon:Users       },
     { label:"Ride Monitoring",    to:"/ride-monitoring",      icon:MapPin      },
   ]},
   { label:"Finance", items:[
