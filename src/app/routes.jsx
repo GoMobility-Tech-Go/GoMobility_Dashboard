@@ -28,6 +28,10 @@ import RevenueAnalyticsPage from "../pages/revenue-analytics/RevenueAnalyticsPag
 import TaxReportsPage from "../pages/tax-reports/TaxReportsPage";
 import EmergencySafetyPage from "../pages/emergency-safety/EmergencySafetyPage";
 import DriverTiersPage from "../pages/driver-tiers/DriverTiersPage";
+import ZonesListPage from "../pages/zones/ZonesListPage";
+import ZonesMapPage from "../pages/zones/ZonesMapPage";
+import ZoneEditorPage from "../pages/zones/ZoneEditorPage";
+import ZoneAnalyticsPage from "../pages/zones/ZoneAnalyticsPage";
 
 const routes = [
   { path:"/signup", element:<SignupPage/> },
@@ -66,6 +70,11 @@ const routes = [
             { path:"fraud-detection", element:<FraudDetectionPage/> },
             { path:"promo-codes", element:<PromoCodesPage/> },
             { path:"roles-access", element:<RolesAccessPage/> },
+            // ── Special Zones ──────────────────────────────────────
+            { path:"zones",              element:<ZonesListPage/>     },
+            { path:"zones/map",          element:<ZonesMapPage/>      },
+            { path:"zones/analytics",    element:<ZoneAnalyticsPage/> },
+            { path:"zones/:id",          element:<ZoneEditorPage/>    },
           ]
         },
       ]

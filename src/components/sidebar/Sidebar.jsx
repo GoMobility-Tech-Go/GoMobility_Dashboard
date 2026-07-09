@@ -4,7 +4,7 @@ import {
   UserPlus, SlidersHorizontal, ShieldCheck, ScrollText, ShieldAlert, LogOut,
   ChevronLeft, ChevronRight, Menu, X, Crown, Megaphone, AlertTriangle,
   Smartphone, Trophy, MessageCircle, Activity, Target, UserCog, Lock,
-  BarChart2, Receipt, Map, CheckCheck
+  BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -55,6 +55,11 @@ const SA_EXTRA = [
     { label:"Fraud Detection",    to:"/fraud-detection",      icon:ShieldAlert },
     { label:"Promo Codes",        to:"/promo-codes",          icon:Gift        },
     { label:"Roles & Access",     to:"/roles-access",         icon:ShieldCheck },
+  ]},
+  { label:"Special Zones", items:[
+    { label:"Zones",              to:"/zones",                icon:Hexagon     },
+    { label:"Zones Map",          to:"/zones/map",            icon:Map         },
+    { label:"Zone Analytics",     to:"/zones/analytics",      icon:PieChart    },
   ]},
 ];
 
