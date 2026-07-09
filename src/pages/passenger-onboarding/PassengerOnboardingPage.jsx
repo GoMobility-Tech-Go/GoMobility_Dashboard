@@ -229,7 +229,7 @@ const LIMIT = 10;
 export default function PassengerOnboardingPage() {
 
   // ── Period state (controls BOTH cards AND table) ──────────────────────
-  const [period, setPeriod]       = useState('month');
+  const [period, setPeriod]       = useState('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo,   setCustomTo]   = useState('');
 
@@ -250,11 +250,12 @@ export default function PassengerOnboardingPage() {
   // ── Stats — ALL 4 cards use the period filter ─────────────────────────
   const [stats, setStats]           = useState({ signups: 0, active: 0, inactive: 0, allTime: 0 });
   const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError,   setStatsError]   = useState(null);
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
+    setStatsError(null);
     try {
-      // Single API call → one SQL query, no rate limit hit
       const res = await getPassengerStats(
         periodDates.from || undefined,
         periodDates.to   || undefined,
@@ -266,7 +267,10 @@ export default function PassengerOnboardingPage() {
         inactive: d.inactive_in_period ?? 0,
         allTime:  d.total_all_time     ?? 0,
       });
-    } catch (e) { console.error('[PassengerStats]', e); }
+    } catch (e) {
+      console.error('[PassengerStats]', e);
+      setStatsError(e?.response?.status === 404 ? 'Stats endpoint not found (404) — backend may need restart' : `Failed to load stats: ${e?.response?.status || 'Network error'}`);
+    }
     setStatsLoading(false);
   }, [periodDates]);
 
@@ -401,6 +405,14 @@ export default function PassengerOnboardingPage() {
           <RefreshCw size={13} />
         </button>
       </div>
+
+      {/* ── Stats error banner ─────────────────────────────────────────── */}
+      {statsError && (
+        <div style={{ marginBottom: 16, padding: '10px 16px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontWeight: 700 }}>Stats Error:</span> {statsError}
+          <button onClick={loadStats} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 6, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', cursor: 'pointer', fontSize: 11, fontFamily: FONT_UI }}>Retry</button>
+        </div>
+      )}
 
       {/* ── 4 Stat cards — ALL respond to period filter ─────────────────── */}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
