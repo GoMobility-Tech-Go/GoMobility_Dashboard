@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, Phone, Mail, Clock,
   Shield, RefreshCw, Calendar, Activity, Eye,
 } from 'lucide-react';
-import { getUsers, getUserById, updateUserStatus } from '../../api/admin';
+import { getUsers, getUserById, updateUserStatus, getPassengerStats } from '../../api/admin';
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
 const PERIODS = [
@@ -254,27 +254,17 @@ export default function PassengerOnboardingPage() {
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     try {
-      // Date params applied to 3 cards; allTime card never has date filter
-      const dp = {};
-      if (periodDates.from) dp.joined_from = periodDates.from;
-      if (periodDates.to)   dp.joined_to   = periodDates.to;
-
-      const [signupRes, activeRes, inactiveRes, allTimeRes] = await Promise.all([
-        // Signups in period (any status)
-        getUsers({ role: 'passenger', limit: 1, ...dp }),
-        // Active in period
-        getUsers({ role: 'passenger', status: 'active',   limit: 1, ...dp }),
-        // Inactive in period
-        getUsers({ role: 'passenger', status: 'inactive', limit: 1, ...dp }),
-        // All-time total (never filtered)
-        getUsers({ role: 'passenger', limit: 1 }),
-      ]);
-
+      // Single API call → one SQL query, no rate limit hit
+      const res = await getPassengerStats(
+        periodDates.from || undefined,
+        periodDates.to   || undefined,
+      );
+      const d = res.data?.data ?? {};
       setStats({
-        signups:  signupRes.data?.data?.pagination?.total  ?? 0,
-        active:   activeRes.data?.data?.pagination?.total  ?? 0,
-        inactive: inactiveRes.data?.data?.pagination?.total ?? 0,
-        allTime:  allTimeRes.data?.data?.pagination?.total  ?? 0,
+        signups:  d.signups_in_period  ?? 0,
+        active:   d.active_in_period   ?? 0,
+        inactive: d.inactive_in_period ?? 0,
+        allTime:  d.total_all_time     ?? 0,
       });
     } catch (e) { console.error('[PassengerStats]', e); }
     setStatsLoading(false);

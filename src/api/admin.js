@@ -144,6 +144,14 @@ export const grantReferralBonus = (data) => api.post('/wallet/referral-bonus', d
 // ── Support Categories ────────────────────────────────────────────────────────
 export const getSupportCategories = () => api.get('/support/categories');
 
+// ── Passengers ────────────────────────────────────────────────────────────────
+export const getPassengerStats = (from, to) => {
+  const params = {};
+  if (from) params.from = from;
+  if (to)   params.to   = to;
+  return api.get('/admin/passengers/stats', { params });
+};
+
 // ── Cities ────────────────────────────────────────────────────────────────────
 export const getCities              = ()                              => api.get('/admin/cities');
 export const getCityDetail          = (id)                            => api.get(`/admin/cities/${id}`);
