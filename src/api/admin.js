@@ -30,7 +30,9 @@ export const getTransactions = (params = {}) =>
   api.get('/admin/transactions', { params: { limit: 20, offset: 0, ...params } });
 
 // ── Refunds ───────────────────────────────────────────────────────────────────
-export const issueRefund = (data) => api.post('/wallet/refund', data);
+// Unified endpoint (2026-07-12) — replaces old /wallet/refund, /wallet/referral-bonus, /payments/refund.
+// See docs/18_REFUNDS_API_MIGRATION.md for the full contract.
+export const createRefund = (data) => api.post('/admin/refunds', data);
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
 export const getPricingVehicles = () => api.get('/admin/pricing/vehicles');
@@ -134,12 +136,6 @@ export const getAdminNotifications = (params = {}) =>
 export const getUnreadNotifCount = () => api.get('/notifications/unread-count');
 export const markNotifRead = (id) => api.patch(`/notifications/${id}/read`);
 export const markAllNotifRead = () => api.patch('/notifications/read-all');
-
-// ── Payment Gateway Refund ────────────────────────────────────────────────────
-export const initiatePaymentRefund = (data) => api.post('/payments/refund', data);
-
-// ── Referral Bonus Grant ──────────────────────────────────────────────────────
-export const grantReferralBonus = (data) => api.post('/wallet/referral-bonus', data);
 
 // ── Support Categories ────────────────────────────────────────────────────────
 export const getSupportCategories = () => api.get('/support/categories');
