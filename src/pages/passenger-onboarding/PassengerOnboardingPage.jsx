@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Users, UserCheck, UserX, UserPlus, Search, X,
+  Users, UserCheck, UserX, UserPlus, X,
   ChevronLeft, ChevronRight, Phone, Mail, Clock,
   Shield, RefreshCw, Calendar, Activity, Eye, EyeOff,
   Filter as FilterIcon,
