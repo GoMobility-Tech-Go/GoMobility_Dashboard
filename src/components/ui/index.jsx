@@ -119,16 +119,59 @@ export function SearchBox({ placeholder, value, onChange }) {
 }
 
 // ── PAGINATION ────────────────────────────────────────────────────────────────
-export function Pagination({ page, total, perPage, onChange }) {
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const from = total === 0 ? 0 : (page - 1) * perPage + 1;
-  const to   = Math.min(page * perPage, total);
+// Two APIs supported:
+//   1. Legacy (backward compat): { page, total, perPage, onChange(pageNum) }
+//   2. Backend-native:           { pagination, onOffsetChange(newOffset) }
+//      where `pagination` is the shape returned by /admin/* endpoints:
+//      { total, limit, offset, currentPage, totalPages, hasMore, hasPrevious, nextOffset, prevOffset }
+export function Pagination({ page, total, perPage, onChange, pagination, onOffsetChange }) {
+  // Resolve source of truth — prefer backend-provided pagination object
+  const p = pagination
+    ? {
+        currentPage: pagination.currentPage,
+        totalPages:  Math.max(1, pagination.totalPages || 1),
+        total:       pagination.total,
+        limit:       pagination.limit,
+        offset:      pagination.offset,
+        hasMore:     pagination.hasMore,
+        hasPrevious: pagination.hasPrevious,
+        nextOffset:  pagination.nextOffset,
+        prevOffset:  pagination.prevOffset,
+      }
+    : {
+        currentPage: page,
+        totalPages:  Math.max(1, Math.ceil(total / perPage)),
+        total,
+        limit:       perPage,
+        offset:      (page - 1) * perPage,
+        hasMore:     page * perPage < total,
+        hasPrevious: page > 1,
+        nextOffset:  page * perPage < total ? page * perPage : null,
+        prevOffset:  page > 1 ? (page - 2) * perPage : null,
+      };
 
-  const pages = (() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    if (page <= 4)              return [1, 2, 3, 4, 5, "…", totalPages];
-    if (page >= totalPages - 3) return [1, "…", totalPages-4, totalPages-3, totalPages-2, totalPages-1, totalPages];
-    return [1, "…", page - 1, page, page + 1, "…", totalPages];
+  const from = p.total === 0 ? 0 : p.offset + 1;
+  const to   = Math.min(p.offset + p.limit, p.total);
+
+  // Jump-to-page helper: uses backend-echoed limit to compute offset
+  const goToPage = (n) => {
+    if (n < 1 || n > p.totalPages || n === p.currentPage) return;
+    const newOffset = (n - 1) * p.limit;
+    if (onOffsetChange) onOffsetChange(newOffset);
+    else if (onChange)  onChange(n);
+  };
+  const goToOffset = (off) => {
+    if (off == null) return;
+    if (onOffsetChange) onOffsetChange(off);
+    else if (onChange)  onChange(Math.floor(off / p.limit) + 1);
+  };
+
+  const pagesList = (() => {
+    const t = p.totalPages, c = p.currentPage;
+    if (t <= 7) return Array.from({ length: t }, (_, i) => i + 1);
+    if (c <= 4)     return [1, 2, 3, 4, 5, "…", t];
+    if (c >= t - 3) return [1, "…", t-4, t-3, t-2, t-1, t];
+    return [1, "…", c - 1, c, c + 1, "…", t];
   })();
 
   const btn = (active, disabled) => ({
@@ -145,16 +188,16 @@ export function Pagination({ page, total, perPage, onChange }) {
   return (
     <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,width:"100%" }}>
       <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",fontFamily:"Outfit,sans-serif" }}>
-        {total > 0 ? `Showing ${from}–${to} of ${total}` : "No results"}
+        {p.total > 0 ? `Showing ${from}–${to} of ${p.total.toLocaleString("en-IN")}` : "No results"}
       </span>
       <div style={{ display:"flex",gap:4,alignItems:"center" }}>
-        <button style={btn(false, page===1)} disabled={page===1} onClick={()=>onChange(page-1)}>‹</button>
-        {pages.map((p, i) =>
-          p === "…"
+        <button style={btn(false, !p.hasPrevious)} disabled={!p.hasPrevious} onClick={() => goToOffset(p.prevOffset)}>‹</button>
+        {pagesList.map((n, i) =>
+          n === "…"
             ? <span key={`e${i}`} style={{ color:"rgba(255,255,255,0.25)",fontSize:13,padding:"0 3px",userSelect:"none" }}>…</span>
-            : <button key={p} style={btn(p===page, false)} onClick={()=>onChange(p)}>{p}</button>
+            : <button key={n} style={btn(n === p.currentPage, false)} onClick={() => goToPage(n)}>{n}</button>
         )}
-        <button style={btn(false, page===totalPages)} disabled={page===totalPages} onClick={()=>onChange(page+1)}>›</button>
+        <button style={btn(false, !p.hasMore)} disabled={!p.hasMore} onClick={() => goToOffset(p.nextOffset)}>›</button>
       </div>
     </div>
   );
