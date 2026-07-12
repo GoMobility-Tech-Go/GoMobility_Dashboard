@@ -86,19 +86,15 @@ const EMPTY = {
   notes:"", notify_user:true,
 };
 
-/* ─── Regex helpers ───────────────────────────────────────────────────────── */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const GOID_RE = /^GO-[A-Z]-\d+$/i;
-
 /* ─── Client-side validation (spec §8) ────────────────────────────────────── */
+// Note: GO-ID format is not regex-checked on the frontend — real IDs vary
+// (GO-P-001234, GO-D-42, GO-DRV-29, GO-PSGR-9 etc.). Backend does the actual
+// UUID/GO-ID lookup and will return 400/404 for a truly bad ref.
 function validateForm(form, type) {
   const errors = [];
   const T = TYPES[type];
 
-  if (!form.user_ref) errors.push("User ref is required");
-  else if (!UUID_RE.test(form.user_ref) && !GOID_RE.test(form.user_ref)) {
-    errors.push("User ref must be UUID or GO-ID (e.g. GO-P-000123)");
-  }
+  if (!form.user_ref || !form.user_ref.trim()) errors.push("User ref is required");
 
   if (T.needsRide && !form.ride_id) errors.push("Ride ID is required for this refund type");
   if (T.needsSubscription && !form.subscription_id) errors.push("Subscription ID is required");
