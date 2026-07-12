@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, ShieldCheck, ShieldX, UserCheck, UserX,
-  X, FileCheck, FileX, AlertTriangle, Eye, Car, Star, MapPin, Phone,
+  ShieldCheck, ShieldX, UserCheck, UserX,
+  X, FileCheck, FileX, AlertTriangle, Eye, EyeOff, Car, Star, MapPin, Phone,
   CheckCircle, Clock, XCircle, RefreshCw, ExternalLink, User, Wallet,
-  CreditCard, Calendar
+  CreditCard, Calendar, Filter as FilterIcon,
 } from "lucide-react";
 import { Pagination } from "../../components/ui/index.jsx";
 import {
@@ -12,6 +12,32 @@ import {
   approveDocument, rejectDocument, getFraudAlerts, suspendDriver,
   getKycDocument, getDriverById, getDriverKycStatus
 } from "../../api/admin";
+import {
+  FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
+} from "../../components/filters/index.jsx";
+
+/* ─── Driver filter meta (spec §5.1) ──────────────────────────────────────── */
+const DRIVER_FIELDS = [
+  { key:"name",         label:"Name",       type:"text" },
+  { key:"phone",        label:"Phone",      type:"text" },
+  { key:"email",        label:"Email",      type:"text" },
+  { key:"go_id",        label:"GO ID",      type:"text" },
+  { key:"is_available", label:"Online",     type:"bool" },
+  { key:"is_on_duty",   label:"On Duty",    type:"bool" },
+  { key:"is_verified",  label:"KYC",        type:"bool" },
+  { key:"is_test_user", label:"Test",       type:"bool" },
+  { key:"rating",       label:"Rating",     type:"number", minValue:0, maxValue:5 },
+  { key:"rides",        label:"Rides",      type:"number", minValue:0 },
+  { key:"earnings",     label:"Earnings",   type:"number", minValue:0 },
+  { key:"joined",       label:"Joined",     type:"date" },
+  { key:"last_login",   label:"Last Login", type:"date" },
+];
+
+const DRIVER_SORT_COLS = {
+  name:"full_name", phone:"phone_number", email:"email",
+  rating:"rating", rides:"total_rides", earnings:"total_earnings",
+  joined:"created_at", last_login:"last_login",
+};
 
 const fmtDate = (d) => d
   ? new Date(d).toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" })
@@ -645,14 +671,20 @@ export default function DriverOnboardingPage() {
   const navigate = useNavigate();
   const [tab, setTab]           = useState("Drivers");
   const [drivers, setDrivers]   = useState([]);
-  const [total, setTotal]       = useState(0);
+  const [pagination, setPagination] = useState(null);
   const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState("");
-  const [status, setStatus]     = useState("");
-  const [verified, setVerified] = useState("");
+  const [filters, setFilters]   = useState({});
+  const [sort, setSort]         = useState({ col:null, dir:"desc" });
+  const [includeInactive,          setIncludeInactive]         = useState(false);
+  const [includeUnverifiedUsers,   setIncludeUnverifiedUsers]  = useState(false);
+  const [includeUnverifiedDrivers, setIncludeUnverifiedDrivers]= useState(false);
   const [offset, setOffset]     = useState(0);
   const [toast, setToast]       = useState(null);
   const [acting, setActing]     = useState({});
+
+  const setFilter    = (key, next) => { setFilters(p => ({ ...p, [key]: next })); setOffset(0); };
+  const clearFilter  = (key)       => { setFilters(p => { const n = { ...p }; delete n[key]; return n; }); setOffset(0); };
+  const clearAllFilters = ()       => { setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" }); };
 
   // Modals
   const [suspendTarget, setSuspendTarget]   = useState(null);
@@ -675,19 +707,37 @@ export default function DriverOnboardingPage() {
 
   const loadDrivers = useCallback(() => {
     setLoading(true);
-    const params = { limit:LIMIT, offset };
-    if (search)        params.search      = search;
-    if (status)        params.status      = status;
-    if (verified !== "") params.is_verified = verified;
+    const params = { limit:LIMIT, offset, ...buildFilterParams(filters, DRIVER_FIELDS) };
+    if (includeInactive)          params.include_inactive           = "true";
+    if (includeUnverifiedUsers)   params.include_unverified_users   = "true";
+    if (includeUnverifiedDrivers) params.include_unverified_drivers = "true";
+    if (sort.col && DRIVER_SORT_COLS[sort.col]) {
+      params.sort_by  = DRIVER_SORT_COLS[sort.col];
+      params.sort_dir = sort.dir;
+    }
     getDrivers(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
         setDrivers(d.drivers || d.items || d.data || []);
-        setTotal(d.pagination?.total || d.total || 0);
+        setPagination(d.pagination || null);
       })
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
-  }, [search, status, verified, offset]);
+  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers]);
+
+  const activeDriverFilters = useMemo(() => Object.entries(filters)
+    .filter(([k, f]) => {
+      const meta = DRIVER_FIELDS.find(m => m.key === k);
+      return meta && isFilterActive(f, meta.type);
+    })
+    .map(([k, f]) => ({ key:k, filter:f, meta: DRIVER_FIELDS.find(m => m.key === k) })),
+    [filters]);
+
+  const toggleDriverSort = (col) => {
+    if (!DRIVER_SORT_COLS[col]) return;
+    setSort(s => s.col === col ? (s.dir === "asc" ? { col, dir:"desc" } : { col:null, dir:"desc" }) : { col, dir:"asc" });
+  };
+  const fMeta = (k) => DRIVER_FIELDS.find(m => m.key === k);
 
   const loadKyc = useCallback(() => {
     setKycLoading(true);
@@ -752,8 +802,8 @@ export default function DriverOnboardingPage() {
     finally { setActing(p => ({...p,[docId]:false})); }
   };
 
-  const totalPages = Math.ceil(total / LIMIT);
-  const currentPage = Math.floor(offset / LIMIT) + 1;
+  const total      = pagination?.total      ?? 0;
+  const totalPages = pagination?.totalPages ?? 1;
 
   const TH = ({ c }) => <th style={{ padding:"12px 16px", textAlign:"left", fontSize:11, fontWeight:700, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", borderBottom:"1px solid rgba(212,175,55,0.1)", whiteSpace:"nowrap" }}>{c}</th>;
   const TD = ({ children, style }) => <td style={{ padding:"13px 16px", fontSize:13, color:"rgba(255,255,255,0.8)", borderBottom:"1px solid rgba(255,255,255,0.04)", verticalAlign:"middle", ...style }}>{children}</td>;
@@ -805,38 +855,100 @@ export default function DriverOnboardingPage() {
       {/* ── DRIVERS TAB ── */}
       {tab === "Drivers" && (
         <>
-          <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
-            <div style={{ position:"relative", flex:1, minWidth:200 }}>
-              <Search size={14} color="rgba(255,255,255,0.3)" style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)" }} />
-              <input value={search} onChange={(e)=>{setSearch(e.target.value);setOffset(0);}} placeholder="Search name or phone…" style={{ width:"100%", height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, paddingLeft:36, paddingRight:12, color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }} />
-            </div>
-            {[
-              { val:status,   set:(v)=>{setStatus(v);setOffset(0);},   opts:[["","All Status"],["online","Online"],["offline","Offline"]] },
-              { val:verified, set:(v)=>{setVerified(v);setOffset(0);}, opts:[["","All"],["true","Verified"],["false","Unverified"]] },
-            ].map(({ val, set, opts }, i) => (
-              <select key={i} value={val} onChange={(e)=>set(e.target.value)} style={{ height:40, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"0 14px", color:"rgba(255,255,255,0.8)", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", cursor:"pointer" }}>
-                {opts.map(([v,l])=><option key={v} value={v} style={{ background:"#020617" }}>{l}</option>)}
-              </select>
-            ))}
+          {/* Visibility toggles + reset */}
+          <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+            <DrvVisibilityToggle active={includeInactive}          onToggle={() => { setIncludeInactive(v=>!v); setOffset(0); }}          label="Blocked" />
+            <DrvVisibilityToggle active={includeUnverifiedUsers}   onToggle={() => { setIncludeUnverifiedUsers(v=>!v); setOffset(0); }}   label="OTP-Unverified" />
+            <DrvVisibilityToggle active={includeUnverifiedDrivers} onToggle={() => { setIncludeUnverifiedDrivers(v=>!v); setOffset(0); }} label="KYC-Incomplete" />
+            <button onClick={loadDrivers} title="Refresh" style={{
+              width:32, height:32, borderRadius:8,
+              background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)",
+              color:"rgba(255,255,255,0.65)", cursor:"pointer",
+              display:"flex", alignItems:"center", justifyContent:"center",
+            }}>
+              <RefreshCw size={13} />
+            </button>
+            {(activeDriverFilters.length > 0 || sort.col) && (
+              <button onClick={clearAllFilters} style={{
+                display:"flex", alignItems:"center", gap:6, height:32, padding:"0 14px",
+                background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)",
+                borderRadius:8, color:"#f87171", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif",
+                marginLeft:"auto",
+              }}>
+                <X size={12}/> Clear all
+              </button>
+            )}
           </div>
 
-          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
-            <div style={{ overflowX:"auto" }}>
+          {/* Active filter chips */}
+          {activeDriverFilters.length > 0 && (
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14, alignItems:"center" }}>
+              <FilterIcon size={13} color="#D4AF37" style={{ marginRight:2 }} />
+              {activeDriverFilters.map(({ key, filter, meta }) => (
+                <FilterChip
+                  key={key}
+                  label={meta.label}
+                  opLabel={OP_LABELS[filter.op] || filter.op}
+                  valueLabel={formatChipValue(filter, meta)}
+                  onRemove={() => clearFilter(key)}
+                />
+              ))}
+            </div>
+          )}
+
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"visible" }}>
+            <div style={{ overflowX:"auto", overflowY:"visible" }}>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                <thead><tr>
-                  {["Driver","Phone","Vehicle","Rating","Status","KYC","Joined","Actions"].map((c)=><TH key={c} c={c}/>)}
-                </tr></thead>
+                <thead>
+                  <tr>
+                    <th style={drvTh(sort.col==="name")}  onClick={()=>toggleDriverSort("name")}>
+                      <FilterHead label="Driver" meta={fMeta("name")} filter={filters.name}
+                        onChange={v => setFilter("name", v)} onClear={() => clearFilter("name")} />
+                    </th>
+                    <th style={drvTh(sort.col==="phone")} onClick={()=>toggleDriverSort("phone")}>
+                      <FilterHead label="Phone" meta={fMeta("phone")} filter={filters.phone}
+                        onChange={v => setFilter("phone", v)} onClear={() => clearFilter("phone")} />
+                    </th>
+                    <th style={drvTh(false)}>Vehicle</th>
+                    <th style={drvTh(sort.col==="rating")} onClick={()=>toggleDriverSort("rating")}>
+                      <FilterHead label="Rating" meta={fMeta("rating")} filter={filters.rating}
+                        onChange={v => setFilter("rating", v)} onClear={() => clearFilter("rating")} />
+                    </th>
+                    <th style={drvTh(false)}>
+                      <FilterHead label="Status" meta={fMeta("is_available")} filter={filters.is_available}
+                        onChange={v => setFilter("is_available", v)} onClear={() => clearFilter("is_available")} />
+                    </th>
+                    <th style={drvTh(false)}>
+                      <FilterHead label="KYC" meta={fMeta("is_verified")} filter={filters.is_verified}
+                        onChange={v => setFilter("is_verified", v)} onClear={() => clearFilter("is_verified")} />
+                    </th>
+                    <th style={drvTh(sort.col==="rides")} onClick={()=>toggleDriverSort("rides")}>
+                      <FilterHead label="Rides" meta={fMeta("rides")} filter={filters.rides}
+                        onChange={v => setFilter("rides", v)} onClear={() => clearFilter("rides")} />
+                    </th>
+                    <th style={drvTh(sort.col==="earnings")} onClick={()=>toggleDriverSort("earnings")}>
+                      <FilterHead label="Earnings" meta={fMeta("earnings")} filter={filters.earnings}
+                        onChange={v => setFilter("earnings", v)} onClear={() => clearFilter("earnings")} align="right" />
+                    </th>
+                    <th style={drvTh(sort.col==="joined")} onClick={()=>toggleDriverSort("joined")}>
+                      <FilterHead label="Joined" meta={fMeta("joined")} filter={filters.joined}
+                        onChange={v => setFilter("joined", v)} onClear={() => clearFilter("joined")} align="right" />
+                    </th>
+                    <th style={{ ...drvTh(false), cursor:"default" }}>Actions</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {loading
                     ? Array(6).fill(0).map((_,i)=>(
-                        <tr key={i}><td colSpan={8}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
+                        <tr key={i}><td colSpan={10}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
                       ))
                     : drivers.length === 0
-                      ? <tr><td colSpan={8} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers found</td></tr>
+                      ? <tr><td colSpan={10} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers match these filters</td></tr>
                       : drivers.map((d) => {
                           const isSuspended = d.is_suspended || d.suspended;
                           const userId = d.user_id || d.userId;
                           const isVerified = !!(d.is_verified || d.verified_at);
+                          const vt = Array.isArray(d.vehicle_type) ? d.vehicle_type.join(", ") : (d.vehicle_type || d.vehicleType);
                           return (
                             <tr key={d.id} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
                               <TD>
@@ -847,21 +959,28 @@ export default function DriverOnboardingPage() {
                                       : <User size={14} color="rgba(212,175,55,0.5)"/>
                                     }
                                   </div>
-                                  <div style={{ fontWeight:600, color:"#fff" }}>{d.full_name || d.name || "—"}</div>
+                                  <div>
+                                    <div style={{ fontWeight:600, color:"#fff" }}>{d.full_name || d.name || "—"}</div>
+                                    {d.go_id && <div style={{ fontSize:10.5, color:"rgba(255,255,255,0.35)", fontFamily:"monospace", marginTop:2 }}>{d.go_id}</div>}
+                                  </div>
                                 </div>
                               </TD>
                               <TD style={{ fontFamily:"monospace", fontSize:12 }}>{d.phone_number || "—"}</TD>
                               <TD>
-                                <div style={{ fontSize:12 }}><span style={{ color:"rgba(255,255,255,0.6)", textTransform:"capitalize" }}>{d.vehicle_type||d.vehicleType||"—"}</span></div>
+                                <div style={{ fontSize:12 }}><span style={{ color:"rgba(255,255,255,0.6)", textTransform:"capitalize" }}>{vt || "—"}</span></div>
                                 {(d.vehicle_number||d.vehicleNumber) && <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginTop:2 }}>{d.vehicle_number||d.vehicleNumber}</div>}
                               </TD>
                               <TD><span style={{ color:"#f59e0b", fontWeight:600 }}>{d.rating ? `${parseFloat(d.rating).toFixed(1)}★` : "—"}</span></TD>
                               <TD>
                                 {isSuspended
                                   ? <Badge label="Suspended" color="#f59e0b" bg="rgba(245,158,11,0.1)" border="rgba(245,158,11,0.3)" />
-                                  : d.is_active
-                                    ? <Badge label="Active" color="#4ade80" bg="rgba(34,197,94,0.12)" border="rgba(34,197,94,0.3)" />
-                                    : <Badge label="Blocked" color="#f87171" bg="rgba(239,68,68,0.12)" border="rgba(239,68,68,0.3)" />
+                                  : !d.is_active
+                                    ? <Badge label="Blocked" color="#f87171" bg="rgba(239,68,68,0.12)" border="rgba(239,68,68,0.3)" />
+                                    : d.is_on_duty
+                                      ? <Badge label="On Ride"  color="#60a5fa" bg="rgba(59,130,246,0.12)" border="rgba(59,130,246,0.3)" />
+                                      : d.is_available
+                                        ? <Badge label="Online" color="#4ade80" bg="rgba(34,197,94,0.12)" border="rgba(34,197,94,0.3)" />
+                                        : <Badge label="Offline" color="rgba(255,255,255,0.6)" bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.1)" />
                                 }
                               </TD>
                               <TD>
@@ -869,6 +988,10 @@ export default function DriverOnboardingPage() {
                                   ? <Badge label="Verified" color="#D4AF37" bg="rgba(212,175,55,0.12)" border="rgba(212,175,55,0.3)" />
                                   : <Badge label="Pending" color="#f59e0b" bg="rgba(245,158,11,0.08)" border="rgba(245,158,11,0.2)" />
                                 }
+                              </TD>
+                              <TD style={{ fontSize:12, fontVariantNumeric:"tabular-nums" }}>{fmtNum(d.total_rides)}</TD>
+                              <TD style={{ fontSize:12, fontVariantNumeric:"tabular-nums", color:"#4ade80" }}>
+                                {d.total_earnings != null ? "₹" + new Intl.NumberFormat("en-IN").format(d.total_earnings) : "—"}
                               </TD>
                               <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDate(d.created_at)}</TD>
                               <TD>
@@ -907,7 +1030,7 @@ export default function DriverOnboardingPage() {
             </div>
             {totalPages > 1 && (
               <div style={{ padding:"14px 20px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
-                <Pagination page={currentPage} total={total} perPage={LIMIT} onChange={(p) => setOffset((p-1)*LIMIT)} />
+                <Pagination pagination={pagination} onOffsetChange={setOffset} />
               </div>
             )}
           </div>
@@ -1071,5 +1194,33 @@ export default function DriverOnboardingPage() {
         </>
       )}
     </div>
+  );
+}
+
+/* ─── Helpers for Drivers-tab UI ──────────────────────────────────────────── */
+function drvTh(isSorted) {
+  return {
+    padding:"11px 14px", textAlign:"left", fontSize:11, fontWeight:700,
+    color: isSorted ? "#D4AF37" : "rgba(212,175,55,0.75)",
+    letterSpacing:"1px", textTransform:"uppercase",
+    borderBottom:"1px solid rgba(212,175,55,0.1)",
+    whiteSpace:"nowrap", userSelect:"none", cursor:"pointer",
+    background:"rgba(0,0,0,0.15)",
+  };
+}
+
+function DrvVisibilityToggle({ active, onToggle, label }) {
+  return (
+    <button onClick={onToggle} title={active ? `Hide ${label.toLowerCase()}` : `Include ${label.toLowerCase()}`} style={{
+      display:"flex", alignItems:"center", gap:6, height:32, padding:"0 12px",
+      background: active ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.04)",
+      border:`1px solid ${active ? "#D4AF37" : "rgba(255,255,255,0.1)"}`,
+      borderRadius:8, cursor:"pointer",
+      color: active ? "#D4AF37" : "rgba(255,255,255,0.55)",
+      fontSize:11.5, fontFamily:"Outfit,sans-serif", fontWeight:600, whiteSpace:"nowrap",
+    }}>
+      {active ? <Eye size={12}/> : <EyeOff size={12}/>}
+      Include {label}
+    </button>
   );
 }

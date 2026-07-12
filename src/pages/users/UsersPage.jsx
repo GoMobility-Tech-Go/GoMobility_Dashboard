@@ -1,22 +1,42 @@
-import { useState, useEffect, useCallback } from "react";
-import { UserCheck, UserX, Eye, X, Wallet, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { UserCheck, UserX, Eye, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, Filter as FilterIcon, EyeOff } from "lucide-react";
 import { getUsers, updateUserStatus, getUserById } from "../../api/admin";
 import { Pagination } from "../../components/ui/index.jsx";
+import {
+  FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
+} from "../../components/filters/index.jsx";
 
+/* ─── Fmt helpers ─────────────────────────────────────────────────────────── */
 const fmtDate     = (d) => d ? new Date(d).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—";
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "—";
 const fmtRupee    = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").format(n) : "—";
 
-const ISTR = {
-  width:"100%", height:26, background:"rgba(255,255,255,0.04)",
-  border:"1px solid rgba(212,175,55,0.12)", borderRadius:6,
-  padding:"0 8px", color:"#fff", fontSize:11, outline:"none",
-  fontFamily:"Outfit,sans-serif", boxSizing:"border-box",
-};
-const ISEL = { ...ISTR, cursor:"pointer" };
-const IDATE = { ...ISTR, colorScheme:"dark" };
-const ISEL_SM = { ...ISEL, height:22, fontSize:10, padding:"0 4px", borderRadius:4 };
+/* ─── Field metadata (spec §4.1) ──────────────────────────────────────────── */
+const FIELDS = [
+  { key:"name",        label:"Name",        type:"text" },
+  { key:"email",       label:"Email",       type:"text" },
+  { key:"phone",       label:"Phone",       type:"text" },
+  { key:"go_id",       label:"GO ID",       type:"text" },
+  { key:"role",        label:"Role",        type:"enum",
+    options:[
+      { value:"passenger",   label:"Passenger" },
+      { value:"driver",      label:"Driver" },
+      { value:"admin",       label:"Admin" },
+      { value:"super_admin", label:"Super Admin" },
+      { value:"ops_team",    label:"Ops Team" },
+    ] },
+  { key:"is_test_user",label:"Test User",   type:"bool" },
+  { key:"wallet",      label:"Wallet",      type:"number", minValue:0 },
+  { key:"joined",      label:"Joined",      type:"date" },
+  { key:"last_login",  label:"Last Login",  type:"date" },
+];
 
+const SORT_COLS = {
+  name:"full_name", email:"email", phone:"phone_number",
+  wallet:"wallet_balance", joined:"created_at", last_login:"last_login",
+};
+
+/* ─── Badges ──────────────────────────────────────────────────────────────── */
 const Badge = ({ active }) => (
   <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:600,
     background: active ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.12)",
@@ -25,17 +45,13 @@ const Badge = ({ active }) => (
     {active ? "Active" : "Inactive"}
   </span>
 );
-
-const Skeleton = () => (
-  <tr><td colSpan={10}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }} /></td></tr>
-);
-
 const RoleBadge = ({ role }) => {
   const colors = {
     driver:      { bg:"rgba(59,130,246,0.15)",  fg:"#60a5fa", bd:"rgba(59,130,246,0.3)" },
     passenger:   { bg:"rgba(168,85,247,0.15)",  fg:"#c084fc", bd:"rgba(168,85,247,0.3)" },
     super_admin: { bg:"rgba(212,175,55,0.18)",  fg:"#D4AF37", bd:"rgba(212,175,55,0.35)" },
     admin:       { bg:"rgba(212,175,55,0.15)",  fg:"#D4AF37", bd:"rgba(212,175,55,0.3)" },
+    ops_team:    { bg:"rgba(20,184,166,0.15)",  fg:"#5eead4", bd:"rgba(20,184,166,0.3)" },
   };
   const c = colors[role] || { bg:"rgba(255,255,255,0.08)", fg:"rgba(255,255,255,0.7)", bd:"rgba(255,255,255,0.15)" };
   return (
@@ -45,13 +61,16 @@ const RoleBadge = ({ role }) => {
   );
 };
 
+/* ─── Skeleton / Toast / Modal ────────────────────────────────────────────── */
+const Skeleton = () => (
+  <tr><td colSpan={10}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }} /></td></tr>
+);
 const Toast = ({ msg, type, onClose }) => (
   <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background:type==="error"?"#7f1d1d":"#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", maxWidth:360 }}>
-  <span style={{ flex:1 }}>{msg}</span>
-  <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer", padding:0 }}><X size={14}/></button>
-</div>
+    <span style={{ flex:1 }}>{msg}</span>
+    <button onClick={onClose} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.6)", cursor:"pointer", padding:0 }}><X size={14}/></button>
+  </div>
 );
-
 const UserModal = ({ user, onClose }) => {
   if (!user) return null;
   return (
@@ -72,6 +91,7 @@ const UserModal = ({ user, onClose }) => {
             ["Balance",    fmtRupee(user.balance ?? user.wallet_balance)],
             ["Test User",  user.is_test_user ? "Yes" : "No"],
             ["Status",     user.is_active ? "Active" : "Inactive"],
+            ["Verified",   user.is_verified ? "Yes" : "No"],
             ["Last Login", fmtDateTime(user.last_login)],
             ["Joined",     fmtDateTime(user.created_at)],
           ].map(([l,v]) => (
@@ -93,107 +113,54 @@ function SortIcon({ col, sort }) {
     : <ChevronDown size={11} style={{ color:"#D4AF37", flexShrink:0 }} />;
 }
 
-// Operator dropdown for text columns
-const OpSelect = ({ value, onChange }) => (
-  <select value={value} onChange={e => onChange(e.target.value)} style={ISEL_SM}>
-    <option value="contains">Contains</option>
-    <option value="not_contains">Doesn&apos;t Contain</option>
-  </select>
-);
-
-// Text filter cell: operator dropdown + input, fires on Enter
-function TextFilterCell({ value, op, onValueChange, onOpChange, placeholder }) {
-  const [draft, setDraft] = useState(value);
-
-  useEffect(() => { setDraft(value); }, [value]);
-
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-      <OpSelect value={op} onChange={onOpChange} />
-      <input
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onKeyDown={e => { if (e.key === "Enter") onValueChange(draft); }}
-        onBlur={() => { if (draft !== value) onValueChange(draft); }}
-        placeholder={placeholder}
-        style={ISTR}
-      />
-    </div>
-  );
-}
-
-const EMPTY = {
-  search:"", searchOp:"contains",
-  role:"", status:"",
-  phone:"", phoneOp:"contains",
-  email:"", emailOp:"contains",
-  isTest:"",
-  joinedFrom:"", joinedTo:"",
-  loginFrom:"", loginTo:"",
-};
+/* ─── Main page ───────────────────────────────────────────────────────────── */
+const LIMIT = 10;
 
 export default function UsersPage() {
-  const [users,    setUsers]    = useState([]);
-  const [total,    setTotal]    = useState(0);
-  const [loading,  setLoading]  = useState(true);
-  const [offset,   setOffset]   = useState(0);
+  const [users,      setUsers]      = useState([]);
+  const [pagination, setPagination] = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [offset,     setOffset]     = useState(0);
   const [toast,    setToast]    = useState(null);
   const [modal,    setModal]    = useState(null);
   const [toggling, setToggling] = useState({});
-  const [sort,     setSort]     = useState({ col:null, dir:"asc" });
-  const [f,        setF_]       = useState(EMPTY);
-  const LIMIT = 10;
+  const [sort,     setSort]     = useState({ col:null, dir:"desc" });
+  const [filters,  setFilters]  = useState({});
+  const [includeInactive,   setIncludeInactive]   = useState(false);
+  const [includeUnverified, setIncludeUnverified] = useState(false);
 
   const showToast = (msg, type="success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3500); };
 
-  // Update a filter key, reset pagination
-  const setF = (key, val) => { setF_(prev => ({ ...prev, [key]: val })); setOffset(0); };
+  const setFilter = (key, next) => { setFilters(p => ({ ...p, [key]: next })); setOffset(0); };
+  const clearFilter = (key) => { setFilters(p => { const n = { ...p }; delete n[key]; return n; }); setOffset(0); };
+  const clearAll = () => { setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" }); };
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = { limit: LIMIT, offset };
-    if (f.search)     { params.search    = f.search;    params.search_op = f.searchOp; }
-    if (f.role)         params.role      = f.role;
-    if (f.status)       params.status    = f.status;
-    if (f.phone)      { params.phone     = f.phone;     params.phone_op  = f.phoneOp; }
-    if (f.email)      { params.email     = f.email;     params.email_op  = f.emailOp; }
-    if (f.isTest)       params.is_test_user = f.isTest === "yes" ? "true" : "false";
-    if (f.joinedFrom)   params.joined_from  = f.joinedFrom;
-    if (f.joinedTo)     params.joined_to    = f.joinedTo;
-    if (f.loginFrom)    params.last_login_from = f.loginFrom;
-    if (f.loginTo)      params.last_login_to   = f.loginTo;
+    const params = { limit: LIMIT, offset, ...buildFilterParams(filters, FIELDS) };
+    if (includeInactive)   params.include_inactive   = "true";
+    if (includeUnverified) params.include_unverified = "true";
+    if (sort.col && SORT_COLS[sort.col]) {
+      params.sort_by  = SORT_COLS[sort.col];
+      params.sort_dir = sort.dir;
+    }
 
     getUsers(params)
       .then(res => {
         const d = res.data?.data || res.data || {};
-        let rows = d.users || d.items || d.data || [];
-        if (sort.col) {
-          rows = [...rows].sort((a, b) => {
-            const m = {
-              name:   [a.full_name||"",    b.full_name||""],
-              phone:  [a.phone_number||"", b.phone_number||""],
-              email:  [a.email||"",        b.email||""],
-              login:  [a.last_login||"",   b.last_login||""],
-              joined: [a.created_at||"",   b.created_at||""],
-            };
-            const [av, bv] = m[sort.col] || ["",""];
-            if (av < bv) return sort.dir === "asc" ? -1 : 1;
-            if (av > bv) return sort.dir === "asc" ?  1 : -1;
-            return 0;
-          });
-        }
-        setUsers(rows);
-        setTotal(d.pagination?.total || d.total || 0);
+        setUsers(d.users || d.items || d.data || []);
+        setPagination(d.pagination || null);
       })
       .catch(() => showToast("Failed to load users.", "error"))
       .finally(() => setLoading(false));
-  }, [f, offset, sort]);
+  }, [filters, offset, sort, includeInactive, includeUnverified]);
 
   useEffect(() => { load(); }, [load]);
 
-  const toggleSort = (col) => setSort(s => s.col === col ? { col, dir: s.dir==="asc"?"desc":"asc" } : { col, dir:"asc" });
-  const clearAll   = () => { setF_(EMPTY); setOffset(0); setSort({ col:null, dir:"asc" }); };
-  const anyFilter  = Object.entries(f).some(([k,v]) => !k.endsWith("Op") && v !== "");
+  const toggleSort = (col) => {
+    if (!SORT_COLS[col]) return;
+    setSort(s => s.col === col ? (s.dir === "asc" ? { col, dir:"desc" } : { col:null, dir:"desc" }) : { col, dir:"asc" });
+  };
 
   const toggleStatus = async (user) => {
     if (!window.confirm(`${user.is_active?"Deactivate":"Activate"} ${user.full_name||"this user"}?`)) return;
@@ -214,16 +181,25 @@ export default function UsersPage() {
     catch { showToast("Failed to load user details.", "error"); }
   };
 
-  const totalPages  = Math.ceil(total / LIMIT);
-  const currentPage = Math.floor(offset / LIMIT) + 1;
+  const total       = pagination?.total       ?? 0;
+  const totalPages  = pagination?.totalPages  ?? 1;
 
-  const thBase = { padding:"10px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", borderBottom:"1px solid rgba(212,175,55,0.1)", whiteSpace:"nowrap", cursor:"pointer", userSelect:"none", background:"rgba(0,0,0,0.15)" };
-  const thSort  = (col) => ({ ...thBase, color: sort.col===col ? "#D4AF37" : "rgba(212,175,55,0.7)" });
+  const activeFilters = useMemo(() => Object.entries(filters)
+    .filter(([k, f]) => {
+      const meta = FIELDS.find(m => m.key === k);
+      return meta && isFilterActive(f, meta.type);
+    })
+    .map(([k, f]) => ({ key:k, filter:f, meta: FIELDS.find(m => m.key === k) })),
+    [filters]);
+
+  const thBase = { padding:"11px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"rgba(212,175,55,0.75)", letterSpacing:"1px", textTransform:"uppercase", borderBottom:"1px solid rgba(212,175,55,0.1)", whiteSpace:"nowrap", userSelect:"none", background:"rgba(0,0,0,0.15)" };
+  const thSort  = (col) => ({ ...thBase, cursor:"pointer", color: sort.col===col ? "#D4AF37" : "rgba(212,175,55,0.75)" });
   const thNS    = { ...thBase, cursor:"default" };
-  const fdCell  = { padding:"5px 8px", borderBottom:"1px solid rgba(212,175,55,0.08)", background:"rgba(0,0,0,0.2)", verticalAlign:"top" };
   const TD = ({ children, style }) => (
     <td style={{ padding:"13px 12px", fontSize:13, color:"rgba(255,255,255,0.8)", borderBottom:"1px solid rgba(255,255,255,0.04)", ...style }}>{children}</td>
   );
+
+  const fMeta = (k) => FIELDS.find(m => m.key === k);
 
   return (
     <div style={{ fontFamily:"Outfit,sans-serif" }}>
@@ -237,86 +213,110 @@ export default function UsersPage() {
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       <UserModal user={modal} onClose={() => setModal(null)} />
 
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+      {/* ─── Header ─── */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:18, gap:16, flexWrap:"wrap" }}>
         <div>
           <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Users</h1>
-          <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Total: {total} users</p>
+          <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>
+            {loading ? "Loading…" : `${total.toLocaleString("en-IN")} users`}
+            {activeFilters.length > 0 && <span style={{ color:"#D4AF37" }}> · {activeFilters.length} filter{activeFilters.length>1?"s":""} active</span>}
+          </p>
         </div>
-        {anyFilter && (
-          <button onClick={clearAll} style={{ display:"flex", alignItems:"center", gap:6, height:34, padding:"0 14px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:8, color:"#f87171", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
-            <X size={12}/> Clear filters
+
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+          <VisibilityToggle
+            active={includeInactive}
+            onToggle={() => { setIncludeInactive(v => !v); setOffset(0); }}
+            label="Deactivated"
+          />
+          <VisibilityToggle
+            active={includeUnverified}
+            onToggle={() => { setIncludeUnverified(v => !v); setOffset(0); }}
+            label="Unverified"
+          />
+          <button onClick={load} title="Refresh" style={iconBtn()}>
+            <RefreshCw size={13} />
           </button>
-        )}
+          {(activeFilters.length > 0 || sort.col) && (
+            <button onClick={clearAll} style={{
+              display:"flex", alignItems:"center", gap:6, height:32, padding:"0 14px",
+              background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)",
+              borderRadius:8, color:"#f87171", fontSize:12, cursor:"pointer",
+              fontFamily:"Outfit,sans-serif",
+            }}>
+              <X size={12}/> Clear all
+            </button>
+          )}
+        </div>
       </div>
 
-      <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
-        <div style={{ overflowX:"auto" }}>
+      {/* ─── Active filter chips ─── */}
+      {activeFilters.length > 0 && (
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14, alignItems:"center" }}>
+          <FilterIcon size={13} color="#D4AF37" style={{ marginRight:2 }} />
+          {activeFilters.map(({ key, filter, meta }) => (
+            <FilterChip
+              key={key}
+              label={meta.label}
+              opLabel={OP_LABELS[filter.op] || filter.op}
+              valueLabel={formatChipValue(filter, meta)}
+              onRemove={() => clearFilter(key)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ─── Table ─── */}
+      <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"visible" }}>
+        <div style={{ overflowX:"auto", overflowY:"visible" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr>
-                <th style={thSort("name")}  onClick={() => toggleSort("name")} ><div style={{ display:"flex", alignItems:"center", gap:4 }}>Name   <SortIcon col="name"  sort={sort}/></div></th>
-                <th style={thNS}>Role</th>
-                <th style={thSort("phone")} onClick={() => toggleSort("phone")}><div style={{ display:"flex", alignItems:"center", gap:4 }}>Phone  <SortIcon col="phone" sort={sort}/></div></th>
-                <th style={thSort("email")} onClick={() => toggleSort("email")}><div style={{ display:"flex", alignItems:"center", gap:4 }}>Email  <SortIcon col="email" sort={sort}/></div></th>
-                <th style={thNS}>Test</th>
-                <th style={thNS}>Status</th>
-                <th style={thSort("login")}  onClick={() => toggleSort("login")} ><div style={{ display:"flex", alignItems:"center", gap:4 }}>Last Login <SortIcon col="login"  sort={sort}/></div></th>
-                <th style={thSort("joined")} onClick={() => toggleSort("joined")}><div style={{ display:"flex", alignItems:"center", gap:4 }}>Joined     <SortIcon col="joined" sort={sort}/></div></th>
+                <th style={thSort("name")}   onClick={() => toggleSort("name")}>
+                  <div style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
+                    <FilterHead label={<span style={{ display:"inline-flex", gap:4, alignItems:"center" }}>Name <SortIcon col="name" sort={sort}/></span>}
+                      meta={fMeta("name")} filter={filters.name}
+                      onChange={v => setFilter("name", v)} onClear={() => clearFilter("name")} />
+                  </div>
+                </th>
+                <th style={thNS}>
+                  <FilterHead label="Role" meta={fMeta("role")} filter={filters.role}
+                    onChange={v => setFilter("role", v)} onClear={() => clearFilter("role")} />
+                </th>
+                <th style={thSort("phone")} onClick={() => toggleSort("phone")}>
+                  <FilterHead label={<span style={{ display:"inline-flex", gap:4, alignItems:"center" }}>Phone <SortIcon col="phone" sort={sort}/></span>}
+                    meta={fMeta("phone")} filter={filters.phone}
+                    onChange={v => setFilter("phone", v)} onClear={() => clearFilter("phone")} />
+                </th>
+                <th style={thSort("email")} onClick={() => toggleSort("email")}>
+                  <FilterHead label={<span style={{ display:"inline-flex", gap:4, alignItems:"center" }}>Email <SortIcon col="email" sort={sort}/></span>}
+                    meta={fMeta("email")} filter={filters.email}
+                    onChange={v => setFilter("email", v)} onClear={() => clearFilter("email")} />
+                </th>
+                <th style={thNS}>
+                  <FilterHead label="GO ID" meta={fMeta("go_id")} filter={filters.go_id}
+                    onChange={v => setFilter("go_id", v)} onClear={() => clearFilter("go_id")} />
+                </th>
+                <th style={thNS}>
+                  <FilterHead label="Test" meta={fMeta("is_test_user")} filter={filters.is_test_user}
+                    onChange={v => setFilter("is_test_user", v)} onClear={() => clearFilter("is_test_user")} />
+                </th>
+                <th style={thSort("wallet")} onClick={() => toggleSort("wallet")}>
+                  <FilterHead label={<span style={{ display:"inline-flex", gap:4, alignItems:"center" }}>Wallet <SortIcon col="wallet" sort={sort}/></span>}
+                    meta={fMeta("wallet")} filter={filters.wallet}
+                    onChange={v => setFilter("wallet", v)} onClear={() => clearFilter("wallet")} />
+                </th>
+                <th style={thSort("last_login")} onClick={() => toggleSort("last_login")}>
+                  <FilterHead label={<span style={{ display:"inline-flex", gap:4, alignItems:"center" }}>Last Login <SortIcon col="last_login" sort={sort}/></span>}
+                    meta={fMeta("last_login")} filter={filters.last_login}
+                    onChange={v => setFilter("last_login", v)} onClear={() => clearFilter("last_login")} align="right" />
+                </th>
+                <th style={thSort("joined")} onClick={() => toggleSort("joined")}>
+                  <FilterHead label={<span style={{ display:"inline-flex", gap:4, alignItems:"center" }}>Joined <SortIcon col="joined" sort={sort}/></span>}
+                    meta={fMeta("joined")} filter={filters.joined}
+                    onChange={v => setFilter("joined", v)} onClear={() => clearFilter("joined")} align="right" />
+                </th>
                 <th style={thNS}>Actions</th>
-              </tr>
-
-              {/* Filter row */}
-              <tr>
-                <td style={fdCell}>
-                  <TextFilterCell value={f.search} op={f.searchOp}
-                    onValueChange={v => setF("search", v)} onOpChange={v => setF("searchOp", v)}
-                    placeholder="Search name…" />
-                </td>
-                <td style={fdCell}>
-                  <select value={f.role} onChange={e => setF("role", e.target.value)} style={ISEL}>
-                    <option value="">All</option>
-                    <option value="passenger">Passenger</option>
-                    <option value="driver">Driver</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </td>
-                <td style={fdCell}>
-                  <TextFilterCell value={f.phone} op={f.phoneOp}
-                    onValueChange={v => setF("phone", v)} onOpChange={v => setF("phoneOp", v)}
-                    placeholder="Filter phone…" />
-                </td>
-                <td style={fdCell}>
-                  <TextFilterCell value={f.email} op={f.emailOp}
-                    onValueChange={v => setF("email", v)} onOpChange={v => setF("emailOp", v)}
-                    placeholder="Filter email…" />
-                </td>
-                <td style={fdCell}>
-                  <select value={f.isTest} onChange={e => setF("isTest", e.target.value)} style={ISEL}>
-                    <option value="">All</option>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                  </select>
-                </td>
-                <td style={fdCell}>
-                  <select value={f.status} onChange={e => setF("status", e.target.value)} style={ISEL}>
-                    <option value="">All</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </td>
-                <td style={fdCell}>
-                  <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                    <input value={f.loginFrom} onChange={e => setF("loginFrom", e.target.value)} type="date" style={IDATE} title="From"/>
-                    <input value={f.loginTo}   onChange={e => setF("loginTo",   e.target.value)} type="date" style={IDATE} title="To"/>
-                  </div>
-                </td>
-                <td style={fdCell}>
-                  <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                    <input value={f.joinedFrom} onChange={e => setF("joinedFrom", e.target.value)} type="date" style={IDATE} title="From"/>
-                    <input value={f.joinedTo}   onChange={e => setF("joinedTo",   e.target.value)} type="date" style={IDATE} title="To"/>
-                  </div>
-                </td>
-                <td style={fdCell}/>
               </tr>
             </thead>
 
@@ -324,24 +324,26 @@ export default function UsersPage() {
               {loading
                 ? Array(6).fill(0).map((_,i) => <Skeleton key={i}/>)
                 : users.length === 0
-                  ? <tr><td colSpan={9} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No users found</td></tr>
+                  ? <tr><td colSpan={10} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>
+                      No users match these filters
+                    </td></tr>
                   : users.map(u => (
                     <tr key={u.id} style={{ transition:"background .15s" }}
                       onMouseEnter={e => e.currentTarget.style.background="rgba(212,175,55,0.03)"}
                       onMouseLeave={e => e.currentTarget.style.background=""}>
                       <TD>
                         <div style={{ fontWeight:600, color:"#fff" }}>{u.full_name || u.name || "—"}</div>
-                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2, fontFamily:"monospace" }}>{u.go_id || ""}</div>
                       </TD>
                       <TD><RoleBadge role={u.role}/></TD>
-                      <TD>{u.phone_number || "—"}</TD>
+                      <TD style={{ fontFamily:"monospace", fontSize:12 }}>{u.phone_number || "—"}</TD>
                       <TD style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>{u.email || "—"}</TD>
+                      <TD style={{ fontFamily:"monospace", fontSize:11, color:"rgba(255,255,255,0.55)" }}>{u.go_id || "—"}</TD>
                       <TD style={{ fontSize:12 }}>
                         {u.is_test_user
                           ? <span style={{ color:"#fbbf24", fontWeight:600 }}>Yes</span>
                           : <span style={{ color:"rgba(255,255,255,0.35)" }}>No</span>}
                       </TD>
-                      <TD><Badge active={u.is_active}/></TD>
+                      <TD style={{ fontSize:12, fontVariantNumeric:"tabular-nums" }}>{fmtRupee(u.balance ?? u.wallet_balance)}</TD>
                       <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDateTime(u.last_login)}</TD>
                       <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDate(u.created_at)}</TD>
                       <TD>
@@ -363,10 +365,37 @@ export default function UsersPage() {
 
         {totalPages > 1 && (
           <div style={{ padding:"14px 20px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
-            <Pagination page={currentPage} total={total} perPage={LIMIT} onChange={p => setOffset((p-1)*LIMIT)}/>
+            <Pagination pagination={pagination} onOffsetChange={setOffset}/>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+/* ─── Small helpers ───────────────────────────────────────────────────────── */
+function iconBtn() {
+  return {
+    width:32, height:32, borderRadius:8,
+    background:"rgba(255,255,255,0.05)",
+    border:"1px solid rgba(212,175,55,0.15)",
+    color:"rgba(255,255,255,0.65)",
+    cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
+  };
+}
+
+function VisibilityToggle({ active, onToggle, label }) {
+  return (
+    <button onClick={onToggle} title={active ? `Hide ${label.toLowerCase()}` : `Include ${label.toLowerCase()}`} style={{
+      display:"flex", alignItems:"center", gap:6, height:32, padding:"0 12px",
+      background: active ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.04)",
+      border:`1px solid ${active ? "#D4AF37" : "rgba(255,255,255,0.1)"}`,
+      borderRadius:8, cursor:"pointer",
+      color: active ? "#D4AF37" : "rgba(255,255,255,0.55)",
+      fontSize:11.5, fontFamily:"Outfit,sans-serif", fontWeight:600, whiteSpace:"nowrap",
+    }}>
+      {active ? <Eye size={12}/> : <EyeOff size={12}/>}
+      {label}
+    </button>
   );
 }

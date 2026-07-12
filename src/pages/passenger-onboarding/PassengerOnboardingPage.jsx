@@ -2,9 +2,24 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Users, UserCheck, UserX, UserPlus, Search, X,
   ChevronLeft, ChevronRight, Phone, Mail, Clock,
-  Shield, RefreshCw, Calendar, Activity, Eye,
+  Shield, RefreshCw, Calendar, Activity, Eye, EyeOff,
+  Filter as FilterIcon,
 } from 'lucide-react';
 import { getUsers, getUserById, updateUserStatus, getPassengerStats } from '../../api/admin';
+import {
+  FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
+} from '../../components/filters/index.jsx';
+
+/* Passenger column meta */
+const P_FIELDS = [
+  { key:'name',         label:'Name',       type:'text' },
+  { key:'phone',        label:'Phone',      type:'text' },
+  { key:'email',        label:'Email',      type:'text' },
+  { key:'go_id',        label:'GO ID',      type:'text' },
+  { key:'is_test_user', label:'Test User',  type:'bool' },
+  { key:'wallet',       label:'Wallet',     type:'number', minValue:0 },
+  { key:'last_login',   label:'Last Login', type:'date' },
+];
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
 const PERIODS = [
@@ -274,38 +289,51 @@ export default function PassengerOnboardingPage() {
 
   // ── Table state ───────────────────────────────────────────────────────
   const [rows,         setRows]         = useState([]);
-  const [tableTotal,   setTableTotal]   = useState(0);
+  const [pagination,   setPagination]   = useState(null);
   const [tableLoading, setTableLoading] = useState(true);
   const [offset,       setOffset]       = useState(0);
+  const tableTotal = pagination?.total ?? 0;
 
-  // Table search + status (independent of period)
-  const [searchDraft,   setSearchDraft]   = useState('');
-  const [search,        setSearch]        = useState('');
-  const [statusFilter,  setStatusFilter]  = useState('');
+  // Column filters + visibility toggles
+  const [filters,           setFilters]           = useState({});
+  const [includeInactive,   setIncludeInactive]   = useState(false);
+  const [includeUnverified, setIncludeUnverified] = useState(false);
+
+  const setFilter    = (key, next) => { setFilters(p => ({ ...p, [key]: next })); setOffset(0); };
+  const clearFilter  = (key)       => { setFilters(p => { const n = { ...p }; delete n[key]; return n; }); setOffset(0); };
+  const clearAll     = ()          => { setFilters({}); setOffset(0); };
 
   // Reset to page 1 when any filter changes
-  useEffect(() => { setOffset(0); }, [periodDates, search, statusFilter]);
+  useEffect(() => { setOffset(0); }, [periodDates, filters, includeInactive, includeUnverified]);
 
   const loadPassengers = useCallback(async () => {
     setTableLoading(true);
     try {
-      const params = { role: 'passenger', limit: LIMIT, offset };
-      if (search)       params.search = search;
-      if (statusFilter) params.status = statusFilter;
-      // Same period dates applied to table (filter by join date)
-      if (periodDates.from) params.joined_from = periodDates.from;
-      if (periodDates.to)   params.joined_to   = periodDates.to;
+      const params = { role: 'passenger', limit: LIMIT, offset, ...buildFilterParams(filters, P_FIELDS) };
+      if (includeInactive)   params.include_inactive   = 'true';
+      if (includeUnverified) params.include_unverified = 'true';
+      // Period dates applied to table via joined range (only if user hasn't set their own joined filter)
+      if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
+      if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
 
       const res = await getUsers(params);
       setRows(res.data?.data?.users ?? []);
-      setTableTotal(res.data?.data?.pagination?.total ?? 0);
+      setPagination(res.data?.data?.pagination ?? null);
     } catch (e) { console.error('[PassengerTable]', e); }
     setTableLoading(false);
-  }, [offset, search, statusFilter, periodDates]);
+  }, [offset, filters, periodDates, includeInactive, includeUnverified]);
 
   useEffect(() => { loadPassengers(); }, [loadPassengers]);
 
-  const commitSearch = () => { setSearch(searchDraft); setOffset(0); };
+  const activePassengerFilters = useMemo(() => Object.entries(filters)
+    .filter(([k, f]) => {
+      const meta = P_FIELDS.find(m => m.key === k);
+      return meta && isFilterActive(f, meta.type);
+    })
+    .map(([k, f]) => ({ key:k, filter:f, meta: P_FIELDS.find(m => m.key === k) })),
+    [filters]);
+
+  const fMeta = (k) => P_FIELDS.find(m => m.key === k);
 
   // ── Detail panel ──────────────────────────────────────────────────────
   const [selected,     setSelected]     = useState(null);
@@ -331,9 +359,10 @@ export default function PassengerOnboardingPage() {
     } catch (e) { console.error(e); }
   };
 
-  const totalPages  = Math.ceil(tableTotal / LIMIT) || 1;
-  const currentPage = Math.floor(offset / LIMIT) + 1;
-  const hasFilters  = period !== 'month' || search || statusFilter;
+  const totalPages  = pagination?.totalPages  ?? 1;
+  const currentPage = pagination?.currentPage ?? 1;
+  const hasMore     = pagination?.hasMore     ?? false;
+  const hasPrev     = pagination?.hasPrevious ?? false;
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
@@ -439,7 +468,7 @@ export default function PassengerOnboardingPage() {
       </div>
 
       {/* ── Passenger table ─────────────────────────────────────────────── */}
-      <div style={{ background: CARD_BG, border: CARD_BOR, borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ background: CARD_BG, border: CARD_BOR, borderRadius: 16, overflow: 'visible' }}>
 
         {/* Toolbar */}
         <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
@@ -448,64 +477,89 @@ export default function PassengerOnboardingPage() {
             <span style={{ fontFamily: FONT_UI, fontSize: 12, color: TEXT_DIM, fontWeight: 400, marginLeft: 8 }}>
               ({tableLoading ? '…' : tableTotal.toLocaleString('en-IN')})
             </span>
-          </div>
-
-          {/* Search */}
-          <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 9, overflow: 'hidden', marginLeft: 'auto' }}>
-            <div style={{ padding: '0 10px', display: 'flex', alignItems: 'center' }}><Search size={13} color={TEXT_DIM} /></div>
-            <input
-              value={searchDraft}
-              onChange={e => setSearchDraft(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && commitSearch()}
-              onBlur={commitSearch}
-              placeholder="Name, phone, email… (Enter to search)"
-              style={{ background: 'transparent', border: 'none', outline: 'none', color: TEXT_BRI, fontSize: 12.5, padding: '8px 4px 8px 0', width: 240, fontFamily: FONT_UI }}
-            />
-            {searchDraft && (
-              <button onClick={() => { setSearchDraft(''); setSearch(''); setOffset(0); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 8px', color: TEXT_DIM }}>
-                <X size={12} />
-              </button>
+            {activePassengerFilters.length > 0 && (
+              <span style={{ fontFamily: FONT_UI, fontSize: 11, color: GOLD, fontWeight: 600, marginLeft: 8 }}>
+                · {activePassengerFilters.length} filter{activePassengerFilters.length>1?'s':''}
+              </span>
             )}
           </div>
 
-          {/* Status filter */}
-          <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setOffset(0); }} style={SEL_STYLE}>
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <PsgToggle active={includeInactive}   onToggle={() => setIncludeInactive(v => !v)}   label="Blocked" />
+            <PsgToggle active={includeUnverified} onToggle={() => setIncludeUnverified(v => !v)} label="Unverified" />
+            {(activePassengerFilters.length > 0) && (
+              <button onClick={clearAll} style={{
+                display:'flex', alignItems:'center', gap:6, height:32, padding:'0 12px',
+                background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.25)',
+                borderRadius:8, color:'#f87171', fontSize:11.5, cursor:'pointer', fontFamily: FONT_UI, fontWeight:600,
+              }}>
+                <X size={12}/> Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Active filter chips */}
-        {(period !== 'all' || search || statusFilter) && (
-          <div style={{ padding: '8px 20px', background: 'rgba(212,175,55,0.025)', borderBottom: '1px solid rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, color: TEXT_DIM, fontWeight: 600 }}>Filters:</span>
+        {(period !== 'all' || activePassengerFilters.length > 0) && (
+          <div style={{ padding: '10px 20px', background: 'rgba(212,175,55,0.025)', borderBottom: '1px solid rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <FilterIcon size={12} color={GOLD} />
             {period !== 'all' && (
               <Chip
                 label={`Period: ${periodLabel}${period === 'custom' ? ` (${customFrom || '?'} → ${customTo || '?'})` : ''}`}
                 onRemove={() => { setPeriod('all'); setOffset(0); }}
               />
             )}
-            {search && <Chip label={`Search: "${search}"`} onRemove={() => { setSearch(''); setSearchDraft(''); setOffset(0); }} />}
-            {statusFilter && <Chip label={`Status: ${statusFilter}`} onRemove={() => { setStatusFilter(''); setOffset(0); }} />}
+            {activePassengerFilters.map(({ key, filter, meta }) => (
+              <FilterChip
+                key={key}
+                label={meta.label}
+                opLabel={OP_LABELS[filter.op] || filter.op}
+                valueLabel={formatChipValue(filter, meta)}
+                onRemove={() => clearFilter(key)}
+              />
+            ))}
           </div>
         )}
 
         {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT_UI }}>
             <thead>
               <tr style={{ background: 'rgba(212,175,55,0.04)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                {['Name', 'Phone', 'Email', 'Status', 'Joined', 'Last Login', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: '0.8px', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
+                <th style={psgTh}>
+                  <FilterHead label="Name"  meta={fMeta('name')}  filter={filters.name}
+                    onChange={v => setFilter('name', v)}  onClear={() => clearFilter('name')} />
+                </th>
+                <th style={psgTh}>
+                  <FilterHead label="Phone" meta={fMeta('phone')} filter={filters.phone}
+                    onChange={v => setFilter('phone', v)} onClear={() => clearFilter('phone')} />
+                </th>
+                <th style={psgTh}>
+                  <FilterHead label="Email" meta={fMeta('email')} filter={filters.email}
+                    onChange={v => setFilter('email', v)} onClear={() => clearFilter('email')} />
+                </th>
+                <th style={psgTh}>
+                  <FilterHead label="GO ID" meta={fMeta('go_id')} filter={filters.go_id}
+                    onChange={v => setFilter('go_id', v)} onClear={() => clearFilter('go_id')} />
+                </th>
+                <th style={psgTh}>
+                  <FilterHead label="Test"  meta={fMeta('is_test_user')} filter={filters.is_test_user}
+                    onChange={v => setFilter('is_test_user', v)} onClear={() => clearFilter('is_test_user')} />
+                </th>
+                <th style={psgTh}>Status</th>
+                <th style={psgTh}>Joined</th>
+                <th style={psgTh}>
+                  <FilterHead label="Last Login" meta={fMeta('last_login')} filter={filters.last_login}
+                    onChange={v => setFilter('last_login', v)} onClear={() => clearFilter('last_login')} align="right" />
+                </th>
+                <th style={psgTh}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {tableLoading
                 ? Array.from({ length: LIMIT }).map((_, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      {[120, 90, 160, 60, 80, 80, 100].map((w, j) => (
+                      {[120, 90, 160, 80, 40, 60, 80, 80, 100].map((w, j) => (
                         <td key={j} style={{ padding: '13px 16px' }}>
                           <div style={{ height: 13, borderRadius: 4, background: 'rgba(255,255,255,0.06)', width: w, animation: 'pulse 1.4s ease-in-out infinite' }} />
                         </td>
@@ -515,7 +569,7 @@ export default function PassengerOnboardingPage() {
                 : rows.length === 0
                   ? (
                       <tr>
-                        <td colSpan={7} style={{ padding: 52, textAlign: 'center' }}>
+                        <td colSpan={9} style={{ padding: 52, textAlign: 'center' }}>
                           <Users size={36} color="rgba(255,255,255,0.06)" style={{ display: 'block', margin: '0 auto 12px' }} />
                           <div style={{ color: TEXT_DIM, fontSize: 13 }}>No passengers found</div>
                           <div style={{ fontSize: 12, color: TEXT_DIM, marginTop: 6, opacity: 0.7 }}>
@@ -544,9 +598,17 @@ export default function PassengerOnboardingPage() {
                           </div>
                         </td>
                         {/* Phone */}
-                        <td style={{ padding: '12px 16px', fontSize: 12.5, color: TEXT_MED, whiteSpace: 'nowrap' }}>{p.phone_number || '—'}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 12.5, color: TEXT_MED, whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{p.phone_number || '—'}</td>
                         {/* Email */}
                         <td style={{ padding: '12px 16px', fontSize: 12, color: TEXT_MED, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.email || '—'}</td>
+                        {/* GO ID */}
+                        <td style={{ padding: '12px 16px', fontSize: 11.5, color: TEXT_DIM, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{p.go_id || '—'}</td>
+                        {/* Test User */}
+                        <td style={{ padding: '12px 16px', fontSize: 12 }}>
+                          {p.is_test_user
+                            ? <span style={{ color:'#fbbf24', fontWeight:600 }}>Yes</span>
+                            : <span style={{ color:TEXT_DIM }}>—</span>}
+                        </td>
                         {/* Status */}
                         <td style={{ padding: '12px 16px' }}><StatusBadge active={p.is_active} /></td>
                         {/* Joined */}
@@ -588,17 +650,19 @@ export default function PassengerOnboardingPage() {
           <span style={{ fontSize: 12, color: TEXT_DIM }}>
             {tableTotal === 0
               ? 'No records'
-              : `Showing ${offset + 1}–${Math.min(offset + LIMIT, tableTotal)} of ${tableTotal.toLocaleString('en-IN')}`
+              : `Showing ${(pagination?.offset ?? 0) + 1}–${Math.min((pagination?.offset ?? 0) + (pagination?.limit ?? LIMIT), tableTotal)} of ${tableTotal.toLocaleString('en-IN')}`
             }
           </span>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button onClick={() => setOffset(o => Math.max(0, o - LIMIT))} disabled={offset === 0} style={pagBtn(offset === 0)}>
+            <button onClick={() => pagination?.prevOffset != null && setOffset(pagination.prevOffset)}
+              disabled={!hasPrev} style={pagBtn(!hasPrev)}>
               <ChevronLeft size={14} />
             </button>
             <span style={{ fontSize: 12, color: TEXT_MED, padding: '0 8px', fontVariantNumeric: 'tabular-nums' }}>
               {currentPage} / {totalPages}
             </span>
-            <button onClick={() => setOffset(o => o + LIMIT)} disabled={offset + LIMIT >= tableTotal} style={pagBtn(offset + LIMIT >= tableTotal)}>
+            <button onClick={() => pagination?.nextOffset != null && setOffset(pagination.nextOffset)}
+              disabled={!hasMore} style={pagBtn(!hasMore)}>
               <ChevronRight size={14} />
             </button>
           </div>
@@ -614,5 +678,28 @@ export default function PassengerOnboardingPage() {
         onToggleStatus={handleToggleStatus}
       />
     </div>
+  );
+}
+
+/* ─── Header cell style + visibility toggle for passenger table ───────────── */
+const psgTh = {
+  padding: '11px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700,
+  color: 'rgba(212,175,55,0.75)', textTransform: 'uppercase', letterSpacing: '0.8px',
+  whiteSpace: 'nowrap', background: 'rgba(0,0,0,0.12)',
+};
+
+function PsgToggle({ active, onToggle, label }) {
+  return (
+    <button onClick={onToggle} title={active ? `Hide ${label.toLowerCase()}` : `Include ${label.toLowerCase()}`} style={{
+      display:'flex', alignItems:'center', gap:6, height:32, padding:'0 12px',
+      background: active ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)',
+      border:`1px solid ${active ? GOLD : 'rgba(255,255,255,0.1)'}`,
+      borderRadius:8, cursor:'pointer',
+      color: active ? GOLD : TEXT_MED,
+      fontSize:11.5, fontFamily: FONT_UI, fontWeight:600, whiteSpace:'nowrap',
+    }}>
+      {active ? <Eye size={12}/> : <EyeOff size={12}/>}
+      Include {label}
+    </button>
   );
 }
