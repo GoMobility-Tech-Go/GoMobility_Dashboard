@@ -106,7 +106,7 @@ export const api = {
   updateVehiclePricing: (vehicleType, data) =>
     request(`/admin/pricing/vehicles/${vehicleType}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
-  // ── Payments ──────────────────────────────────────────────────
-  initiateRefund: (data) =>
-    request('/payments/refund', { method: 'POST', body: JSON.stringify(data) }),
+  // ── Refunds (unified) ─────────────────────────────────────────
+  createRefund: (data) =>
+    request('/admin/refunds', { method: 'POST', body: JSON.stringify(data) }),
 };
