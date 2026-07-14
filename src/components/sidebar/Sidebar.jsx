@@ -97,6 +97,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
   const openBell = () => {
     setBellOpen(p => !p);
     if (!bellOpen) {
+      // Refresh unread count + fetch notifications only when bell is opened
+      fetchUnread();
       setNotifsLoading(true);
       getAdminNotifications()
         .then((res) => {
@@ -125,11 +127,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
     } catch {}
   };
 
-  useEffect(() => {
-    fetchUnread();
-    const t = setInterval(fetchUnread, 60000);
-    return () => clearInterval(t);
-  }, [fetchUnread]);
+  // Call once on mount only — no polling
+  useEffect(() => { fetchUnread(); }, [fetchUnread]);
 
   useEffect(() => {
     const h = e => {
