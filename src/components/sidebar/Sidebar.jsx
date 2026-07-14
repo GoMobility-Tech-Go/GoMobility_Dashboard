@@ -6,10 +6,10 @@ import {
   Smartphone, Trophy, MessageCircle, Activity, Target, UserCog, Lock,
   BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText
 } from "lucide-react";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { getAdminNotifications, getUnreadNotifCount, markNotifRead, markAllNotifRead } from "../../api/admin";
+import { getAdminNotifications, markNotifRead, markAllNotifRead } from "../../api/admin";
 import SidebarHeader from "./SidebarHeader";
 import SidebarItem from "./SidebarItem";
 
@@ -88,23 +88,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
     items: g.items.filter(item => item.to !== "/logs" || canViewLogs),
   })).filter(g => g.items.length > 0);
 
-  const fetchUnread = useCallback(() => {
-    getUnreadNotifCount()
-      .then((res) => setUnread(res.data?.data?.count ?? res.data?.count ?? 0))
-      .catch(() => {});
-  }, []);
-
   const openBell = () => {
     setBellOpen(p => !p);
     if (!bellOpen) {
-      // Refresh unread count + fetch notifications only when bell is opened
-      fetchUnread();
       setNotifsLoading(true);
       getAdminNotifications()
         .then((res) => {
           const d = res.data?.data || res.data || {};
           const list = d.notifications || d.items || (Array.isArray(d) ? d : []);
           setNotifs(list);
+          setUnread(list.filter(n => !n.is_read).length);
         })
         .catch(() => setNotifs([]))
         .finally(() => setNotifsLoading(false));
@@ -126,9 +119,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
       setUnread(p => Math.max(0, p - 1));
     } catch {}
   };
-
-  // Call once on mount only — no polling
-  useEffect(() => { fetchUnread(); }, [fetchUnread]);
 
   useEffect(() => {
     const h = e => {
