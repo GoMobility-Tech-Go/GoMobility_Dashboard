@@ -148,6 +148,10 @@ export const getPassengerStats = (from, to) => {
   return api.get('/admin/passengers/stats', { params });
 };
 
+// ── API Logs (dev tool — restricted by phone) ─────────────────────────────────
+export const getApiLogs = (params = {}) =>
+  api.get('/admin/logs', { params: { limit: 200, offset: 0, ...params } });
+
 // ── Cities ────────────────────────────────────────────────────────────────────
 export const getCities              = ()                              => api.get('/admin/cities');
 export const getCityDetail          = (id)                            => api.get(`/admin/cities/${id}`);

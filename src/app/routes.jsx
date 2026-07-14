@@ -32,6 +32,7 @@ import ZonesListPage from "../pages/zones/ZonesListPage";
 import ZonesMapPage from "../pages/zones/ZonesMapPage";
 import ZoneEditorPage from "../pages/zones/ZoneEditorPage";
 import ZoneAnalyticsPage from "../pages/zones/ZoneAnalyticsPage";
+import LogsPage from "../pages/logs/LogsPage";
 
 const routes = [
   { path:"/signup", element:<SignupPage/> },
@@ -59,6 +60,7 @@ const routes = [
         { path:"operational-metrics", element:<OperationalMetricsPage/> },
         { path:"notifications", element:<NotificationsPage/> },
         { path:"settings", element:<SettingsPage/> },
+        { path:"logs", element:<LogsPage/> },
         // ── Super Admin only routes ───────────────────────────────
         {
           element:<RoleRoute allowedRoles={["Super Admin"]}/>,

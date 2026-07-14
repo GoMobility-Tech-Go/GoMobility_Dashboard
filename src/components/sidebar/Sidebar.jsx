@@ -4,7 +4,7 @@ import {
   UserPlus, SlidersHorizontal, ShieldCheck, ScrollText, ShieldAlert, LogOut,
   ChevronLeft, ChevronRight, Menu, X, Crown, Megaphone, AlertTriangle,
   Smartphone, Trophy, MessageCircle, Activity, Target, UserCog, Lock,
-  BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart
+  BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -42,6 +42,7 @@ const ADMIN_MENU = [
   ]},
   { label:"System", items:[
     { label:"Settings",           to:"/settings",             icon:Settings    },
+    { label:"Logs",               to:"/logs",                 icon:FileText    },
   ]},
 ];
 
@@ -63,6 +64,10 @@ const SA_EXTRA = [
   ]},
 ];
 
+// ── Logs page — only these two phone numbers can see it ───────────────────────
+const LOGS_ALLOWED = new Set(["6205356010", "9540594976"]);
+const normPhone = (p) => (p || "").replace(/\D/g, "").slice(-10);
+
 export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, setDesktopCollapsed, sidebarWidth }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -74,7 +79,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
   const ref = useRef(null);
   const bellRef = useRef(null);
   const isSA = user?.role === "Super Admin";
-  const groups = isSA ? [...ADMIN_MENU, ...SA_EXTRA] : ADMIN_MENU;
+  const canViewLogs = LOGS_ALLOWED.has(normPhone(user?.phone));
+
+  // Filter out Logs item for non-allowed phones
+  const baseGroups = isSA ? [...ADMIN_MENU, ...SA_EXTRA] : ADMIN_MENU;
+  const groups = baseGroups.map(g => ({
+    ...g,
+    items: g.items.filter(item => item.to !== "/logs" || canViewLogs),
+  })).filter(g => g.items.length > 0);
 
   const fetchUnread = useCallback(() => {
     getUnreadNotifCount()
