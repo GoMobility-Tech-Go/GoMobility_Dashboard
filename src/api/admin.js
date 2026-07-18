@@ -148,6 +148,13 @@ export const getPassengerStats = (from, to) => {
   return api.get('/admin/passengers/stats', { params });
 };
 
+export const getDriverStats = (from, to) => {
+  const params = {};
+  if (from) params.from = from;
+  if (to)   params.to   = to;
+  return api.get('/admin/drivers/stats', { params });
+};
+
 // ── API Logs (dev tool — restricted by phone) ─────────────────────────────────
 export const getApiLogs = (params = {}) =>
   api.get('/admin/logs', { params: { limit: 200, offset: 0, ...params } });

@@ -4,17 +4,86 @@ import {
   ShieldCheck, ShieldX, UserCheck, UserX,
   X, FileCheck, FileX, AlertTriangle, Eye, EyeOff, Car, Star, MapPin, Phone,
   CheckCircle, Clock, XCircle, RefreshCw, ExternalLink, User, Wallet,
-  CreditCard, Calendar, Filter as FilterIcon,
+  CreditCard, Calendar, Filter as FilterIcon, UserPlus, Users,
 } from "lucide-react";
 import { Pagination } from "../../components/ui/index.jsx";
 import {
   getDrivers, verifyDriver, updateDriverStatus, getKycQueue,
   approveDocument, rejectDocument, getFraudAlerts, suspendDriver,
-  getKycDocument, getDriverById, getDriverKycStatus
+  getKycDocument, getDriverById, getDriverKycStatus, getDriverStats,
 } from "../../api/admin";
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
 } from "../../components/filters/index.jsx";
+
+// ─── Period helpers ───────────────────────────────────────────────────────────
+const PERIODS = [
+  { key: 'today', label: 'Today' },
+  { key: 'week',  label: 'This Week' },
+  { key: 'month', label: 'This Month' },
+  { key: 'year',  label: 'This Year' },
+  { key: 'custom',label: 'Custom' },
+  { key: 'all',   label: 'All Time' },
+];
+
+function getPeriodDates(period) {
+  const now = new Date();
+  const sod = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
+  const eod = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+  switch (period) {
+    case 'today': return { from: sod(now), to: eod(now) };
+    case 'week': { const s = new Date(now); s.setDate(now.getDate() - ((now.getDay() + 6) % 7)); return { from: sod(s), to: eod(now) }; }
+    case 'month': return { from: sod(new Date(now.getFullYear(), now.getMonth(), 1)), to: eod(now) };
+    case 'year':  return { from: sod(new Date(now.getFullYear(), 0, 1)), to: eod(now) };
+    default: return { from: null, to: null };
+  }
+}
+
+const GOLD    = '#D4AF37';
+const GOLD20  = 'rgba(212,175,55,0.20)';
+const GOLD10  = 'rgba(212,175,55,0.10)';
+const TEXT_DIM = 'rgba(255,255,255,0.40)';
+const TEXT_MED = 'rgba(255,255,255,0.62)';
+const TEXT_BRI = 'rgba(255,255,255,0.88)';
+
+function DrvStatCard({ icon: Icon, label, value, color, loading }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.03)', border: `1px solid ${color}22`,
+      borderRadius: 14, padding: '18px 22px',
+      display: 'flex', alignItems: 'center', gap: 16,
+      flex: 1, minWidth: 170, position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${color},transparent)` }} />
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: `${color}18`, border: `1px solid ${color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={20} color={color} />
+      </div>
+      <div>
+        <div style={{ fontSize: 10.5, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}>{label}</div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: TEXT_BRI, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums' }}>
+          {loading ? <span style={{ opacity: 0.25 }}>—</span> : (value ?? 0).toLocaleString('en-IN')}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const DATE_INPUT_STYLE = {
+  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: 8, color: TEXT_BRI, fontSize: 12, padding: '6px 10px',
+  fontFamily: 'Outfit,sans-serif', outline: 'none', colorScheme: 'dark',
+};
+
+function DrvPeriodChip({ label, onRemove }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px 3px 10px', borderRadius: 20, background: GOLD10, border: `1px solid ${GOLD20}`, fontSize: 11, color: GOLD, fontWeight: 600 }}>
+      {label}
+      <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: GOLD, display: 'flex', alignItems: 'center', padding: 0, opacity: 0.7 }}>
+        <X size={10} />
+      </button>
+    </span>
+  );
+}
 
 /* ─── Driver filter meta (spec §5.1) ──────────────────────────────────────── */
 const DRIVER_FIELDS = [
@@ -682,6 +751,45 @@ export default function DriverOnboardingPage() {
   const [toast, setToast]       = useState(null);
   const [acting, setActing]     = useState({});
 
+  // ── Period filter state ───────────────────────────────────────────────
+  const [period, setPeriod]         = useState('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo,   setCustomTo]   = useState('');
+
+  const periodDates = useMemo(() => {
+    if (period === 'all') return { from: null, to: null };
+    if (period === 'custom') {
+      return {
+        from: customFrom ? new Date(customFrom + 'T00:00:00').toISOString() : null,
+        to:   customTo   ? new Date(customTo   + 'T23:59:59').toISOString() : null,
+      };
+    }
+    return getPeriodDates(period);
+  }, [period, customFrom, customTo]);
+
+  const periodLabel = PERIODS.find(p => p.key === period)?.label ?? 'Period';
+
+  // ── Driver stats ──────────────────────────────────────────────────────
+  const [stats, setStats]               = useState({ signups: 0, active: 0, inactive: 0, allTime: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const res = await getDriverStats(periodDates.from || undefined, periodDates.to || undefined);
+      const d = res.data?.data ?? {};
+      setStats({
+        signups:  d.signups_in_period  ?? 0,
+        active:   d.active_in_period   ?? 0,
+        inactive: d.inactive_in_period ?? 0,
+        allTime:  d.total_all_time     ?? 0,
+      });
+    } catch (e) { console.error('[DriverStats]', e); }
+    setStatsLoading(false);
+  }, [periodDates]);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
+
   const setFilter    = (key, next) => { setFilters(p => ({ ...p, [key]: next })); setOffset(0); };
   const clearFilter  = (key)       => { setFilters(p => { const n = { ...p }; delete n[key]; return n; }); setOffset(0); };
   const clearAllFilters = ()       => { setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" }); };
@@ -715,6 +823,8 @@ export default function DriverOnboardingPage() {
       params.sort_by  = DRIVER_SORT_COLS[sort.col];
       params.sort_dir = sort.dir;
     }
+    if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
+    if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
     getDrivers(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -723,7 +833,7 @@ export default function DriverOnboardingPage() {
       })
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
-  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers]);
+  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates]);
 
   const activeDriverFilters = useMemo(() => Object.entries(filters)
     .filter(([k, f]) => {
@@ -769,7 +879,7 @@ export default function DriverOnboardingPage() {
 
   const act = async (key, fn, successMsg) => {
     setActing((p) => ({ ...p, [key]: true }));
-    try { await fn(); showToast(successMsg); loadDrivers(); }
+    try { await fn(); showToast(successMsg); loadDrivers(); loadStats(); }
     catch (err) { showToast(err.response?.data?.message || "Action failed.", "error"); }
     finally { setActing((p) => ({ ...p, [key]: false })); }
   };
@@ -855,6 +965,43 @@ export default function DriverOnboardingPage() {
       {/* ── DRIVERS TAB ── */}
       {tab === "Drivers" && (
         <>
+          {/* Period filter bar */}
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(212,175,55,0.12)', borderRadius: 14, padding: '13px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
+              <Calendar size={13} color={GOLD} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Period Filter</span>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {PERIODS.map(p => (
+                <button key={p.key} onClick={() => { setPeriod(p.key); setOffset(0); }} style={{
+                  padding: '6px 14px', borderRadius: 8, fontSize: 12.5, fontFamily: 'Outfit,sans-serif', cursor: 'pointer',
+                  border: `1px solid ${period === p.key ? GOLD20 : 'rgba(255,255,255,0.08)'}`,
+                  background: period === p.key ? GOLD10 : 'transparent',
+                  color: period === p.key ? GOLD : TEXT_MED,
+                  fontWeight: period === p.key ? 700 : 500, transition: 'all .15s',
+                }}>{p.label}</button>
+              ))}
+            </div>
+            {period === 'custom' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="date" value={customFrom} onChange={e => { setCustomFrom(e.target.value); setOffset(0); }} style={DATE_INPUT_STYLE} />
+                <span style={{ color: TEXT_DIM, fontSize: 12 }}>to</span>
+                <input type="date" value={customTo} onChange={e => { setCustomTo(e.target.value); setOffset(0); }} style={DATE_INPUT_STYLE} />
+              </div>
+            )}
+            <button onClick={() => { loadStats(); loadDrivers(); }} title="Refresh" style={{ marginLeft: 'auto', width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: TEXT_DIM, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <RefreshCw size={13} />
+            </button>
+          </div>
+
+          {/* Stat cards */}
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+            <DrvStatCard icon={UserPlus}  label={`Signups — ${periodLabel}`} value={stats.signups}  color={GOLD}      loading={statsLoading} />
+            <DrvStatCard icon={UserCheck} label={`Active — ${periodLabel}`}  value={stats.active}   color="#22c55e"   loading={statsLoading} />
+            <DrvStatCard icon={UserX}     label={`Inactive — ${periodLabel}`}value={stats.inactive} color="#ef4444"   loading={statsLoading} />
+            <DrvStatCard icon={Users}     label="Total All-Time"             value={stats.allTime}  color="#6366f1"   loading={statsLoading} />
+          </div>
+
           {/* Visibility toggles + reset */}
           <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
             <DrvVisibilityToggle active={includeInactive}          onToggle={() => { setIncludeInactive(v=>!v); setOffset(0); }}          label="Blocked" />
@@ -881,9 +1028,15 @@ export default function DriverOnboardingPage() {
           </div>
 
           {/* Active filter chips */}
-          {activeDriverFilters.length > 0 && (
+          {(period !== 'all' || activeDriverFilters.length > 0) && (
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14, alignItems:"center" }}>
               <FilterIcon size={13} color="#D4AF37" style={{ marginRight:2 }} />
+              {period !== 'all' && (
+                <DrvPeriodChip
+                  label={`Period: ${periodLabel}${period === 'custom' ? ` (${customFrom || '?'} → ${customTo || '?'})` : ''}`}
+                  onRemove={() => { setPeriod('all'); setOffset(0); }}
+                />
+              )}
               {activeDriverFilters.map(({ key, filter, meta }) => (
                 <FilterChip
                   key={key}
