@@ -3,7 +3,7 @@ import {
   Users, UserCheck, UserX, UserPlus, X,
   ChevronLeft, ChevronRight, Phone, Mail, Clock,
   Shield, RefreshCw, Calendar, Activity, Eye, EyeOff,
-  Filter as FilterIcon,
+  Filter as FilterIcon, MapPin,
 } from 'lucide-react';
 import { getUsers, getUserById, updateUserStatus, getPassengerStats } from '../../api/admin';
 import {
@@ -163,6 +163,15 @@ function PassengerDetailPanel({ passenger, detail, loading, onClose, onToggleSta
                 <DpSection title="Device Info">
                   {user.device_info.platform    && <DpRow icon={Activity} label="Platform"    value={user.device_info.platform} />}
                   {user.device_info.app_version && <DpRow icon={Activity} label="App Version" value={user.device_info.app_version} />}
+                </DpSection>
+              )}
+              {(user.signup_city_name || user.signup_latitude != null) && (
+                <DpSection title="Signup Location">
+                  {user.signup_city_name  && <DpRow icon={MapPin}   label="City"        value={user.signup_city_name} />}
+                  {user.signup_latitude != null && (
+                    <DpRow icon={MapPin} label="Coordinates"
+                      value={`${parseFloat(user.signup_latitude).toFixed(5)}, ${parseFloat(user.signup_longitude).toFixed(5)}`} />
+                  )}
                 </DpSection>
               )}
               <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(212,175,55,0.1)' }}>

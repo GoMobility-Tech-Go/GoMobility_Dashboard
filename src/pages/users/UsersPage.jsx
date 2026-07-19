@@ -94,6 +94,8 @@ const UserModal = ({ user, onClose }) => {
             ["Verified",   user.is_verified ? "Yes" : "No"],
             ["Last Login", fmtDateTime(user.last_login)],
             ["Joined",     fmtDateTime(user.created_at)],
+            ...(user.last_login_city_name ? [["Login City", user.last_login_city_name]] : []),
+            ...(user.signup_city_name     ? [["Signup City", user.signup_city_name]]    : []),
           ].map(([l,v]) => (
             <div key={l} style={{ display:"flex", gap:12 }}>
               <span style={{ width:80, fontSize:12, color:"rgba(255,255,255,0.4)", flexShrink:0 }}>{l}</span>

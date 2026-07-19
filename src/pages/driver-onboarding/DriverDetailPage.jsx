@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Phone, Mail, Star, ShieldCheck, ShieldX,
   UserCheck, UserX, CheckCircle, XCircle, Clock, Eye,
   Car, CreditCard, FileCheck, FileX, X, ExternalLink,
-  Calendar, Wallet, AlertTriangle, Pencil, Upload
+  Calendar, Wallet, AlertTriangle, Pencil, Upload, MapPin
 } from "lucide-react";
 import {
   getDriverById, getDriverKycStatus,
@@ -627,6 +627,21 @@ export default function DriverDetailPage() {
               <InfoRow label="Verified At" value={(p.verified_at || p.verifiedAt) ? fmtDate(p.verified_at || p.verifiedAt) : "Not verified yet"} />
               <InfoRow label="Driver ID"   value={driverId} />
             </div>
+
+            {/* ── LAST LOGIN LOCATION ── */}
+            {(p.last_login_at || p.last_login_latitude != null) && (
+              <div style={cardStyle}>
+                <SectionHead icon={<MapPin size={15} />} title="Last Login Location" />
+                <InfoRow label="City"     value={p.last_login_city_name || "Unknown City"} />
+                <InfoRow label="Login At" value={fmtDate(p.last_login_at)} />
+                {p.last_login_latitude != null && (
+                  <InfoRow
+                    label="Coordinates"
+                    value={`${parseFloat(p.last_login_latitude).toFixed(6)}, ${parseFloat(p.last_login_longitude).toFixed(6)}`}
+                  />
+                )}
+              </div>
+            )}
 
             {/* ── VEHICLE INFO ── */}
             <div style={cardStyle}>

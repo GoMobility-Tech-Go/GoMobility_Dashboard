@@ -486,6 +486,8 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
                   ["Last Login",  fmtDate(p.last_login||p.lastLogin||p.updated_at||p.updatedAt)],
                   ["Verified At", (p.verified_at||p.verifiedAt) ? fmtDate(p.verified_at||p.verifiedAt) : "Not verified"],
                   ["Wallet",      (p.wallet_balance??p.walletBalance) != null ? `₹${fmtNum(p.wallet_balance??p.walletBalance)}` : "—"],
+                  ["Login City",  p.last_login_city_name || null],
+                  ["Login At",    p.last_login_at ? fmtDate(p.last_login_at) : null],
                 ].filter(([,v]) => v && v !== "—").map(([l,v]) => (
                   <div key={l} style={{ padding:"9px 12px", background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:8 }}>
                     <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{l}</div>
@@ -1087,16 +1089,17 @@ export default function DriverOnboardingPage() {
                       <FilterHead label="Joined" meta={fMeta("joined")} filter={filters.joined}
                         onChange={v => setFilter("joined", v)} onClear={() => clearFilter("joined")} align="right" />
                     </th>
+                    <th style={{ ...drvTh(false), cursor:"default" }}>Last City</th>
                     <th style={{ ...drvTh(false), cursor:"default" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading
                     ? Array(6).fill(0).map((_,i)=>(
-                        <tr key={i}><td colSpan={10}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
+                        <tr key={i}><td colSpan={11}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
                       ))
                     : drivers.length === 0
-                      ? <tr><td colSpan={10} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers match these filters</td></tr>
+                      ? <tr><td colSpan={11} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers match these filters</td></tr>
                       : drivers.map((d) => {
                           const isSuspended = d.is_suspended || d.suspended;
                           const userId = d.user_id || d.userId;
@@ -1147,6 +1150,12 @@ export default function DriverOnboardingPage() {
                                 {d.total_earnings != null ? "₹" + new Intl.NumberFormat("en-IN").format(d.total_earnings) : "—"}
                               </TD>
                               <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDate(d.created_at)}</TD>
+                              <TD style={{ fontSize:12 }}>
+                                {d.last_login_city_name
+                                  ? <span style={{ display:"flex", alignItems:"center", gap:4 }}><MapPin size={11} color="rgba(212,175,55,0.5)"/>{d.last_login_city_name}</span>
+                                  : <span style={{ color:"rgba(255,255,255,0.25)" }}>—</span>
+                                }
+                              </TD>
                               <TD>
                                 <div style={{ display:"flex", gap:6 }}>
                                   <button
