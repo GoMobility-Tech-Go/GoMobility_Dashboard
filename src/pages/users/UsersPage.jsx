@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { UserCheck, UserX, Eye, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, Filter as FilterIcon, EyeOff } from "lucide-react";
+import { UserCheck, UserX, Eye, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, Filter as FilterIcon, EyeOff, MapPin } from "lucide-react";
 import { getUsers, updateUserStatus, getUserById } from "../../api/admin";
 import { Pagination } from "../../components/ui/index.jsx";
 import {
@@ -318,6 +318,7 @@ export default function UsersPage() {
                     meta={fMeta("joined")} filter={filters.joined}
                     onChange={v => setFilter("joined", v)} onClear={() => clearFilter("joined")} align="right" />
                 </th>
+                <th style={thNS}>Signup City</th>
                 <th style={thNS}>Actions</th>
               </tr>
             </thead>
@@ -326,7 +327,7 @@ export default function UsersPage() {
               {loading
                 ? Array(6).fill(0).map((_,i) => <Skeleton key={i}/>)
                 : users.length === 0
-                  ? <tr><td colSpan={10} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>
+                  ? <tr><td colSpan={11} style={{ padding:48, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>
                       No users match these filters
                     </td></tr>
                   : users.map(u => (
@@ -348,6 +349,11 @@ export default function UsersPage() {
                       <TD style={{ fontSize:12, fontVariantNumeric:"tabular-nums" }}>{fmtRupee(u.balance ?? u.wallet_balance)}</TD>
                       <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDateTime(u.last_login)}</TD>
                       <TD style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{fmtDate(u.created_at)}</TD>
+                      <TD style={{ fontSize:12 }}>
+                        {u.signup_city_name
+                          ? <span style={{ display:"flex", alignItems:"center", gap:4 }}><MapPin size={11} color="rgba(212,175,55,0.5)"/>{u.signup_city_name}</span>
+                          : <span style={{ color:"rgba(255,255,255,0.25)" }}>—</span>}
+                      </TD>
                       <TD>
                         <div style={{ display:"flex", gap:8 }}>
                           <button onClick={() => openModal(u.id)} title="View" style={{ width:32, height:32, borderRadius:8, border:"1px solid rgba(212,175,55,0.2)", background:"transparent", cursor:"pointer", color:"#D4AF37", display:"flex", alignItems:"center", justifyContent:"center" }}>
