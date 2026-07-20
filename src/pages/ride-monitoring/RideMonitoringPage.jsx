@@ -79,7 +79,7 @@ const RideDetailModal = ({ ride, onClose }) => {
             ["Vehicle",   ride.vehicle_type || "—"],
             ["Status",    ride.status || "—"],
             ["Pickup",    ride.pickup_address || "—"],
-            ["Drop",      ride.drop_address || "—"],
+            ["Drop",      ride.dropoff_address || "—"],
             ["Distance",  ride.distance_km ? `${ride.distance_km} km` : "—"],
             ["Duration",  ride.duration_minutes ? `${ride.duration_minutes} min` : "—"],
             ["Fare",      fmtRupee(ride.final_fare)],
@@ -129,12 +129,12 @@ const MapPanel = ({ rides, selectedId, onRideClick }) => {
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
 
-    const ridesWithCoords = rides.filter((r) => r.pickup_lat && r.pickup_lng);
+    const ridesWithCoords = rides.filter((r) => r.pickup_latitude && r.pickup_longitude);
     if (ridesWithCoords.length === 0) return;
 
     ridesWithCoords.forEach((ride) => {
-      const hasPickup = !!(ride.pickup_lat && ride.pickup_lng);
-      const hasDrop   = !!(ride.drop_lat   && ride.drop_lng);
+      const hasPickup = !!(ride.pickup_latitude && ride.pickup_longitude);
+      const hasDrop   = !!(ride.dropoff_latitude && ride.dropoff_longitude);
 
       const infoContent = `
         <div style="font-family:'Outfit',sans-serif;padding:10px 12px;min-width:200px;color:#0c1f5e">
@@ -149,7 +149,7 @@ const MapPanel = ({ rides, selectedId, onRideClick }) => {
 
       if (hasPickup) {
         const pickupMarker = new window.google.maps.Marker({
-          position: { lat: parseFloat(ride.pickup_lat), lng: parseFloat(ride.pickup_lng) },
+          position: { lat: parseFloat(ride.pickup_latitude), lng: parseFloat(ride.pickup_longitude) },
           map: gMapRef.current,
           title: `Pickup: ${ride.pickup_address || ""}`,
           icon: {
@@ -167,9 +167,9 @@ const MapPanel = ({ rides, selectedId, onRideClick }) => {
 
       if (hasDrop) {
         const dropMarker = new window.google.maps.Marker({
-          position: { lat: parseFloat(ride.drop_lat), lng: parseFloat(ride.drop_lng) },
+          position: { lat: parseFloat(ride.dropoff_latitude), lng: parseFloat(ride.dropoff_longitude) },
           map: gMapRef.current,
-          title: `Drop: ${ride.drop_address || ""}`,
+          title: `Drop: ${ride.dropoff_address || ""}`,
           icon: {
             path: window.google.maps.SymbolPath.CIRCLE,
             fillColor: "#f87171", fillOpacity: 1,
@@ -182,8 +182,8 @@ const MapPanel = ({ rides, selectedId, onRideClick }) => {
       if (hasPickup && hasDrop) {
         const line = new window.google.maps.Polyline({
           path: [
-            { lat: parseFloat(ride.pickup_lat), lng: parseFloat(ride.pickup_lng) },
-            { lat: parseFloat(ride.drop_lat),   lng: parseFloat(ride.drop_lng)   },
+            { lat: parseFloat(ride.pickup_latitude), lng: parseFloat(ride.pickup_longitude) },
+            { lat: parseFloat(ride.dropoff_latitude), lng: parseFloat(ride.dropoff_longitude) },
           ],
           geodesic: true,
           strokeColor: "#D4AF37",
@@ -200,8 +200,8 @@ const MapPanel = ({ rides, selectedId, onRideClick }) => {
   useEffect(() => {
     if (!mapReady || !gMapRef.current || !selectedId) return;
     const ride = rides.find((r) => r.id === selectedId);
-    if (!ride?.pickup_lat) return;
-    gMapRef.current.panTo({ lat: parseFloat(ride.pickup_lat), lng: parseFloat(ride.pickup_lng) });
+    if (!ride?.pickup_latitude) return;
+    gMapRef.current.panTo({ lat: parseFloat(ride.pickup_latitude), lng: parseFloat(ride.pickup_longitude) });
     gMapRef.current.setZoom(14);
   }, [selectedId, rides, mapReady]);
 

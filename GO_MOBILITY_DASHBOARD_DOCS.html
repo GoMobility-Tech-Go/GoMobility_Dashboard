@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>GO Mobility — Admin Dashboard Documentation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --gold: #D4AF37;
+    --gold-dim: rgba(212,175,55,0.15);
+    --gold-border: rgba(212,175,55,0.2);
+    --bg: #04081A;
+    --surface: rgba(255,255,255,0.03);
+    --border: rgba(255,255,255,0.07);
+    --text: rgba(255,255,255,0.85);
+    --muted: rgba(255,255,255,0.38);
+    --green: #34D399;
+    --blue: #60A5FA;
+    --red: #F87171;
+    --orange: #F59E0B;
+    --purple: #A78BFA;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(4,8,26,0.92);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--gold-border);
+    padding: 0 32px;
+    display: flex; align-items: center; gap: 32px;
+    height: 60px;
+  }
+  .nav-brand {
+    font-family: 'Cinzel', serif;
+    font-size: 15px; font-weight: 700;
+    color: var(--gold);
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  .nav-links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .nav-links a {
+    padding: 6px 12px; border-radius: 8px;
+    color: var(--muted); font-size: 12px; font-weight: 500;
+    text-decoration: none; transition: all .2s;
+  }
+  .nav-links a:hover { color: var(--gold); background: var(--gold-dim); }
+  .nav-badge {
+    margin-left: auto;
+    padding: 4px 10px; border-radius: 20px;
+    background: var(--gold-dim); border: 1px solid var(--gold-border);
+    color: var(--gold); font-size: 11px; font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* ── LAYOUT ── */
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 64px 24px 48px;
+    text-align: center;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(212,175,55,0.07) 0%, transparent 70%);
+    border-bottom: 1px solid var(--gold-border);
+    margin-bottom: 48px;
+  }
+  .hero-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border-radius: 20px;
+    background: var(--gold-dim); border: 1px solid var(--gold-border);
+    color: var(--gold); font-size: 11px; font-weight: 600;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .dot-pulse {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--gold);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,.5)} 50%{box-shadow:0 0 0 7px rgba(212,175,55,0)} }
+  .hero h1 {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(32px, 5vw, 58px);
+    font-weight: 900; letter-spacing: -0.03em;
+    line-height: 1.05; margin-bottom: 16px;
+  }
+  .gold-text { color: var(--gold); }
+  .hero-sub {
+    max-width: 640px; margin: 0 auto 32px;
+    color: var(--muted); font-size: 16px; line-height: 1.7;
+  }
+  .hero-meta {
+    display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;
+  }
+  .meta-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; border-radius: 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+  }
+  .meta-chip strong { color: var(--text); }
+
+  /* ── SECTION ── */
+  section { margin-bottom: 64px; scroll-margin-top: 80px; }
+  .section-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 28px; padding-bottom: 16px;
+    border-bottom: 1px solid var(--gold-border);
+  }
+  .section-number {
+    width: 32px; height: 32px; border-radius: 10px;
+    background: var(--gold-dim); border: 1px solid var(--gold-border);
+    color: var(--gold); font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cinzel', serif; flex-shrink: 0;
+  }
+  .section-header h2 {
+    font-family: 'Cinzel', serif;
+    font-size: 22px; font-weight: 700; color: #fff;
+  }
+  .section-header p { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  /* ── CARDS GRID ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 22px;
+    transition: border-color .3s, transform .3s;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute;
+    top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg,transparent,rgba(212,175,55,0.25),transparent);
+  }
+  .card:hover { border-color: var(--gold-border); transform: translateY(-2px); }
+  .card-header {
+    display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 8px;
+    margin-bottom: 12px;
+  }
+  .card-icon { font-size: 22px; flex-shrink: 0; }
+  .card h3 { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+  .card p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .card-footer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 20px;
+    font-size: 10.5px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-live    { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.25); color: #34D399; }
+  .badge-stub    { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.25); color: #F87171; }
+  .badge-fixed   { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.25); color: #60A5FA; }
+  .badge-partial { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); color: #F59E0B; }
+  .badge-new     { background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.25); color: #A78BFA; }
+  .badge-gold    { background: var(--gold-dim); border: 1px solid var(--gold-border); color: var(--gold); }
+
+  /* ── TABLE ── */
+  .table-wrap {
+    border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; margin-bottom: 16px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 12px 16px; text-align: left;
+    font-size: 11px; font-weight: 700;
+    color: rgba(212,175,55,0.6);
+    letter-spacing: 1px; text-transform: uppercase;
+    background: rgba(212,175,55,0.04);
+    border-bottom: 1px solid var(--gold-border);
+  }
+  tbody td {
+    padding: 12px 16px; font-size: 12.5px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(212,175,55,0.02); }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--blue); }
+  .mono-gold { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--gold); }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: rgba(255,255,255,0.75);
+    line-height: 1.6; overflow-x: auto;
+    margin: 12px 0;
+  }
+  .code-block .kw { color: #c792ea; }
+  .code-block .fn { color: #82aaff; }
+  .code-block .str { color: #c3e88d; }
+  .code-block .cm { color: rgba(255,255,255,0.28); font-style: italic; }
+  .code-block .num { color: #f78c6c; }
+
+  /* ── STAT STRIP ── */
+  .stat-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px; margin-bottom: 28px;
+  }
+  .stat-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px 20px;
+    text-align: center;
+  }
+  .stat-box .val {
+    font-family: 'Cinzel', serif;
+    font-size: 28px; font-weight: 800; color: var(--gold);
+    line-height: 1; margin-bottom: 6px;
+  }
+  .stat-box .lbl { font-size: 11px; color: var(--muted); }
+
+  /* ── ALERT ── */
+  .alert {
+    padding: 14px 18px; border-radius: 12px;
+    margin-bottom: 16px; font-size: 13px; line-height: 1.5;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .alert-info  { background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.2); color: #93c5fd; }
+  .alert-warn  { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); color: #fcd34d; }
+  .alert-success { background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.2); color: #6ee7b7; }
+
+  /* ── METHOD PILLS ── */
+  .method {
+    display: inline-block; padding: 2px 7px; border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+  }
+  .get  { background: rgba(52,211,153,0.15); color: #34D399; }
+  .post { background: rgba(96,165,250,0.15); color: #60A5FA; }
+  .patch{ background: rgba(245,158,11,0.15); color: #F59E0B; }
+  .put  { background: rgba(167,139,250,0.15); color: #A78BFA; }
+  .del  { background: rgba(248,113,113,0.15); color: #F87171; }
+
+  /* ── TIMELINE ── */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 8px; top: 8px; bottom: 8px;
+    width: 1px; background: var(--gold-border);
+  }
+  .tl-item { position: relative; margin-bottom: 24px; }
+  .tl-dot {
+    position: absolute; left: -24px; top: 4px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--gold); border: 2px solid var(--bg);
+    box-shadow: 0 0 8px rgba(212,175,55,0.4);
+  }
+  .tl-item h4 { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+  .tl-item p  { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* ── DIVIDER ── */
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--gold-border);
+    padding: 32px 24px;
+    text-align: center;
+    background: rgba(212,175,55,0.02);
+  }
+  footer p { font-size: 12px; color: var(--muted); }
+  footer strong { color: var(--gold); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    nav { padding: 0 16px; gap: 16px; }
+    .nav-links { display: none; }
+    .hero { padding: 40px 16px 32px; }
+    .container { padding: 0 16px; }
+    .cards-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── PRINT ── */
+  @media print {
+    nav { display: none; }
+    .card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <span class="nav-brand">🚗 GO Mobility Docs</span>
+  <div class="nav-links">
+    <a href="#overview">Overview</a>
+    <a href="#pages">Pages</a>
+    <a href="#api">APIs</a>
+    <a href="#auth">Auth</a>
+    <a href="#implemented">Implemented</a>
+    <a href="#stubs">Stubs</a>
+    <a href="#security">Security</a>
+  </div>
+  <span class="nav-badge">v1.0 · June 2026</span>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-tag">
+    <span class="dot-pulse"></span>
+    Admin Dashboard — Full Technical Documentation
+  </div>
+  <h1>
+    <span style="color:#fff">GO Mobility</span><br/>
+    <span class="gold-text">Dashboard Docs</span>
+  </h1>
+  <p class="hero-sub">
+    Complete technical reference for the GO Mobility admin dashboard —
+    all pages, API connections, functionality, backend integrations, and implementation status.
+  </p>
+  <div class="hero-meta">
+    <div class="meta-chip">🖥️ Frontend: <strong>React + Vite</strong></div>
+    <div class="meta-chip">⚙️ Backend: <strong>Node.js + Express</strong></div>
+    <div class="meta-chip">🌐 API: <strong>api.gomobility.co.in/api/v1</strong></div>
+    <div class="meta-chip">📦 Build: <strong>✓ Zero errors</strong></div>
+    <div class="meta-chip">📄 Pages: <strong>32 total</strong></div>
+    <div class="meta-chip">🔗 API Functions: <strong>48</strong></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 1 — OVERVIEW -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <section id="overview">
+    <div class="section-header">
+      <div class="section-number">1</div>
+      <div>
+        <h2>Project Overview</h2>
+        <p>Architecture, tech stack, and project structure</p>
+      </div>
+    </div>
+
+    <div class="stat-strip">
+      <div class="stat-box"><div class="val">32</div><div class="lbl">Total Pages</div></div>
+      <div class="stat-box"><div class="val">48</div><div class="lbl">API Functions</div></div>
+      <div class="stat-box"><div class="val">24</div><div class="lbl">Live Pages</div></div>
+      <div class="stat-box"><div class="val">8</div><div class="lbl">Stub Pages</div></div>
+      <div class="stat-box"><div class="val">0</div><div class="lbl">Build Errors</div></div>
+      <div class="stat-box"><div class="val">5</div><div class="lbl">Major Fixes</div></div>
+    </div>
+
+    <div class="cards-grid">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">⚛️</span>
+          <span class="badge badge-live">Frontend</span>
+        </div>
+        <h3>React + Vite Dashboard</h3>
+        <p>Admin SPA built with React 18, Vite bundler, Recharts for data visualization, and Lucide for icons. Custom UI component library in <code style="color:var(--gold);font-size:11px">src/components/ui/index.jsx</code>.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">React 18</span>
+          <span class="badge badge-gold">Vite 5</span>
+          <span class="badge badge-gold">Recharts</span>
+          <span class="badge badge-gold">Lucide Icons</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">⚙️</span>
+          <span class="badge badge-live">Backend</span>
+        </div>
+        <h3>Node.js + Express API</h3>
+        <p>REST API with JWT auth, Prisma ORM, session management, and comprehensive admin route protection. All admin routes protected by <code style="color:var(--blue);font-size:11px">authenticate</code> + <code style="color:var(--blue);font-size:11px">requireRole(['admin'])</code> middleware.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">Node.js</span>
+          <span class="badge badge-gold">Express</span>
+          <span class="badge badge-gold">Prisma ORM</span>
+          <span class="badge badge-gold">JWT Auth</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🌐</span>
+          <span class="badge badge-live">API Config</span>
+        </div>
+        <h3>API Base Configuration</h3>
+        <p>All API calls go through a centralized Axios instance. Base URL is hardcoded in <code style="color:var(--gold);font-size:11px">src/api/axios.js</code>. JWT token is auto-attached via request interceptor.</p>
+        <div class="code-block">
+<span class="cm">// src/api/axios.js</span>
+<span class="kw">const</span> baseURL = <span class="str">"https://api.gomobility.co.in/api/v1"</span>;
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📁</span>
+          <span class="badge badge-gold">Structure</span>
+        </div>
+        <h3>Folder Structure</h3>
+        <p>Pages are organized in <code style="color:var(--gold);font-size:11px">src/pages/</code> — one folder per page. All backend functions centralized in <code style="color:var(--gold);font-size:11px">src/api/admin.js</code>.</p>
+        <div class="code-block">
+src/
+├── api/
+│   ├── admin.js      <span class="cm">(48 API functions)</span>
+│   └── axios.js      <span class="cm">(base config)</span>
+├── components/
+│   └── ui/index.jsx  <span class="cm">(shared components)</span>
+└── pages/            <span class="cm">(32 page folders)</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 2 — AUTH -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <section id="auth">
+    <div class="section-header">
+      <div class="section-number">2</div>
+      <div>
+        <h2>Authentication Flow</h2>
+        <p>OTP-based 2-step admin login and session management</p>
+      </div>
+    </div>
+
+    <div class="alert alert-info">
+      ℹ️ Dashboard uses a <strong>2-step OTP authentication</strong>. Admin enters phone number → receives OTP → verifies OTP → gets JWT token stored in localStorage.
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Step</th><th>Endpoint</th><th>Method</th><th>Payload</th><th>Response</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong style="color:var(--gold)">Step 1</strong> — Request OTP</td>
+            <td class="mono">/auth/signin</td>
+            <td><span class="method post">POST</span></td>
+            <td class="mono">{ phone_number }</td>
+            <td class="mono">{ message: "OTP sent" }</td>
+          </tr>
+          <tr>
+            <td><strong style="color:var(--gold)">Step 2</strong> — Verify OTP</td>
+            <td class="mono">/auth/verify-signin</td>
+            <td><span class="method post">POST</span></td>
+            <td class="mono">{ phone_number, otp }</td>
+            <td class="mono">{ token, user: { role } }</td>
+          </tr>
+          <tr>
+            <td><strong style="color:var(--gold)">Step 3</strong> — All Requests</td>
+            <td class="mono">Any /admin/* endpoint</td>
+            <td><span class="method get">GET</span> <span class="method post">POST</span></td>
+            <td class="mono">Authorization: Bearer &lt;token&gt;</td>
+            <td class="mono">Protected response</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="cards-grid">
+      <div class="card">
+        <div class="card-header"><span class="card-icon">🔐</span><span class="badge badge-live">Server-Side</span></div>
+        <h3>Backend Auth Middleware (5-Layer)</h3>
+        <p>Every admin API route is protected by:</p>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;gap:8px;align-items:center;font-size:12px;">
+            <span style="color:var(--gold);font-weight:700;min-width:20px">1.</span>
+            <span><code style="color:var(--blue)">authenticate</code> — Verifies JWT signature + expiry</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;font-size:12px;">
+            <span style="color:var(--gold);font-weight:700;min-width:20px">2.</span>
+            <span>JWT blacklist check — Logged-out tokens rejected</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;font-size:12px;">
+            <span style="color:var(--gold);font-weight:700;min-width:20px">3.</span>
+            <span>DB session validation — Session must exist in DB</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;font-size:12px;">
+            <span style="color:var(--gold);font-weight:700;min-width:20px">4.</span>
+            <span><code style="color:var(--blue)">requireRole(['admin'])</code> — Role must be "admin"</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;font-size:12px;">
+            <span style="color:var(--gold);font-weight:700;min-width:20px">5.</span>
+            <span>Audit trail — Every admin action logged with adminId + timestamp</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-icon">🪙</span><span class="badge badge-live">Token</span></div>
+        <h3>JWT Token Management</h3>
+        <p>Token stored in <code style="color:var(--gold);font-size:11px">localStorage</code>. Auto-attached to all requests via Axios interceptor. On 401 response, user is redirected to login page automatically.</p>
+        <div class="code-block">
+<span class="cm">// Auto-attach in axios.js interceptor</span>
+config.headers.Authorization =
+  <span class="str">`Bearer ${localStorage.getItem('token')}`</span>;
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 3 — ALL PAGES -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <section id="pages">
+    <div class="section-header">
+      <div class="section-number">3</div>
+      <div>
+        <h2>All Dashboard Pages</h2>
+        <p>Complete list of all 32 pages with status, functionality, and backend connections</p>
+      </div>
+    </div>
+
+    <div class="alert alert-success">
+      ✅ <strong>24 pages</strong> are fully connected to real backend APIs. <strong>8 pages</strong> are intentional UI-only stubs (no backend endpoint exists for them yet).
+    </div>
+
+    <!-- CORE PAGES -->
+    <h3 style="font-size:14px;color:var(--gold);margin-bottom:14px;letter-spacing:1px;text-transform:uppercase;">📊 Core Operations</h3>
+    <div class="cards-grid" style="margin-bottom:28px;">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🏠</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Dashboard (Home)</h3>
+        <p>Main overview with real-time stats — total users, drivers, rides, revenue. Shows today's counts, ongoing rides, and system health summary.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/dashboard</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📈</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Revenue Analytics</h3>
+        <p>Interactive revenue charts with 4 time periods: 1 Week, 1 Month, 3 Months, 1 Year. Report generation for operations/financial/errors/anomalies/pendingDues/stuckRides types.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/analytics/revenue?days=</span>
+          <span class="badge badge-blue">POST /admin/reports/run/:type</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📊</span>
+          <span class="badge badge-new">● Updated</span>
+        </div>
+        <h3>Operational Metrics</h3>
+        <p>Live platform performance dashboard. Real stats from getDashboard() — users, drivers, rides counts. Weekly ride bar chart + vehicle distribution pie chart + daily revenue trend from analytics API.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/dashboard</span>
+          <span class="badge badge-blue">GET /admin/analytics/revenue?days=7</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🚗</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Ride Monitoring</h3>
+        <p>Full paginated ride list with status filters, date range filter (start_date/end_date), search by ID. Shows rider, driver, route, fare, duration, status for every ride.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/rides</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- USER & DRIVER MANAGEMENT -->
+    <h3 style="font-size:14px;color:var(--gold);margin-bottom:14px;letter-spacing:1px;text-transform:uppercase;">👥 User & Driver Management</h3>
+    <div class="cards-grid" style="margin-bottom:28px;">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">👤</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Users Management</h3>
+        <p>Paginated user list with search, status filter. View user profile, wallet balance, total rides. Activate/deactivate user accounts with real API calls.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/users</span>
+          <span class="badge badge-gold">GET /admin/users/:id</span>
+          <span class="badge badge-blue">PATCH /admin/users/:id/status</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🚕</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Driver Onboarding</h3>
+        <p>Driver list with verification status, active/inactive toggle. Block/unblock drivers. Driver Detail Modal shows full profile — name, phone, rating, vehicle info, wallet balance, earnings, KYC status.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/drivers</span>
+          <span class="badge badge-gold">GET /admin/drivers/:id</span>
+          <span class="badge badge-blue">PATCH /admin/drivers/:id/verify</span>
+          <span class="badge badge-blue">PATCH /admin/drivers/:id/status</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🪪</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>KYC Management (Driver Onboarding)</h3>
+        <p>Full KYC document queue — approve/reject individual documents, view document details, suspend drivers. Backend enforces tamper detection, age check (18+), PAN/DL validity. Per-route <code style="font-size:11px;color:var(--blue)">authorize('admin')</code> middleware.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /kyc/admin/queue</span>
+          <span class="badge badge-blue">POST /kyc/admin/documents/:id/approve</span>
+          <span class="badge badge-blue">POST /kyc/admin/documents/:id/reject</span>
+          <span class="badge badge-blue">POST /kyc/admin/drivers/:id/suspend</span>
+          <span class="badge badge-gold">GET /kyc/admin/fraud-alerts</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">⭐</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Reviews & Ratings</h3>
+        <p>Flagged review queue — view flagged reviews, hide inappropriate content, unflag resolved reviews. Supports pagination and filtering.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /reviews/admin/flagged</span>
+          <span class="badge badge-blue">PATCH /reviews/admin/:id/hide</span>
+          <span class="badge badge-blue">PATCH /reviews/admin/:id/unflag</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FINANCE -->
+    <h3 style="font-size:14px;color:var(--gold);margin-bottom:14px;letter-spacing:1px;text-transform:uppercase;">💰 Finance & Payments</h3>
+    <div class="cards-grid" style="margin-bottom:28px;">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">💸</span>
+          <span class="badge badge-new">● Updated</span>
+        </div>
+        <h3>Driver Payouts</h3>
+        <p>Withdrawal transaction list with status filter (pending/processing/success/failed). Date range filter with start_date/end_date. Summary cards show paid today, pending count, failed count, total amount.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/transactions?category=withdrawal</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">💳</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Finance / Transactions</h3>
+        <p>Full transaction ledger — all wallet transactions (topup, debit, ride_fare, withdrawal). Filter by type, date range. Shows user, amount, type, balance after transaction.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/transactions</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">↩️</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Refunds</h3>
+        <p>Issue wallet refunds to users directly from the dashboard. Specify user ID, amount, and reason. Refund credited to user wallet instantly.</p>
+        <div class="card-footer">
+          <span class="badge badge-blue">POST /wallet/refund</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🏛️</span>
+          <span class="badge badge-new">● Updated</span>
+        </div>
+        <h3>Tax & Compliance Reports</h3>
+        <p>GST summary table, TDS per driver, Income Statement with live 30-day revenue from analytics API, Audit logs. PDF/GSTR-1/GSTR-3B buttons trigger real financial report via email. Income Statement dynamically calculated from real revenue.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/analytics/revenue?days=30</span>
+          <span class="badge badge-blue">POST /admin/reports/run/financial</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- PRICING -->
+    <h3 style="font-size:14px;color:var(--gold);margin-bottom:14px;letter-spacing:1px;text-transform:uppercase;">⚡ Pricing Engine</h3>
+    <div class="cards-grid" style="margin-bottom:28px;">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🏷️</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Pricing Engine (5 Tabs)</h3>
+        <p>Complete pricing management with 5 tabs:</p>
+        <ul style="margin:10px 0 0 16px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:5px;">
+          <li><strong style="color:var(--text)">Vehicles</strong> — per-km rate, base fare, min fare, surge for bike/auto/car/xl/premium/luxury</li>
+          <li><strong style="color:var(--text)">GST</strong> — platform GST % + description</li>
+          <li><strong style="color:var(--text)">Distance Tiers</strong> — km ranges with per-km multipliers</li>
+          <li><strong style="color:var(--text)">Penalties</strong> — offense type, count, penalty amount (inline edit + delete)</li>
+          <li><strong style="color:var(--text)">Settings</strong> — all global pricing key-value settings</li>
+        </ul>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/pricing/vehicles</span>
+          <span class="badge badge-gold">GET /admin/pricing/gst</span>
+          <span class="badge badge-gold">GET /admin/pricing/tiers</span>
+          <span class="badge badge-gold">GET /admin/pricing/penalties</span>
+          <span class="badge badge-gold">GET /admin/pricing/settings</span>
+          <span class="badge badge-blue">PATCH/PUT/DELETE various</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🏅</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Driver Tiers / Subscriptions</h3>
+        <p>Manage driver subscription tiers (Silver/Gold/Platinum). View all subscribers, update tier limits and pricing. Real-time data from pricing subscribers endpoint.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/pricing/subscribers</span>
+          <span class="badge badge-blue">PATCH /admin/pricing/subscribers/:tier</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📋</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Subscription Plans</h3>
+        <p>View and manage driver subscription plans. Create new plans, toggle plan active/inactive status, update plan pricing and features.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /subscriptions/plans</span>
+          <span class="badge badge-blue">POST /subscriptions/admin/plans</span>
+          <span class="badge badge-blue">PATCH /subscriptions/admin/plans/:id/status</span>
+          <span class="badge badge-blue">PATCH /subscriptions/admin/plans/:id</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- NOTIFICATIONS & SUPPORT -->
+    <h3 style="font-size:14px;color:var(--gold);margin-bottom:14px;letter-spacing:1px;text-transform:uppercase;">📢 Notifications, Support & Safety</h3>
+    <div class="cards-grid" style="margin-bottom:28px;">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📣</span>
+          <span class="badge badge-new">● Updated</span>
+        </div>
+        <h3>Broadcast Messaging</h3>
+        <p>"Send Broadcast" button now calls real <code style="font-size:11px;color:var(--blue)">triggerEngagement()</code> API. Target audience mapped to backend types (drivers/users/gold_drivers). Loading state, real error handling. Message history tab shows sent broadcasts.</p>
+        <div class="card-footer">
+          <span class="badge badge-blue">POST /notifications/admin/trigger-engagement</span>
+          <span class="badge badge-gold">GET /notifications/admin/schedule</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🎯</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Notifications Management</h3>
+        <p>View notification schedule, trigger engagement notifications, manage push notification campaigns. Connected to backend notification system.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /notifications/admin/schedule</span>
+          <span class="badge badge-blue">POST /notifications/admin/trigger-engagement</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🎫</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Complaints & Support</h3>
+        <p>Support ticket search with pagination. Reply to tickets directly from dashboard. Shows ticket status, user info, category, and message thread.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /support/search</span>
+          <span class="badge badge-blue">POST /support/tickets/:id/reply</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🆘</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Emergency & Safety (SOS)</h3>
+        <p>View SOS alert history — all emergency incidents with driver/rider info, location, timestamp. Cancel active SOS alerts. Full audit trail of emergency responses.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /sos/history</span>
+          <span class="badge badge-blue">PATCH /sos/:id/cancel</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🚨</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Fraud Detection</h3>
+        <p>KYC fraud alerts dashboard. View flagged accounts with risk scores, suspicious patterns detected by the backend AI/rules engine. Take action (suspend/review) directly.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /kyc/admin/fraud-alerts</span>
+          <span class="badge badge-blue">POST /kyc/admin/drivers/:id/suspend</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">💻</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>System Health</h3>
+        <p>Real-time system monitoring — API response times, error rates, database status, queue depths. Visual health indicators with live backend data.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/dashboard (system stats)</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ROLES -->
+    <h3 style="font-size:14px;color:var(--gold);margin-bottom:14px;letter-spacing:1px;text-transform:uppercase;">🔑 Access & Config</h3>
+    <div class="cards-grid" style="margin-bottom:28px;">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🔑</span>
+          <span class="badge badge-live">● Live</span>
+        </div>
+        <h3>Roles & Access</h3>
+        <p>Admin roles management. View admin accounts and their access levels. Note: All admins currently have equal access (no super_admin tier differentiation) — backend limitation.</p>
+        <div class="card-footer">
+          <span class="badge badge-gold">GET /admin/users (role=admin filter)</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">⚙️</span>
+          <span class="badge badge-stub">○ Stub</span>
+        </div>
+        <h3>App Config / Settings</h3>
+        <p>Platform-level settings UI. Design-only — no backend endpoint for global app config exists yet. Displays configurable keys with toggle/input fields.</p>
+        <div class="card-footer">
+          <span class="badge" style="background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);color:#F87171">No backend API</span>
+        </div>
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 4 — STUB PAGES -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <section id="stubs">
+    <div class="section-header">
+      <div class="section-number">4</div>
+      <div>
+        <h2>Intentional Stub Pages</h2>
+        <p>UI-only pages with no backend equivalent — cannot be connected until backend APIs are built</p>
+      </div>
+    </div>
+
+    <div class="alert alert-warn">
+      ⚠️ These 8 pages have design and UI but <strong>no backend APIs exist</strong> for them. They show static/demo data. Once backend adds the endpoints, these can be connected.
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Page</th><th>Path</th><th>What's Missing</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Promo Codes</strong></td>
+            <td class="mono">/promo-codes</td>
+            <td style="font-size:12px;color:var(--muted)">No CRUD endpoint for promo codes in backend</td>
+            <td><span class="badge badge-stub">○ UI Only</span></td>
+          </tr>
+          <tr>
+            <td><strong>Banners / Announcements</strong></td>
+            <td class="mono">/banners</td>
+            <td style="font-size:12px;color:var(--muted)">No banner management API exists</td>
+            <td><span class="badge badge-stub">○ UI Only</span></td>
+          </tr>
+          <tr>
+            <td><strong>Campaigns</strong></td>
+            <td class="mono">/campaigns</td>
+            <td style="font-size:12px;color:var(--muted)">No campaign management endpoint</td>
+            <td><span class="badge badge-stub">○ UI Only</span></td>
+          </tr>
+          <tr>
+            <td><strong>City Management</strong></td>
+            <td class="mono">/city-management</td>
+            <td style="font-size:12px;color:var(--muted)">No city/zone CRUD endpoint</td>
+            <td><span class="badge badge-stub">○ UI Only</span></td>
+          </tr>
+          <tr>
+            <td><strong>Dispatch Settings</strong></td>
+            <td class="mono">/dispatch-settings</td>
+            <td style="font-size:12px;color:var(--muted)">No dispatch config API</td>
+            <td><span class="badge badge-stub">○ UI Only</span></td>
+          </tr>
+          <tr>
+            <td><strong>User Segments</strong></td>
+            <td class="mono">/user-segments</td>
+            <td style="font-size:12px;color:var(--muted)">No user segmentation endpoint</td>
+            <td><span class="badge badge-stub">○ UI Only</span></td>
+          </tr>
+          <tr>
+            <td><strong>Activity Logs</strong></td>
+            <td class="mono">/activity-logs</td>
+            <td style="font-size:12px;color:var(--muted)">Admin audit logs exist in DB but no read API</td>
+            <td><span class="badge badge-stub">○ UI Only</span></td>
+          </tr>
+          <tr>
+            <td><strong>Driver Incentives</strong></td>
+            <td class="mono">/driver-incentives</td>
+            <td style="font-size:12px;color:var(--muted)">No driver incentive management API</td>
+            <td><span class="badge badge-stub">○ UI Only</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 5 — ALL API FUNCTIONS -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <section id="api">
+    <div class="section-header">
+      <div class="section-number">5</div>
+      <div>
+        <h2>All 48 API Functions (admin.js)</h2>
+        <p>Complete reference of every backend function — endpoint, method, parameters, usage</p>
+      </div>
+    </div>
+
+    <div class="alert alert-success">
+      ✅ All 48 functions have corresponding UI in the dashboard. Zero dead/unused API functions.
+    </div>
+
+    <!-- Dashboard & Analytics -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">📊 Dashboard & Analytics</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Used In</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-gold">getDashboard()</td><td><span class="method get">GET</span></td><td class="mono">/admin/dashboard</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">Dashboard, OperationalMetrics</td></tr>
+          <tr><td class="mono-gold">getRevenueAnalytics(days)</td><td><span class="method get">GET</span></td><td class="mono">/admin/analytics/revenue?days=</td><td style="font-size:11px;color:var(--muted)">days: 1–365</td><td style="font-size:11px">RevenueAnalytics, OperationalMetrics, TaxReports</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Users -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">👤 Users</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Used In</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-gold">getUsers(params)</td><td><span class="method get">GET</span></td><td class="mono">/admin/users</td><td style="font-size:11px;color:var(--muted)">limit, offset, search, status</td><td style="font-size:11px">UsersPage</td></tr>
+          <tr><td class="mono-gold">getUserById(userId)</td><td><span class="method get">GET</span></td><td class="mono">/admin/users/:id</td><td style="font-size:11px;color:var(--muted)">userId</td><td style="font-size:11px">UsersPage (detail modal)</td></tr>
+          <tr><td class="mono-gold">updateUserStatus(userId, is_active)</td><td><span class="method patch">PATCH</span></td><td class="mono">/admin/users/:id/status</td><td style="font-size:11px;color:var(--muted)">{ is_active: bool }</td><td style="font-size:11px">UsersPage (toggle)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Drivers -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">🚕 Drivers</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Used In</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-gold">getDrivers(params)</td><td><span class="method get">GET</span></td><td class="mono">/admin/drivers</td><td style="font-size:11px;color:var(--muted)">limit, offset, search, is_verified</td><td style="font-size:11px">DriverOnboarding</td></tr>
+          <tr><td class="mono-gold">getDriverById(driverId)</td><td><span class="method get">GET</span></td><td class="mono">/admin/drivers/:id</td><td style="font-size:11px;color:var(--muted)">driverId</td><td style="font-size:11px">DriverOnboarding (Detail Modal)</td></tr>
+          <tr><td class="mono-gold">verifyDriver(driverId, is_verified)</td><td><span class="method patch">PATCH</span></td><td class="mono">/admin/drivers/:id/verify</td><td style="font-size:11px;color:var(--muted)">{ is_verified: bool }</td><td style="font-size:11px">DriverOnboarding</td></tr>
+          <tr><td class="mono-gold">updateDriverStatus(driverId, is_active)</td><td><span class="method patch">PATCH</span></td><td class="mono">/admin/drivers/:id/status</td><td style="font-size:11px;color:var(--muted)">{ is_active: bool }</td><td style="font-size:11px">DriverOnboarding (block/unblock)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Rides & Transactions -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">🚗 Rides & Transactions</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Used In</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-gold">getRides(params)</td><td><span class="method get">GET</span></td><td class="mono">/admin/rides</td><td style="font-size:11px;color:var(--muted)">limit, offset, status, start_date, end_date</td><td style="font-size:11px">RideMonitoring</td></tr>
+          <tr><td class="mono-gold">getTransactions(params)</td><td><span class="method get">GET</span></td><td class="mono">/admin/transactions</td><td style="font-size:11px;color:var(--muted)">limit, offset, category, start_date, end_date</td><td style="font-size:11px">Finance</td></tr>
+          <tr><td class="mono-gold">getPayouts(params)</td><td><span class="method get">GET</span></td><td class="mono">/admin/transactions</td><td style="font-size:11px;color:var(--muted)">category=withdrawal, status, start_date, end_date</td><td style="font-size:11px">PayoutsPage</td></tr>
+          <tr><td class="mono-gold">issueRefund(data)</td><td><span class="method post">POST</span></td><td class="mono">/wallet/refund</td><td style="font-size:11px;color:var(--muted)">{ userId, amount, reason }</td><td style="font-size:11px">RefundsPage</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pricing -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">⚡ Pricing Engine</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Used In</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-gold">getPricingVehicles()</td><td><span class="method get">GET</span></td><td class="mono">/admin/pricing/vehicles</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">PricingEngine > Vehicles tab</td></tr>
+          <tr><td class="mono-gold">updateVehiclePricing(type, data)</td><td><span class="method patch">PATCH</span></td><td class="mono">/admin/pricing/vehicles/:type</td><td style="font-size:11px;color:var(--muted)">{ base_fare, per_km_rate, ... }</td><td style="font-size:11px">PricingEngine > Vehicles tab</td></tr>
+          <tr><td class="mono-gold">getPricingSettings()</td><td><span class="method get">GET</span></td><td class="mono">/admin/pricing/settings</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">PricingEngine > Settings tab</td></tr>
+          <tr><td class="mono-gold">updatePricingSetting(key, val, type)</td><td><span class="method patch">PATCH</span></td><td class="mono">/admin/pricing/settings/:key</td><td style="font-size:11px;color:var(--muted)">{ value, value_type }</td><td style="font-size:11px">PricingEngine > Settings tab</td></tr>
+          <tr><td class="mono-gold">reloadPricingCache()</td><td><span class="method post">POST</span></td><td class="mono">/admin/pricing/cache/reload</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">PricingEngine (refresh button)</td></tr>
+          <tr><td class="mono-gold">getPricingGst()</td><td><span class="method get">GET</span></td><td class="mono">/admin/pricing/gst</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">PricingEngine > GST tab</td></tr>
+          <tr><td class="mono-gold">updatePricingGst(data)</td><td><span class="method patch">PATCH</span></td><td class="mono">/admin/pricing/gst</td><td style="font-size:11px;color:var(--muted)">{ gst_percentage, description }</td><td style="font-size:11px">PricingEngine > GST tab</td></tr>
+          <tr><td class="mono-gold">getPricingTiers()</td><td><span class="method get">GET</span></td><td class="mono">/admin/pricing/tiers</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">PricingEngine > Distance Tiers</td></tr>
+          <tr><td class="mono-gold">updatePricingTier(name, data)</td><td><span class="method put">PUT</span></td><td class="mono">/admin/pricing/tiers/:name</td><td style="font-size:11px;color:var(--muted)">{ min_km, max_km, per_km_multiplier }</td><td style="font-size:11px">PricingEngine > Distance Tiers</td></tr>
+          <tr><td class="mono-gold">getPricingPenalties()</td><td><span class="method get">GET</span></td><td class="mono">/admin/pricing/penalties</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">PricingEngine > Penalties tab</td></tr>
+          <tr><td class="mono-gold">upsertPricingPenalty(type, count, data)</td><td><span class="method put">PUT</span></td><td class="mono">/admin/pricing/penalties/:type/:count</td><td style="font-size:11px;color:var(--muted)">{ penalty_type, amount }</td><td style="font-size:11px">PricingEngine > Penalties tab</td></tr>
+          <tr><td class="mono-gold">deletePricingPenalty(type, count)</td><td><span class="method del">DELETE</span></td><td class="mono">/admin/pricing/penalties/:type/:count</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">PricingEngine > Penalties tab</td></tr>
+          <tr><td class="mono-gold">getPricingSubscribers()</td><td><span class="method get">GET</span></td><td class="mono">/admin/pricing/subscribers</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">DriverTiersPage</td></tr>
+          <tr><td class="mono-gold">updatePricingSubscriber(tier, data)</td><td><span class="method patch">PATCH</span></td><td class="mono">/admin/pricing/subscribers/:tier</td><td style="font-size:11px;color:var(--muted)">{ ... tier config }</td><td style="font-size:11px">DriverTiersPage</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Subscriptions -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">📋 Subscriptions</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Used In</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-gold">getSubscriptionPlans()</td><td><span class="method get">GET</span></td><td class="mono">/subscriptions/plans</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">SubscriptionsPage</td></tr>
+          <tr><td class="mono-gold">createSubscriptionPlan(data)</td><td><span class="method post">POST</span></td><td class="mono">/subscriptions/admin/plans</td><td style="font-size:11px;color:var(--muted)">{ name, price, duration, ... }</td><td style="font-size:11px">SubscriptionsPage</td></tr>
+          <tr><td class="mono-gold">togglePlanStatus(planId, is_active)</td><td><span class="method patch">PATCH</span></td><td class="mono">/subscriptions/admin/plans/:id/status</td><td style="font-size:11px;color:var(--muted)">{ is_active: bool }</td><td style="font-size:11px">SubscriptionsPage</td></tr>
+          <tr><td class="mono-gold">updateSubscriptionPlan(planId, data)</td><td><span class="method patch">PATCH</span></td><td class="mono">/subscriptions/admin/plans/:id</td><td style="font-size:11px;color:var(--muted)">{ name, price, ... }</td><td style="font-size:11px">SubscriptionsPage</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Reviews -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">⭐ Reviews</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Used In</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-gold">getFlaggedReviews(params)</td><td><span class="method get">GET</span></td><td class="mono">/reviews/admin/flagged</td><td style="font-size:11px;color:var(--muted)">limit, offset</td><td style="font-size:11px">ReviewsPage</td></tr>
+          <tr><td class="mono-gold">hideReview(reviewId)</td><td><span class="method patch">PATCH</span></td><td class="mono">/reviews/admin/:id/hide</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">ReviewsPage</td></tr>
+          <tr><td class="mono-gold">unflagReview(reviewId)</td><td><span class="method patch">PATCH</span></td><td class="mono">/reviews/admin/:id/unflag</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">ReviewsPage</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- KYC -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">🪪 KYC</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Used In</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-gold">getKycQueue(params)</td><td><span class="method get">GET</span></td><td class="mono">/kyc/admin/queue</td><td style="font-size:11px;color:var(--muted)">limit, page, status</td><td style="font-size:11px">DriverOnboarding > KYC tab</td></tr>
+          <tr><td class="mono-gold">approveDocument(docId)</td><td><span class="method post">POST</span></td><td class="mono">/kyc/admin/documents/:id/approve</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">DriverOnboarding > KYC tab</td></tr>
+          <tr><td class="mono-gold">rejectDocument(docId, reason, retry)</td><td><span class="method post">POST</span></td><td class="mono">/kyc/admin/documents/:id/reject</td><td style="font-size:11px;color:var(--muted)">{ reason, allowRetry }</td><td style="font-size:11px">DriverOnboarding > KYC tab</td></tr>
+          <tr><td class="mono-gold">getFraudAlerts(params)</td><td><span class="method get">GET</span></td><td class="mono">/kyc/admin/fraud-alerts</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">FraudDetectionPage</td></tr>
+          <tr><td class="mono-gold">suspendDriver(userId, reason)</td><td><span class="method post">POST</span></td><td class="mono">/kyc/admin/drivers/:id/suspend</td><td style="font-size:11px;color:var(--muted)">{ reason }</td><td style="font-size:11px">FraudDetection, DriverOnboarding</td></tr>
+          <tr><td class="mono-gold">getKycDocument(docId)</td><td><span class="method get">GET</span></td><td class="mono">/kyc/admin/documents/:id</td><td style="font-size:11px;color:var(--muted)">docId</td><td style="font-size:11px">KYC Document detail view</td></tr>
+          <tr><td class="mono-gold">getDriverKycStatus(userId)</td><td><span class="method get">GET</span></td><td class="mono">/kyc/admin/drivers/:id</td><td style="font-size:11px;color:var(--muted)">userId</td><td style="font-size:11px">Driver Detail Modal</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Notifications & Support & SOS -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">📢 Notifications, Support & SOS</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Used In</th></tr></thead>
+        <tbody>
+          <tr><td class="mono-gold">triggerEngagement(data)</td><td><span class="method post">POST</span></td><td class="mono">/notifications/admin/trigger-engagement</td><td style="font-size:11px;color:var(--muted)">{ type, message, title }</td><td style="font-size:11px">BroadcastMessaging (Send Broadcast)</td></tr>
+          <tr><td class="mono-gold">getNotificationSchedule()</td><td><span class="method get">GET</span></td><td class="mono">/notifications/admin/schedule</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">NotificationsPage</td></tr>
+          <tr><td class="mono-gold">getSupportTickets(params)</td><td><span class="method get">GET</span></td><td class="mono">/support/search</td><td style="font-size:11px;color:var(--muted)">limit, offset, query, status</td><td style="font-size:11px">ComplaintsSupport</td></tr>
+          <tr><td class="mono-gold">replyToTicket(ticketId, message)</td><td><span class="method post">POST</span></td><td class="mono">/support/tickets/:id/reply</td><td style="font-size:11px;color:var(--muted)">{ message }</td><td style="font-size:11px">ComplaintsSupport (reply)</td></tr>
+          <tr><td class="mono-gold">getSosHistory(params)</td><td><span class="method get">GET</span></td><td class="mono">/sos/history</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">EmergencySafetyPage</td></tr>
+          <tr><td class="mono-gold">cancelSos(alertId)</td><td><span class="method patch">PATCH</span></td><td class="mono">/sos/:id/cancel</td><td style="font-size:11px;color:var(--muted)">None</td><td style="font-size:11px">EmergencySafetyPage</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Reports -->
+    <h3 style="font-size:13px;color:rgba(212,175,55,0.7);margin:20px 0 10px;letter-spacing:1px;text-transform:uppercase">📄 Reports</h3>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Function</th><th>Method</th><th>Endpoint</th><th>Parameters</th><th>Report Types</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono-gold">runReport(reportType)</td>
+            <td><span class="method post">POST</span></td>
+            <td class="mono">/admin/reports/run/:type</td>
+            <td style="font-size:11px;color:var(--muted)">reportType in path</td>
+            <td style="font-size:11px">
+              <span class="badge badge-gold" style="margin:2px">operations</span>
+              <span class="badge badge-gold" style="margin:2px">financial</span>
+              <span class="badge badge-gold" style="margin:2px">errors</span>
+              <span class="badge badge-gold" style="margin:2px">anomalies</span>
+              <span class="badge badge-gold" style="margin:2px">pendingDues</span>
+              <span class="badge badge-gold" style="margin:2px">stuckRides</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 6 — WHAT WAS IMPLEMENTED / FIXED -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <section id="implemented">
+    <div class="section-header">
+      <div class="section-number">6</div>
+      <div>
+        <h2>Implementation Log</h2>
+        <p>All bugs fixed and features implemented — complete changelog</p>
+      </div>
+    </div>
+
+    <div class="timeline">
+
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <h4>🐛 Bug Fix — 3 Wrong API URLs in admin.js</h4>
+        <p>
+          <code style="color:var(--red);font-size:11px">/notifications/trigger-engagement</code> → <code style="color:var(--green);font-size:11px">/notifications/admin/trigger-engagement</code><br/>
+          <code style="color:var(--red);font-size:11px">/notifications/schedule</code> → <code style="color:var(--green);font-size:11px">/notifications/admin/schedule</code><br/>
+          <code style="color:var(--red);font-size:11px">/support/tickets</code> → <code style="color:var(--green);font-size:11px">/support/search</code>
+        </p>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <h4>✨ New API Functions Added to admin.js</h4>
+        <p>Added 10 missing functions: <code style="color:var(--blue);font-size:11px">getPricingTiers</code>, <code style="color:var(--blue);font-size:11px">updatePricingTier</code>, <code style="color:var(--blue);font-size:11px">getPricingPenalties</code>, <code style="color:var(--blue);font-size:11px">upsertPricingPenalty</code>, <code style="color:var(--blue);font-size:11px">deletePricingPenalty</code>, <code style="color:var(--blue);font-size:11px">runReport</code>, <code style="color:var(--blue);font-size:11px">getPayouts</code>, <code style="color:var(--blue);font-size:11px">updateSubscriptionPlan</code>, <code style="color:var(--blue);font-size:11px">getKycDocument</code>, <code style="color:var(--blue);font-size:11px">getDriverKycStatus</code>.</p>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <h4>🏷️ PricingEnginePage — Complete Rebuild (5 Tabs)</h4>
+        <p>Completely rewritten with 5 fully functional tabs: Vehicles, GST, Distance Tiers, Penalties, Settings. All tabs load from and save to real backend. Penalty tab has inline edit + add + delete. Settings tab supports all value types (float, int, string, bool).</p>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <h4>👁️ DriverOnboardingPage — Driver Detail Modal</h4>
+        <p>Added "Details" button (eye icon) to driver table rows. Opens modal fetching full driver profile via <code style="color:var(--blue);font-size:11px">getDriverById()</code> — shows name, phone, rating, vehicle, wallet balance, total rides, earnings, KYC status, suspension reason.</p>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <h4>📈 RevenueAnalyticsPage — Period Labels + Report Types Fixed</h4>
+        <p>Period buttons changed from cryptic <code style="color:var(--red);font-size:11px">7D/30D/90D</code> to <code style="color:var(--green);font-size:11px">1 Week / 1 Month / 3 Months / 1 Year</code>. Added 1 Year (365 days) option which was missing entirely. Fixed REPORT_TYPES keys — dashboard had wrong keys like <code style="color:var(--red);font-size:11px">daily_revenue, weekly_summary</code> which backend doesn't support. Now uses correct keys: <code style="color:var(--green);font-size:11px">operations, financial, errors, anomalies, pendingDues, stuckRides</code>.</p>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <h4>💸 PayoutsPage — Date Range Filter Added</h4>
+        <p>Backend <code style="color:var(--blue);font-size:11px">/admin/transactions</code> supports <code style="color:var(--blue);font-size:11px">start_date</code>/<code style="color:var(--blue);font-size:11px">end_date</code> but the Payouts page had no UI for it. Added "From" and "To" date inputs with Clear button. Date params correctly passed to API on change.</p>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <h4>📊 OperationalMetricsPage — Real Backend Data (Was 100% Fake)</h4>
+        <p>Page had hardcoded fake numbers (27,496 rides, 907 drivers, ₹13.7L revenue). Now fully connected: Summary cards from <code style="color:var(--blue);font-size:11px">getDashboard()</code>, weekly bar chart + vehicle distribution pie + daily revenue line chart from <code style="color:var(--blue);font-size:11px">getRevenueAnalytics(7)</code>. Added Refresh button + last-updated timestamp. Platform Snapshot panel shows 8 live DB metrics.</p>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <h4>📣 BroadcastMessagingPage — Real API Connection</h4>
+        <p>"Send Broadcast" button now calls real <code style="color:var(--blue);font-size:11px">triggerEngagement()</code> API. Subject field added and wired. Audience type mapped: broadcast-drivers→"drivers", broadcast-users→"users", broadcast-gold→"gold_drivers". Loading state, proper async error handling, real-time feedback toast.</p>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <h4>🏛️ TaxReportsPage — Live Revenue + Real Report Generation</h4>
+        <p>Loads real 30-day revenue via <code style="color:var(--blue);font-size:11px">getRevenueAnalytics(30)</code>. Income Statement now dynamically calculates all values (gross, subscriptions, cancellation fees, payouts, GST liability, net profit) from real revenue data. All PDF/GSTR-1/GSTR-3B/Excel buttons now call <code style="color:var(--blue);font-size:11px">runReport('financial')</code> which queues report to admin email. MiniStatRow shows live 30d revenue and GST estimate.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 7 — SECURITY -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <section id="security">
+    <div class="section-header">
+      <div class="section-number">7</div>
+      <div>
+        <h2>Security Architecture</h2>
+        <p>How unauthorized access and abuse are prevented</p>
+      </div>
+    </div>
+
+    <div class="alert alert-success">
+      ✅ <strong>All destructive actions</strong> (block driver, suspend account, KYC approve/reject, issue refund) are protected by backend middleware. The dashboard cannot bypass any of these checks — they are enforced server-side.
+    </div>
+
+    <div class="cards-grid">
+      <div class="card">
+        <div class="card-header"><span class="card-icon">🔒</span><span class="badge badge-live">Backend Enforced</span></div>
+        <h3>Driver Block — Can Anyone Do It?</h3>
+        <p><strong style="color:var(--green)">No.</strong> Blocking a driver requires:</p>
+        <div style="margin-top:10px;font-size:12px;display:flex;flex-direction:column;gap:6px;">
+          <div>✅ Valid JWT token (not expired, not blacklisted)</div>
+          <div>✅ Active session record in database</div>
+          <div>✅ User role must be exactly <code style="color:var(--blue);">"admin"</code></div>
+          <div>✅ All actions logged with adminId + timestamp</div>
+          <div>✅ 401/403 returned if any check fails</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-icon">📋</span><span class="badge badge-live">Backend Enforced</span></div>
+        <h3>KYC Approval — Tamper-Proof</h3>
+        <p>Backend KYC approval enforces additional validations beyond just auth:</p>
+        <div style="margin-top:10px;font-size:12px;display:flex;flex-direction:column;gap:6px;">
+          <div>✅ Document must exist and be in pending state</div>
+          <div>✅ Age verification — must be 18+</div>
+          <div>✅ PAN card format validation (regex)</div>
+          <div>✅ DL expiry check — expired DLs rejected</div>
+          <div>✅ Tamper detection on document images</div>
+          <div>✅ Per-route <code style="color:var(--blue);">authorize('admin')</code> middleware</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-icon">🗂️</span><span class="badge badge-live">Audit Trail</span></div>
+        <h3>Admin Audit Log</h3>
+        <p>Every admin action in the system is recorded in the database with:</p>
+        <div style="margin-top:10px;font-size:12px;display:flex;flex-direction:column;gap:6px;">
+          <div>📝 Admin user ID who performed the action</div>
+          <div>📝 Exact action type (verify_driver, reject_kyc, etc.)</div>
+          <div>📝 Target entity ID (driver/user/document)</div>
+          <div>📝 Timestamp (UTC)</div>
+          <div>📝 IP address</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-icon">⚠️</span><span class="badge badge-partial">Known Limitation</span></div>
+        <h3>Admin Role Levels</h3>
+        <p>Currently all admin accounts have <strong style="color:var(--orange)">equal access</strong> — there is no super_admin tier differentiation enforced by the backend. Any admin can perform any admin action. This is a backend architecture limitation, not something the dashboard can fix unilaterally.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 8 — BACKEND CONSTRAINTS -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-number">8</div>
+      <div>
+        <h2>Backend Constraints &amp; Known Limitations</h2>
+        <p>Important facts about what the backend can and cannot do</p>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Constraint</th><th>Detail</th><th>Dashboard Workaround</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Analytics only accepts <code style="font-size:11px;color:var(--blue)">days</code> param</strong></td>
+            <td style="font-size:12px;color:var(--muted)"><code>GET /admin/analytics/revenue</code> only accepts <code>?days=N</code> (1–365). Does NOT support startDate/endDate range filtering.</td>
+            <td style="font-size:12px">Dashboard uses fixed period buttons: 7d, 30d, 90d, 365d</td>
+          </tr>
+          <tr>
+            <td><strong>No GST/TDS breakdown endpoint</strong></td>
+            <td style="font-size:12px;color:var(--muted)">Backend has no dedicated per-month GST breakdown API. Only <code>runReport('financial')</code> which sends an email report.</td>
+            <td style="font-size:12px">TaxReports shows estimated GST based on revenue × 18%. Real monthly breakdown requires backend endpoint.</td>
+          </tr>
+          <tr>
+            <td><strong>Reports are email-only</strong></td>
+            <td style="font-size:12px;color:var(--muted)"><code>POST /admin/reports/run/:type</code> queues report generation and sends to admin email. No direct JSON response with report data.</td>
+            <td style="font-size:12px">Buttons show toast "check admin email" after API call</td>
+          </tr>
+          <tr>
+            <td><strong>No real-time websocket</strong></td>
+            <td style="font-size:12px;color:var(--muted)">Backend uses REST only — no WebSocket/SSE for live updates. Dashboard data is snapshot-based.</td>
+            <td style="font-size:12px">Manual Refresh buttons added to key pages (OperationalMetrics, Payouts)</td>
+          </tr>
+          <tr>
+            <td><strong>Flat admin roles</strong></td>
+            <td style="font-size:12px;color:var(--muted)">Backend only has <code>role === 'admin'</code> check — no sub-role differentiation (superadmin, finance-only, read-only).</td>
+            <td style="font-size:12px">Dashboard cannot implement role-based UI hiding reliably — all admins see everything</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 9 — BUILD STATUS -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="section-header">
+      <div class="section-number">9</div>
+      <div>
+        <h2>Build &amp; Deployment Status</h2>
+        <p>Production build verification results</p>
+      </div>
+    </div>
+
+    <div class="alert alert-success">
+      ✅ Production build passes with <strong>zero errors</strong>. 2434 modules transformed successfully. Build time: ~14 seconds.
+    </div>
+
+    <div class="code-block">
+<span class="cm"># Build output — June 2026</span>
+$ npm run build
+
+> go-mobility-dashboard@1.0.0 build
+> vite build
+
+<span style="color:#34D399">✓</span> <span class="num">2434</span> modules transformed.
+dist/index.html                 <span class="num">0.41 kB</span>
+dist/assets/index.css           <span class="num">7.57 kB</span>
+dist/assets/index.js        <span class="num">1,113.73 kB</span>  <span class="cm">⚠ gzip: 294 kB (normal for a full dashboard)</span>
+<span style="color:#34D399">✓ built in 14.05s  — ZERO ERRORS</span>
+
+<span class="cm">⚠ Only warning: chunk size &gt;500 kB (expected — no code splitting needed for admin tool)</span>
+    </div>
+
+    <div class="cards-grid" style="margin-top:20px">
+      <div class="card">
+        <div class="card-header"><span class="card-icon">🌐</span><span class="badge badge-live">Config</span></div>
+        <h3>API Base URL</h3>
+        <div class="code-block" style="margin-top:10px">
+<span class="str">"https://api.gomobility.co.in/api/v1"</span>
+<span class="cm">// src/api/axios.js</span>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">Change this one line to point to a different environment (staging/local).</p>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-icon">🔧</span><span class="badge badge-live">Stack</span></div>
+        <h3>Tech Versions</h3>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">React</span><span class="mono">18.x</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Vite</span><span class="mono">5.4.21</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Recharts</span><span class="mono">2.x</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Axios</span><span class="mono">1.x</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Lucide React</span><span class="mono">0.x</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- QUICK REFERENCE -->
+  <section style="margin-bottom:48px">
+    <div class="section-header">
+      <div class="section-number">📌</div>
+      <div>
+        <h2>Quick Reference</h2>
+        <p>Badge legend and status meanings</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span class="badge badge-live">● Live</span> Connected to real backend API</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span class="badge badge-new">● Updated</span> Recently improved/connected in this session</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span class="badge badge-fixed">Fixed</span> Bug was fixed</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span class="badge badge-stub">○ Stub</span> UI-only, no backend API exists</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)"><span class="badge badge-partial">Partial</span> Limitation or known constraint</div>
+    </div>
+  </section>
+
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <p style="margin-bottom:8px"><strong>GO Mobility Admin Dashboard</strong> — Full Technical Documentation</p>
+  <p>Generated: June 2026 &nbsp;·&nbsp; Build: ✓ Zero Errors &nbsp;·&nbsp; <strong>24 live pages</strong> · <strong>48 API functions</strong> · <strong>8 intentional stubs</strong></p>
+  <p style="margin-top:8px;font-size:11px;color:rgba(255,255,255,0.18)">Internal document — GO Mobility Engineering Team</p>
+</footer>
+
+</body>
+</html>
