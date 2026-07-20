@@ -108,7 +108,7 @@ const UserModal = ({ user, onClose }) => {
               <span style={{ fontSize:13, color:"rgba(255,255,255,0.85)", fontWeight:500, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                 {user.signup_city_name
                   ? <><MapPin size={12} color="#D4AF37"/> {user.signup_city_name}</>
-                  : <>{parseFloat(user.signup_latitude).toFixed(5)}, {parseFloat(user.signup_longitude).toFixed(5)}</>
+                  : <GeoName lat={user.signup_latitude} lng={user.signup_longitude} />
                 }
                 {user.signup_latitude != null && (
                   <a href={`https://www.google.com/maps?q=${user.signup_latitude},${user.signup_longitude}`}
@@ -127,7 +127,7 @@ const UserModal = ({ user, onClose }) => {
               <span style={{ fontSize:13, color:"rgba(255,255,255,0.85)", fontWeight:500, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                 {user.last_login_city_name
                   ? <><MapPin size={12} color="#D4AF37"/> {user.last_login_city_name}</>
-                  : <>{parseFloat(user.last_login_latitude).toFixed(5)}, {parseFloat(user.last_login_longitude).toFixed(5)}</>
+                  : <GeoName lat={user.last_login_latitude} lng={user.last_login_longitude} />
                 }
                 {user.last_login_latitude != null && (
                   <a href={`https://www.google.com/maps?q=${user.last_login_latitude},${user.last_login_longitude}`}
@@ -150,6 +150,35 @@ function SortIcon({ col, sort }) {
   return sort.dir === "asc"
     ? <ChevronUp   size={11} style={{ color:"#D4AF37", flexShrink:0 }} />
     : <ChevronDown size={11} style={{ color:"#D4AF37", flexShrink:0 }} />;
+}
+
+/* ─── Reverse geocoding via Nominatim (free, no API key) ──────────────────── */
+const _geoCache = {};
+function GeoName({ lat, lng }) {
+  const key = `${lat},${lng}`;
+  const [name, setName] = useState(_geoCache[key] || null);
+  useEffect(() => {
+    if (_geoCache[key]) { setName(_geoCache[key]); return; }
+    if (lat == null || lng == null) return;
+    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10&accept-language=en`)
+      .then(r => r.json())
+      .then(d => {
+        const a = d.address || {};
+        const city = a.city || a.town || a.village || a.county || a.state_district || '';
+        const country = a.country || '';
+        const result = city ? `${city}, ${country}` : (d.display_name || '').split(',').slice(0, 2).join(',').trim();
+        _geoCache[key] = result;
+        setName(result);
+      })
+      .catch(() => {});
+  }, [key, lat, lng]);
+  return (
+    <a href={`https://www.google.com/maps?q=${lat},${lng}`} target="_blank" rel="noopener noreferrer"
+      style={{ color:"rgba(212,175,55,0.7)", fontSize:11, textDecoration:"none", display:"flex", alignItems:"center", gap:3 }}>
+      <MapPin size={10}/>
+      {name || `${parseFloat(lat).toFixed(3)}, ${parseFloat(lng).toFixed(3)}`}
+    </a>
+  );
 }
 
 /* ─── Main page ───────────────────────────────────────────────────────────── */
@@ -390,7 +419,7 @@ export default function UsersPage() {
                         {u.signup_city_name
                           ? <span style={{ display:"flex", alignItems:"center", gap:4 }}><MapPin size={11} color="rgba(212,175,55,0.5)"/>{u.signup_city_name}</span>
                           : u.signup_latitude != null
-                            ? <a href={`https://www.google.com/maps?q=${u.signup_latitude},${u.signup_longitude}`} target="_blank" rel="noopener noreferrer" style={{ color:"rgba(212,175,55,0.6)", fontSize:11, textDecoration:"none", display:"flex", alignItems:"center", gap:3 }}><MapPin size={10}/>{parseFloat(u.signup_latitude).toFixed(3)}, {parseFloat(u.signup_longitude).toFixed(3)}</a>
+                            ? <GeoName lat={u.signup_latitude} lng={u.signup_longitude} />
                             : <span style={{ color:"rgba(255,255,255,0.25)" }}>—</span>}
                       </TD>
                       <TD>
