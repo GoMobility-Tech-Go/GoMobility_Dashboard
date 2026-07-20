@@ -95,13 +95,50 @@ const UserModal = ({ user, onClose }) => {
             ["Last Login", fmtDateTime(user.last_login)],
             ["Joined",     fmtDateTime(user.created_at)],
             ...(user.last_login_city_name ? [["Login City", user.last_login_city_name]] : []),
-            ...(user.signup_city_name     ? [["Signup City", user.signup_city_name]]    : []),
           ].map(([l,v]) => (
             <div key={l} style={{ display:"flex", gap:12 }}>
               <span style={{ width:80, fontSize:12, color:"rgba(255,255,255,0.4)", flexShrink:0 }}>{l}</span>
               <span style={{ fontSize:13, color:"rgba(255,255,255,0.85)", fontWeight:500 }}>{String(v)}</span>
             </div>
           ))}
+          {/* Signup Location — city name ya coordinates + map link */}
+          {(user.signup_city_name || user.signup_latitude != null) && (
+            <div style={{ display:"flex", gap:12 }}>
+              <span style={{ width:80, fontSize:12, color:"rgba(255,255,255,0.4)", flexShrink:0 }}>Signup From</span>
+              <span style={{ fontSize:13, color:"rgba(255,255,255,0.85)", fontWeight:500, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                {user.signup_city_name
+                  ? <><MapPin size={12} color="#D4AF37"/> {user.signup_city_name}</>
+                  : <>{parseFloat(user.signup_latitude).toFixed(5)}, {parseFloat(user.signup_longitude).toFixed(5)}</>
+                }
+                {user.signup_latitude != null && (
+                  <a href={`https://www.google.com/maps?q=${user.signup_latitude},${user.signup_longitude}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize:11, color:"#D4AF37", textDecoration:"none", border:"1px solid rgba(212,175,55,0.3)", borderRadius:4, padding:"1px 6px" }}>
+                    Map ↗
+                  </a>
+                )}
+              </span>
+            </div>
+          )}
+          {/* Last Login Location — city name ya coordinates + map link */}
+          {(user.last_login_city_name || user.last_login_latitude != null) && (
+            <div style={{ display:"flex", gap:12 }}>
+              <span style={{ width:80, fontSize:12, color:"rgba(255,255,255,0.4)", flexShrink:0 }}>Login From</span>
+              <span style={{ fontSize:13, color:"rgba(255,255,255,0.85)", fontWeight:500, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                {user.last_login_city_name
+                  ? <><MapPin size={12} color="#D4AF37"/> {user.last_login_city_name}</>
+                  : <>{parseFloat(user.last_login_latitude).toFixed(5)}, {parseFloat(user.last_login_longitude).toFixed(5)}</>
+                }
+                {user.last_login_latitude != null && (
+                  <a href={`https://www.google.com/maps?q=${user.last_login_latitude},${user.last_login_longitude}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize:11, color:"#D4AF37", textDecoration:"none", border:"1px solid rgba(212,175,55,0.3)", borderRadius:4, padding:"1px 6px" }}>
+                    Map ↗
+                  </a>
+                )}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -352,7 +389,9 @@ export default function UsersPage() {
                       <TD style={{ fontSize:12 }}>
                         {u.signup_city_name
                           ? <span style={{ display:"flex", alignItems:"center", gap:4 }}><MapPin size={11} color="rgba(212,175,55,0.5)"/>{u.signup_city_name}</span>
-                          : <span style={{ color:"rgba(255,255,255,0.25)" }}>—</span>}
+                          : u.signup_latitude != null
+                            ? <a href={`https://www.google.com/maps?q=${u.signup_latitude},${u.signup_longitude}`} target="_blank" rel="noopener noreferrer" style={{ color:"rgba(212,175,55,0.6)", fontSize:11, textDecoration:"none", display:"flex", alignItems:"center", gap:3 }}><MapPin size={10}/>{parseFloat(u.signup_latitude).toFixed(3)}, {parseFloat(u.signup_longitude).toFixed(3)}</a>
+                            : <span style={{ color:"rgba(255,255,255,0.25)" }}>—</span>}
                       </TD>
                       <TD>
                         <div style={{ display:"flex", gap:8 }}>
