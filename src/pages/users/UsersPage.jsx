@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { UserCheck, UserX, Eye, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, Filter as FilterIcon, EyeOff, MapPin } from "lucide-react";
+import { UserCheck, UserX, Eye, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, Filter as FilterIcon, EyeOff, MapPin, Download } from "lucide-react";
 import { getUsers, updateUserStatus, getUserById } from "../../api/admin";
+import { exportToExcel, xlsDate } from "../../utils/exportExcel";
 import { Pagination } from "../../components/ui/index.jsx";
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
@@ -196,6 +197,7 @@ export default function UsersPage() {
   const [filters,  setFilters]  = useState({});
   const [includeInactive,   setIncludeInactive]   = useState(false);
   const [includeUnverified, setIncludeUnverified] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const showToast = (msg, type="success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3500); };
 
@@ -247,6 +249,47 @@ export default function UsersPage() {
   const openModal = async (userId) => {
     try { const res = await getUserById(userId); setModal(res.data?.data || res.data || {}); }
     catch { showToast("Failed to load user details.", "error"); }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = { limit: 5000, offset: 0, ...buildFilterParams(filters, FIELDS) };
+      if (includeInactive)   params.include_inactive   = "true";
+      if (includeUnverified) params.include_unverified = "true";
+      if (sort.col && SORT_COLS[sort.col]) {
+        params.sort_by  = SORT_COLS[sort.col];
+        params.sort_dir = sort.dir;
+      }
+      const res  = await getUsers(params);
+      const d    = res.data?.data || res.data || {};
+      const all  = d.users || d.items || d.data || [];
+      if (!all.length) { showToast("No data to export.", "error"); return; }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const rows  = all.map((u) => ({
+        "GO ID":            u.go_id || "",
+        "Full Name":        u.full_name || "",
+        "Role":             u.role ? u.role.replace("_", " ") : "",
+        "Phone":            u.phone_number || "",
+        "Email":            u.email || "",
+        "Signup City":      u.signup_city_name || "",
+        "Last Login City":  u.last_login_city_name || "",
+        "Wallet Balance":   u.wallet_balance != null ? Number(u.wallet_balance) : "",
+        "Active":           u.is_active ? "Yes" : "No",
+        "Verified":         u.is_verified ? "Yes" : "No",
+        "Test User":        u.is_test_user ? "Yes" : "No",
+        "Last Login":       xlsDate(u.last_login),
+        "Registered On":    xlsDate(u.created_at),
+      }));
+
+      exportToExcel(rows, `go-mobility-users-${today}`, "Users");
+      showToast(`Exported ${rows.length} users successfully.`);
+    } catch {
+      showToast("Export failed. Please try again.", "error");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const total       = pagination?.total       ?? 0;
@@ -302,6 +345,24 @@ export default function UsersPage() {
             onToggle={() => { setIncludeUnverified(v => !v); setOffset(0); }}
             label="Unverified"
           />
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            title="Export to Excel"
+            style={{
+              display:"flex", alignItems:"center", gap:6,
+              height:32, padding:"0 14px",
+              background: exporting ? "rgba(34,197,94,0.06)" : "rgba(34,197,94,0.1)",
+              border:"1px solid rgba(34,197,94,0.25)",
+              borderRadius:8, color: exporting ? "rgba(74,222,128,0.5)" : "#4ade80",
+              fontSize:12, cursor: exporting ? "not-allowed" : "pointer",
+              fontFamily:"Outfit,sans-serif", fontWeight:600,
+              transition:"all .2s",
+            }}
+          >
+            <Download size={13}/>
+            {exporting ? "Exporting…" : "Export Excel"}
+          </button>
           <button onClick={load} title="Refresh" style={iconBtn()}>
             <RefreshCw size={13} />
           </button>

@@ -4,7 +4,7 @@ import {
   ShieldCheck, ShieldX, UserCheck, UserX,
   X, FileCheck, FileX, AlertTriangle, Eye, EyeOff, Car, Star, MapPin, Phone,
   CheckCircle, Clock, XCircle, RefreshCw, ExternalLink, User, Wallet,
-  CreditCard, Calendar, Filter as FilterIcon, UserPlus, Users,
+  CreditCard, Calendar, Filter as FilterIcon, UserPlus, Users, Download,
 } from "lucide-react";
 import { Pagination } from "../../components/ui/index.jsx";
 import {
@@ -15,6 +15,7 @@ import {
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
 } from "../../components/filters/index.jsx";
+import { exportToExcel, xlsDate } from "../../utils/exportExcel";
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
 const PERIODS = [
@@ -752,6 +753,7 @@ export default function DriverOnboardingPage() {
   const [offset, setOffset]     = useState(0);
   const [toast, setToast]       = useState(null);
   const [acting, setActing]     = useState({});
+  const [exporting, setExporting] = useState(false);
 
   // ── Period filter state ───────────────────────────────────────────────
   const [period, setPeriod]         = useState('all');
@@ -836,6 +838,55 @@ export default function DriverOnboardingPage() {
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
   }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates]);
+
+  const handleExportDrivers = async () => {
+    setExporting(true);
+    try {
+      const params = { limit: 5000, offset: 0, ...buildFilterParams(filters, DRIVER_FIELDS) };
+      if (includeInactive)          params.include_inactive           = "true";
+      if (includeUnverifiedUsers)   params.include_unverified_users   = "true";
+      if (includeUnverifiedDrivers) params.include_unverified_drivers = "true";
+      if (sort.col && DRIVER_SORT_COLS[sort.col]) {
+        params.sort_by  = DRIVER_SORT_COLS[sort.col];
+        params.sort_dir = sort.dir;
+      }
+      if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
+      if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
+
+      const res  = await getDrivers(params);
+      const d    = res.data?.data || res.data || {};
+      const all  = d.drivers || d.items || d.data || [];
+      if (!all.length) { showToast("No data to export.", "error"); return; }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const rows  = all.map((dr) => ({
+        "GO ID":              dr.go_id || "",
+        "Full Name":          dr.full_name || "",
+        "Phone":              dr.phone_number || "",
+        "Email":              dr.email || "",
+        "Vehicle Type":       dr.vehicle_type ? dr.vehicle_type.charAt(0).toUpperCase() + dr.vehicle_type.slice(1) : "",
+        "Vehicle Number":     dr.vehicle_number || "",
+        "Vehicle Model":      dr.vehicle_model || "",
+        "Last Login City":    dr.last_login_city_name || "",
+        "KYC Status":         dr.kyc_status || "",
+        "Driver Verified":    dr.is_verified ? "Yes" : "No",
+        "Account Active":     dr.is_active ? "Yes" : "No",
+        "Currently Online":   dr.is_online ? "Yes" : "No",
+        "Avg Rating":         dr.avg_rating != null ? Number(Number(dr.avg_rating).toFixed(2)) : "",
+        "Total Rides":        dr.total_rides != null ? Number(dr.total_rides) : "",
+        "Total Earnings":     dr.total_earnings != null ? Number(dr.total_earnings) : "",
+        "Last Login":         xlsDate(dr.last_login),
+        "Joined On":          xlsDate(dr.created_at),
+      }));
+
+      exportToExcel(rows, `go-mobility-drivers-${today}`, "Drivers");
+      showToast(`Exported ${rows.length} drivers successfully.`);
+    } catch {
+      showToast("Export failed. Please try again.", "error");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const activeDriverFilters = useMemo(() => Object.entries(filters)
     .filter(([k, f]) => {
@@ -1009,6 +1060,23 @@ export default function DriverOnboardingPage() {
             <DrvVisibilityToggle active={includeInactive}          onToggle={() => { setIncludeInactive(v=>!v); setOffset(0); }}          label="Blocked" />
             <DrvVisibilityToggle active={includeUnverifiedUsers}   onToggle={() => { setIncludeUnverifiedUsers(v=>!v); setOffset(0); }}   label="OTP-Unverified" />
             <DrvVisibilityToggle active={includeUnverifiedDrivers} onToggle={() => { setIncludeUnverifiedDrivers(v=>!v); setOffset(0); }} label="KYC-Incomplete" />
+            <button
+              onClick={handleExportDrivers}
+              disabled={exporting}
+              title="Export to Excel"
+              style={{
+                display:"flex", alignItems:"center", gap:6,
+                height:32, padding:"0 14px",
+                background: exporting ? "rgba(34,197,94,0.06)" : "rgba(34,197,94,0.1)",
+                border:"1px solid rgba(34,197,94,0.25)",
+                borderRadius:8, color: exporting ? "rgba(74,222,128,0.5)" : "#4ade80",
+                fontSize:12, cursor: exporting ? "not-allowed" : "pointer",
+                fontFamily:"Outfit,sans-serif", fontWeight:600, transition:"all .2s",
+              }}
+            >
+              <Download size={13}/>
+              {exporting ? "Exporting…" : "Export Excel"}
+            </button>
             <button onClick={loadDrivers} title="Refresh" style={{
               width:32, height:32, borderRadius:8,
               background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.15)",

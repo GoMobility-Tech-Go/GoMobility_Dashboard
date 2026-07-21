@@ -3,12 +3,13 @@ import {
   Users, UserCheck, UserX, UserPlus, X,
   ChevronLeft, ChevronRight, Phone, Mail, Clock,
   Shield, RefreshCw, Calendar, Activity, Eye, EyeOff,
-  Filter as FilterIcon, MapPin,
+  Filter as FilterIcon, MapPin, Download,
 } from 'lucide-react';
 import { getUsers, getUserById, updateUserStatus, getPassengerStats } from '../../api/admin';
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
 } from '../../components/filters/index.jsx';
+import { exportToExcel, xlsDate } from '../../utils/exportExcel';
 
 /* Passenger column meta */
 const P_FIELDS = [
@@ -305,6 +306,7 @@ export default function PassengerOnboardingPage() {
   const [pagination,   setPagination]   = useState(null);
   const [tableLoading, setTableLoading] = useState(true);
   const [offset,       setOffset]       = useState(0);
+  const [exporting,    setExporting]    = useState(false);
   const tableTotal = pagination?.total ?? 0;
 
   // Column filters + visibility toggles
@@ -337,6 +339,40 @@ export default function PassengerOnboardingPage() {
   }, [offset, filters, periodDates, includeInactive, includeUnverified]);
 
   useEffect(() => { loadPassengers(); }, [loadPassengers]);
+
+  const handleExportPassengers = async () => {
+    setExporting(true);
+    try {
+      const params = { role: 'passenger', limit: 5000, offset: 0, ...buildFilterParams(filters, P_FIELDS) };
+      if (includeInactive)   params.include_inactive   = 'true';
+      if (includeUnverified) params.include_unverified = 'true';
+      if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
+      if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
+
+      const res  = await getUsers(params);
+      const all  = res.data?.data?.users ?? [];
+      if (!all.length) { console.warn('[Export] No passengers found'); return; }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const data  = all.map((u) => ({
+        "GO ID":            u.go_id || "",
+        "Full Name":        u.full_name || "",
+        "Phone":            u.phone_number || "",
+        "Email":            u.email || "",
+        "Signup City":      u.signup_city_name || "",
+        "Last Login City":  u.last_login_city_name || "",
+        "Wallet Balance":   u.wallet_balance != null ? Number(u.wallet_balance) : "",
+        "Active":           u.is_active ? "Yes" : "No",
+        "Verified":         u.is_verified ? "Yes" : "No",
+        "Test User":        u.is_test_user ? "Yes" : "No",
+        "Last Login":       xlsDate(u.last_login),
+        "Registered On":    xlsDate(u.created_at),
+      }));
+
+      exportToExcel(data, `go-mobility-passengers-${today}`, "Passengers");
+    } catch (e) { console.error('[Export] Failed:', e); }
+    finally { setExporting(false); }
+  };
 
   const activePassengerFilters = useMemo(() => Object.entries(filters)
     .filter(([k, f]) => {
@@ -435,13 +471,32 @@ export default function PassengerOnboardingPage() {
           </div>
         )}
 
-        <button
-          onClick={() => { loadStats(); loadPassengers(); }}
-          title="Refresh"
-          style={{ marginLeft: 'auto', width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: TEXT_DIM, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <RefreshCw size={13} />
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            onClick={handleExportPassengers}
+            disabled={exporting}
+            title="Export to Excel"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              height: 32, padding: '0 14px',
+              background: exporting ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.1)',
+              border: '1px solid rgba(34,197,94,0.25)',
+              borderRadius: 8, color: exporting ? 'rgba(74,222,128,0.5)' : '#4ade80',
+              fontSize: 12, cursor: exporting ? 'not-allowed' : 'pointer',
+              fontFamily: FONT_UI, fontWeight: 600, transition: 'all .2s',
+            }}
+          >
+            <Download size={13} />
+            {exporting ? 'Exporting…' : 'Export Excel'}
+          </button>
+          <button
+            onClick={() => { loadStats(); loadPassengers(); }}
+            title="Refresh"
+            style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: TEXT_DIM, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <RefreshCw size={13} />
+          </button>
+        </div>
       </div>
 
       {/* ── Stats error banner ─────────────────────────────────────────── */}
