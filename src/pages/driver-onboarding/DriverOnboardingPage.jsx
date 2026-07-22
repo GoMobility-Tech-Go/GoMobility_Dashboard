@@ -864,7 +864,7 @@ export default function DriverOnboardingPage() {
         "Full Name":          dr.full_name || "",
         "Phone":              dr.phone_number || "",
         "Email":              dr.email || "",
-        "Vehicle Type":       dr.vehicle_type ? dr.vehicle_type.charAt(0).toUpperCase() + dr.vehicle_type.slice(1) : "",
+        "Vehicle Type":       (() => { const vt = Array.isArray(dr.vehicle_type) ? dr.vehicle_type.join(" / ") : (dr.vehicle_type || ""); return vt ? vt.charAt(0).toUpperCase() + vt.slice(1) : ""; })(),
         "Vehicle Number":     dr.vehicle_number || "",
         "Vehicle Model":      dr.vehicle_model_from_rc || "",
         "Vehicle Color":      dr.vehicle_color || "",
