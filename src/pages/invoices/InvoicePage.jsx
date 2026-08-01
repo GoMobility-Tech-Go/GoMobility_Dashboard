@@ -61,153 +61,206 @@ const Chip = ({ label, map, fallback }) => {
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function InvoiceModal({ inv, onClose }) {
+  const [tab, setTab] = useState("passenger");
   if (!inv) return null;
 
-  // Pick best available value (ride_invoices > rides)
   const passengerPaid = Number(inv.passenger_total || inv.passenger_total_rides || inv.final_fare || inv.actual_fare || 0);
   const driverEarned  = Number(inv.driver_net_earnings || 0);
   const companyEarned = Number(inv.company_total || inv.platform_share || 0);
 
-  const BRow = ({ label, value, sub, color, bold, minus }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+  const Row = ({ label, value, color, minus, sub }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
       <div>
-        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.55)" }}>{label}</span>
-        {sub && <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.3)", marginTop: 1 }}>{sub}</div>}
+        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.6)" }}>{label}</span>
+        {sub && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", marginTop: 1 }}>{sub}</div>}
       </div>
-      <span style={{ fontSize: 13, fontWeight: bold ? 700 : 500, color: color || "rgba(255,255,255,0.85)", fontVariantNumeric: "tabular-nums", marginLeft: 16 }}>
-        {minus ? "- " : ""}{value}
+      <span style={{ fontSize: 13, fontWeight: 500, color: color || "rgba(255,255,255,0.85)", fontVariantNumeric: "tabular-nums" }}>
+        {minus ? "− " : ""}{value}
       </span>
     </div>
   );
 
-  const Section = ({ title, color, total, totalLabel, children }) => (
-    <div style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${color}22`, borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
-      <div style={{ fontFamily: "Cinzel,serif", fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 10 }}>{title}</div>
-      {children}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, marginTop: 4, borderTop: `1px solid ${color}33` }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color }}>{totalLabel}</span>
-        <span style={{ fontSize: 16, fontWeight: 800, color, fontFamily: "Cinzel,serif", fontVariantNumeric: "tabular-nums" }}>{fmt(total)}</span>
-      </div>
-    </div>
-  );
+  const TABS = [
+    { key: "passenger", label: "Passenger", color: "#60a5fa", total: passengerPaid },
+    { key: "driver",    label: "Driver",    color: "#34D399", total: driverEarned  },
+    { key: "company",   label: "Company",   color: "#D4AF37", total: companyEarned },
+    { key: "info",      label: "Details",   color: "rgba(255,255,255,0.5)", total: null },
+  ];
+
+  const activeColor = TABS.find(t => t.key === tab)?.color || "#fff";
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(1,9,23,0.88)", backdropFilter: "blur(6px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-      onClick={onClose}>
-      <div style={{ background: "linear-gradient(170deg,#020c20,#030f28)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 18, width: "100%", maxWidth: 660, maxHeight: "92vh", overflowY: "auto", padding: "24px 24px 28px", position: "relative" }}
-        onClick={e => e.stopPropagation()}>
-
-        <button onClick={onClose} style={{ position: "absolute", top: 14, right: 14, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.5)" }}>
-          <X size={13} />
-        </button>
-
-        {/* Header */}
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-            <span style={{ fontFamily: "Cinzel,serif", fontSize: 15, fontWeight: 700, color: "#fff" }}>
-              {inv.invoice_number || `RIDE-${inv.ride_id}`}
-            </span>
-            {inv.ride_number && <span style={{ fontFamily: "monospace", fontSize: 11, color: "rgba(212,175,55,0.6)", background: "rgba(212,175,55,0.08)", padding: "2px 8px", borderRadius: 6 }}>{inv.ride_number}</span>}
-            {inv.is_free_ride && <span style={{ fontSize: 10, background: "rgba(52,211,153,0.15)", color: "#34D399", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>FREE RIDE</span>}
-            {inv.is_peak && <span style={{ fontSize: 10, background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>PEAK</span>}
-            {inv.is_scheduled && <span style={{ fontSize: 10, background: "rgba(96,165,250,0.15)", color: "#60a5fa", border: "1px solid rgba(96,165,250,0.3)", borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>SCHEDULED</span>}
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(1,9,23,0.85)", backdropFilter: "blur(8px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 16px" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "linear-gradient(160deg,#020e24 0%,#031020 100%)", border: "1px solid rgba(212,175,55,0.18)", borderRadius: 20, width: "100%", maxWidth: 680, display: "flex", flexDirection: "column", maxHeight: "88vh", overflow: "hidden" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Top bar ── */}
+        <div style={{ padding: "18px 22px 14px", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                <span style={{ fontFamily: "Cinzel,serif", fontSize: 16, fontWeight: 700, color: "#fff" }}>
+                  {inv.invoice_number || `RIDE-${inv.ride_id}`}
+                </span>
+                {inv.ride_number && (
+                  <span style={{ fontFamily: "monospace", fontSize: 11, color: "rgba(212,175,55,0.65)", background: "rgba(212,175,55,0.08)", padding: "2px 8px", borderRadius: 6, border: "1px solid rgba(212,175,55,0.15)" }}>
+                    {inv.ride_number}
+                  </span>
+                )}
+                {inv.is_free_ride  && <span style={{ fontSize: 9.5, background: "rgba(52,211,153,0.15)", color: "#34D399", border: "1px solid rgba(52,211,153,0.28)", borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>FREE</span>}
+                {inv.is_peak       && <span style={{ fontSize: 9.5, background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.28)", borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>PEAK</span>}
+                {inv.is_scheduled  && <span style={{ fontSize: 9.5, background: "rgba(96,165,250,0.15)", color: "#60a5fa", border: "1px solid rgba(96,165,250,0.28)", borderRadius: 10, padding: "2px 8px", fontWeight: 700 }}>SCHEDULED</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11.5, color: "rgba(255,255,255,0.35)" }}>{fmtD(inv.completed_at)}</span>
+                <Chip label={inv.vehicle_type} map={VEHICLE_COLORS} />
+                <Chip label={inv.payment_method} map={PAY_COLORS} />
+                {Number(inv.surge_multiplier) > 1 && <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>×{Number(inv.surge_multiplier).toFixed(1)} surge</span>}
+              </div>
+            </div>
+            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
+              <X size={13} />
+            </button>
           </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)" }}>
-            {fmtD(inv.completed_at)} · <Chip label={inv.vehicle_type} map={VEHICLE_COLORS} /> · <Chip label={inv.payment_method} map={PAY_COLORS} />
-            {Number(inv.surge_multiplier) > 1 && <span style={{ marginLeft: 8, fontSize: 11, color: "#f59e0b" }}>×{Number(inv.surge_multiplier).toFixed(1)} surge</span>}
+
+          {/* Route — compact single line */}
+          <div style={{ marginTop: 12, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "10px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#34D399", flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.pickup_address || "—"}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#f87171", flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inv.dropoff_address || "—"}</span>
+            </div>
+            <div style={{ display: "flex", gap: 16, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+              {[["📏", fmtKm(inv.distance_km)], ["⏱", fmtMin(inv.duration_minutes)], inv.locked_is_subscribed && ["⭐", inv.locked_subscriber_tier || "Subscriber"]].filter(Boolean).map(([icon, v]) => (
+                <span key={icon} style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{icon} <span style={{ color: "rgba(255,255,255,0.65)" }}>{v}</span></span>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Route */}
-        <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px 16px", marginBottom: 14 }}>
-          <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#34D399", flexShrink: 0 }} />
-              <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f87171", flexShrink: 0 }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.72)", marginBottom: 14 }}>{inv.pickup_address || "—"}</div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.72)" }}>{inv.dropoff_address || "—"}</div>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            {[
-              ["Distance", fmtKm(inv.distance_km)],
-              ["Duration", fmtMin(inv.duration_minutes)],
-              inv.started_at && ["Started", fmtD(inv.started_at)],
-              inv.locked_is_subscribed && ["Subscriber", inv.locked_subscriber_tier || "Yes"],
-            ].filter(Boolean).map(([l, v]) => (
-              <span key={l} style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>{l}: <span style={{ color: "rgba(255,255,255,0.7)" }}>{v}</span></span>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Passenger Paid ── */}
-        <Section title="Passenger Paid" color="#60a5fa" total={passengerPaid} totalLabel="Total Paid by Passenger">
-          {pos(inv.ri_base_fare)             && <BRow label="Base Fare"              value={fmt(inv.ri_base_fare)} />}
-          {pos(inv.ri_distance_fare)         && <BRow label="Distance Charge"        value={fmt(inv.ri_distance_fare)} />}
-          {pos(inv.ri_time_fare)             && <BRow label="Time Charge"            value={fmt(inv.ri_time_fare)} />}
-          {pos(inv.ri_surge_charge)          && <BRow label="Surge Charge"           value={fmt(inv.ri_surge_charge)} sub={`×${Number(inv.surge_multiplier||1).toFixed(1)} multiplier`} />}
-          {pos(inv.ri_waiting_charges)       && <BRow label="Waiting Charges"        value={fmt(inv.ri_waiting_charges)} />}
-          {pos(inv.ri_pickup_charges)        && <BRow label="Pickup Compensation"    value={fmt(inv.ri_pickup_charges)} />}
-          {pos(inv.ri_toll_charges)          && <BRow label="Toll Charges"           value={fmt(inv.ri_toll_charges)} />}
-          {pos(inv.ri_convenience_fee)       && <BRow label="Convenience Fee"        value={fmt(inv.ri_convenience_fee)} />}
-          {pos(inv.ri_tip_amount)            && <BRow label="Tip"                    value={fmt(inv.ri_tip_amount)} />}
-          {pos(inv.ri_subtotal)              && <BRow label="Subtotal"               value={fmt(inv.ri_subtotal)} />}
-          {pos(inv.ri_tax_amount)            && <BRow label={`GST (${inv.ri_tax_percent || 5}%)`} value={fmt(inv.ri_tax_amount)} />}
-          {pos(inv.ri_coupon_discount)       && <BRow label="Coupon Discount"        value={fmt(inv.ri_coupon_discount)}       color="#34D399" minus />}
-          {inv.coupon_code                   && <BRow label="Coupon Code"            value={inv.coupon_code}                   color="#34D399" />}
-          {pos(inv.ri_subscription_discount) && <BRow label="Subscription Discount"  value={fmt(inv.ri_subscription_discount)} color="#34D399" minus />}
-          {pos(inv.ri_discount_amount)       && <BRow label="Other Discount"         value={fmt(inv.ri_discount_amount)}       color="#34D399" minus />}
-        </Section>
-
-        {/* ── Driver Earned ── */}
-        <Section title="Driver Earned" color="#34D399" total={driverEarned} totalLabel="Driver Net Earnings">
-          <BRow label="Trip Fare"                   value={fmt(inv.actual_fare)} />
-          {pos(inv.ri_waiting_charges)  && <BRow label="Waiting Bonus"            value={fmt(inv.ri_waiting_charges)} />}
-          {pos(inv.ri_tip_amount)       && <BRow label="Tip Received"             value={fmt(inv.ri_tip_amount)} />}
-          {pos(inv.ri_pickup_charges)   && <BRow label="Pickup Compensation"      value={fmt(inv.ri_pickup_charges)} />}
-          <BRow label="Platform Fee Deducted"       value={fmt(inv.platform_share)}         color="#f87171" minus />
-          {pos(inv.gst_on_platform_fee) && <BRow label="GST on Platform (18%)"   value={fmt(inv.gst_on_platform_fee)} color="#f87171" minus />}
-        </Section>
-
-        {/* ── Company Earned ── */}
-        <Section title="Company Earned" color="#D4AF37" total={companyEarned} totalLabel="Total Company Revenue">
-          {pos(inv.ri_platform_fee)     && <BRow label="Platform Fee"             value={fmt(inv.ri_platform_fee)} />}
-          {pos(inv.ri_convenience_fee)  && <BRow label="Convenience Fee"          value={fmt(inv.ri_convenience_fee)} />}
-          {pos(inv.gst_on_platform_fee) && <BRow label="GST on Platform (18%)"   value={fmt(inv.gst_on_platform_fee)} sub="collected from driver" />}
-          {pos(inv.gst_on_fare)         && <BRow label="GST on Ride (5%)"        value={fmt(inv.gst_on_fare)} sub="collected from passenger, remitted to govt" />}
-        </Section>
-
-        {/* ── People ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+        {/* ── 3 stream totals bar ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
           {[
-            { label: "Passenger", name: inv.passenger_name, phone: inv.passenger_phone, extra: inv.locked_is_subscribed ? `Subscriber · ${inv.locked_subscriber_tier || ""}` : null },
-            { label: "Driver",    name: inv.driver_name,    phone: inv.driver_phone },
-          ].map(({ label, name, phone, extra }) => (
-            <div key={label} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "11px 14px" }}>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>{label}</div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontWeight: 500 }}>{name || "—"}</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{phone || "—"}</div>
-              {extra && <div style={{ fontSize: 10, color: "#D4AF37", marginTop: 3 }}>{extra}</div>}
-            </div>
+            { key: "passenger", label: "Passenger Paid", value: passengerPaid, color: "#60a5fa", icon: "👤" },
+            { key: "driver",    label: "Driver Earned",  value: driverEarned,  color: "#34D399", icon: "🚗" },
+            { key: "company",   label: "Company",        value: companyEarned, color: "#D4AF37", icon: "🏢" },
+          ].map(({ key, label, value, color, icon }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              style={{ padding: "14px 16px", background: tab === key ? `${color}10` : "transparent", border: "none", borderBottom: tab === key ? `2px solid ${color}` : "2px solid transparent", cursor: "pointer", textAlign: "left", transition: "all .15s" }}
+            >
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 4 }}>{icon} {label}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color, fontFamily: "Cinzel,serif", fontVariantNumeric: "tabular-nums" }}>{fmt(value)}</div>
+            </button>
           ))}
         </div>
 
-        {/* ── Payment status ── */}
-        <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "11px 14px", display: "flex", flexWrap: "wrap", gap: 18 }}>
-          {[
-            ["Invoice #",      inv.invoice_number || "—"],
-            ["Ride #",         inv.ride_number || "—"],
-            ["Payment Status", inv.payment_status || inv.ride_payment_status || "—"],
-            ["Paid At",        fmtD(inv.paid_at)],
-          ].map(([l, v]) => (
-            <div key={l}>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 2 }}>{l}</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", fontVariantNumeric: "tabular-nums" }}>{v}</div>
-            </div>
+        {/* ── Tab nav ── */}
+        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
+          {TABS.map(({ key, label, color }) => (
+            <button key={key} onClick={() => setTab(key)} style={{ flex: 1, padding: "10px 8px", background: "none", border: "none", borderBottom: tab === key ? `2px solid ${color}` : "2px solid transparent", color: tab === key ? color : "rgba(255,255,255,0.35)", fontSize: 12, fontWeight: tab === key ? 700 : 500, cursor: "pointer", fontFamily: "Outfit,sans-serif", transition: "all .15s" }}>
+              {label}
+            </button>
           ))}
+        </div>
+
+        {/* ── Tab content ── */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 22px" }}>
+
+          {tab === "passenger" && (
+            <div>
+              {pos(inv.ri_base_fare)             && <Row label="Base Fare"             value={fmt(inv.ri_base_fare)} />}
+              {pos(inv.ri_distance_fare)         && <Row label="Distance Charge"       value={fmt(inv.ri_distance_fare)} />}
+              {pos(inv.ri_time_fare)             && <Row label="Time Charge"           value={fmt(inv.ri_time_fare)} />}
+              {pos(inv.ri_surge_charge)          && <Row label="Surge Charge"          value={fmt(inv.ri_surge_charge)} sub={`×${Number(inv.surge_multiplier||1).toFixed(1)} surge multiplier`} />}
+              {pos(inv.ri_waiting_charges)       && <Row label="Waiting Charges"       value={fmt(inv.ri_waiting_charges)} />}
+              {pos(inv.ri_pickup_charges)        && <Row label="Pickup Compensation"   value={fmt(inv.ri_pickup_charges)} />}
+              {pos(inv.ri_toll_charges)          && <Row label="Toll Charges"          value={fmt(inv.ri_toll_charges)} />}
+              {pos(inv.ri_convenience_fee)       && <Row label="Convenience Fee"       value={fmt(inv.ri_convenience_fee)} />}
+              {pos(inv.ri_tip_amount)            && <Row label="Tip"                   value={fmt(inv.ri_tip_amount)} />}
+              {pos(inv.ri_subtotal)              && <Row label="Subtotal"              value={fmt(inv.ri_subtotal)} color="rgba(255,255,255,0.55)" />}
+              {pos(inv.ri_tax_amount)            && <Row label={`GST (${inv.ri_tax_percent || 5}%)`} value={fmt(inv.ri_tax_amount)} />}
+              {pos(inv.ri_coupon_discount)       && <Row label="Coupon Discount"       value={fmt(inv.ri_coupon_discount)}       color="#34D399" minus />}
+              {inv.coupon_code                   && <Row label="Coupon Code"           value={inv.coupon_code}                   color="#34D399" />}
+              {pos(inv.ri_subscription_discount) && <Row label="Subscription Discount" value={fmt(inv.ri_subscription_discount)} color="#34D399" minus />}
+              {pos(inv.ri_discount_amount)       && <Row label="Other Discount"        value={fmt(inv.ri_discount_amount)}       color="#34D399" minus />}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 4px", marginTop: 4, borderTop: "1px solid rgba(96,165,250,0.2)" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#60a5fa" }}>Total Paid by Passenger</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color: "#60a5fa", fontFamily: "Cinzel,serif", fontVariantNumeric: "tabular-nums" }}>{fmt(passengerPaid)}</span>
+              </div>
+            </div>
+          )}
+
+          {tab === "driver" && (
+            <div>
+              <Row label="Trip Fare"              value={fmt(inv.actual_fare)} />
+              {pos(inv.ri_waiting_charges) && <Row label="Waiting Bonus"          value={fmt(inv.ri_waiting_charges)} />}
+              {pos(inv.ri_tip_amount)      && <Row label="Tip Received"           value={fmt(inv.ri_tip_amount)} />}
+              {pos(inv.ri_pickup_charges)  && <Row label="Pickup Compensation"    value={fmt(inv.ri_pickup_charges)} />}
+              <Row label="Platform Fee Deducted"  value={fmt(inv.platform_share)} color="#f87171" minus />
+              {pos(inv.gst_on_platform_fee)&& <Row label="GST on Platform (18%)" value={fmt(inv.gst_on_platform_fee)} color="#f87171" minus sub="deducted from driver" />}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 4px", marginTop: 4, borderTop: "1px solid rgba(52,211,153,0.2)" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#34D399" }}>Driver Net Earnings</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color: "#34D399", fontFamily: "Cinzel,serif", fontVariantNumeric: "tabular-nums" }}>{fmt(driverEarned)}</span>
+              </div>
+            </div>
+          )}
+
+          {tab === "company" && (
+            <div>
+              {pos(inv.ri_platform_fee)    && <Row label="Platform Fee"            value={fmt(inv.ri_platform_fee)} />}
+              {pos(inv.ri_convenience_fee) && <Row label="Convenience Fee"         value={fmt(inv.ri_convenience_fee)} />}
+              {pos(inv.gst_on_platform_fee)&& <Row label="GST on Platform (18%)"  value={fmt(inv.gst_on_platform_fee)} sub="collected from driver" />}
+              {pos(inv.gst_on_fare)        && <Row label="GST on Ride (5%)"       value={fmt(inv.gst_on_fare)} sub="collected from passenger, remitted to govt" />}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 4px", marginTop: 4, borderTop: "1px solid rgba(212,175,55,0.2)" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#D4AF37" }}>Total Company Revenue</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color: "#D4AF37", fontFamily: "Cinzel,serif", fontVariantNumeric: "tabular-nums" }}>{fmt(companyEarned)}</span>
+              </div>
+            </div>
+          )}
+
+          {tab === "info" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* People */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { label: "Passenger", name: inv.passenger_name, phone: inv.passenger_phone, extra: inv.locked_is_subscribed ? `⭐ Subscriber${inv.locked_subscriber_tier ? ` · ${inv.locked_subscriber_tier}` : ""}` : null },
+                  { label: "Driver",    name: inv.driver_name,    phone: inv.driver_phone },
+                ].map(({ label, name, phone, extra }) => (
+                  <div key={label} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>{label}</div>
+                    <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>{name || "—"}</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", marginTop: 2 }}>{phone || "—"}</div>
+                    {extra && <div style={{ fontSize: 11, color: "#D4AF37", marginTop: 4 }}>{extra}</div>}
+                  </div>
+                ))}
+              </div>
+              {/* Payment meta */}
+              <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 20px" }}>
+                {[
+                  ["Invoice #",      inv.invoice_number || "—"],
+                  ["Ride #",         inv.ride_number || "—"],
+                  ["Payment Status", inv.payment_status || inv.ride_payment_status || "—"],
+                  ["Paid At",        fmtD(inv.paid_at)],
+                  ["Completed At",   fmtD(inv.completed_at)],
+                  ["Started At",     fmtD(inv.started_at)],
+                ].map(([l, v]) => (
+                  <div key={l}>
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.6px" }}>{l}</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", fontVariantNumeric: "tabular-nums" }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
