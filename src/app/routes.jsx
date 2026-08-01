@@ -33,6 +33,7 @@ import ZonesMapPage from "../pages/zones/ZonesMapPage";
 import ZoneEditorPage from "../pages/zones/ZoneEditorPage";
 import ZoneAnalyticsPage from "../pages/zones/ZoneAnalyticsPage";
 import LogsPage from "../pages/logs/LogsPage";
+import InvoicePage from "../pages/invoices/InvoicePage";
 
 const routes = [
   { path:"/signup", element:<SignupPage/> },
@@ -49,6 +50,7 @@ const routes = [
         { path:"passenger-onboarding", element:<PassengerOnboardingPage/> },
         { path:"ride-monitoring", element:<RideMonitoringPage/> },
         { path:"finance", element:<FinancePage/> },
+        { path:"invoices", element:<InvoicePage/> },
         { path:"refunds", element:<RefundsPage/> },
         { path:"payouts", element:<PayoutsPage/> },
         { path:"city-management", element:<CityManagementPage/> },

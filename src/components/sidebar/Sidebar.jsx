@@ -25,6 +25,7 @@ const ADMIN_MENU = [
   ]},
   { label:"Finance", items:[
     { label:"Transactions",       to:"/finance",              icon:CircleDollarSign },
+    { label:"Invoices",           to:"/invoices",             icon:ScrollText  },
     { label:"Refunds",            to:"/refunds",              icon:RotateCcw   },
     { label:"Driver Payouts",     to:"/payouts",              icon:Wallet      },
   ]},

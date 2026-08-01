@@ -25,6 +25,10 @@ export const updateDriverStatus = (driverId, is_active) =>
 export const getRides = (params = {}) =>
   api.get('/admin/rides', { params: { limit: 20, offset: 0, ...params } });
 
+// ── Invoices ──────────────────────────────────────────────────────────────────
+export const getInvoices = (params = {}) =>
+  api.get('/admin/invoices', { params: { limit: 20, offset: 0, ...params } });
+
 // ── Transactions ──────────────────────────────────────────────────────────────
 export const getTransactions = (params = {}) =>
   api.get('/admin/transactions', { params: { limit: 20, offset: 0, ...params } });
