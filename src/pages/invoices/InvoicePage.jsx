@@ -206,7 +206,6 @@ function InvoiceModal({ inv, onClose }) {
               {pos(inv.ri_tip_amount)      && <Row label="Tip Received"           value={fmt(inv.ri_tip_amount)} />}
               {pos(inv.ri_pickup_charges)  && <Row label="Pickup Compensation"    value={fmt(inv.ri_pickup_charges)} />}
               <Row label="Platform Fee Deducted"  value={fmt(inv.platform_share)} color="#f87171" minus />
-              {pos(inv.gst_on_platform_fee)&& <Row label="GST on Platform (18%)" value={fmt(inv.gst_on_platform_fee)} color="#f87171" minus sub="deducted from driver" />}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 4px", marginTop: 4, borderTop: "1px solid rgba(52,211,153,0.2)" }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: "#34D399" }}>Driver Net Earnings</span>
                 <span style={{ fontSize: 20, fontWeight: 800, color: "#34D399", fontFamily: "Cinzel,serif", fontVariantNumeric: "tabular-nums" }}>{fmt(driverEarned)}</span>
@@ -216,12 +215,24 @@ function InvoiceModal({ inv, onClose }) {
 
           {tab === "company" && (
             <div>
-              {pos(inv.ri_platform_fee)    && <Row label="Platform Fee"            value={fmt(inv.ri_platform_fee)} />}
-              {pos(inv.ri_convenience_fee) && <Row label="Convenience Fee"         value={fmt(inv.ri_convenience_fee)} />}
-              {pos(inv.gst_on_platform_fee)&& <Row label="GST on Platform (18%)"  value={fmt(inv.gst_on_platform_fee)} sub="collected from driver" />}
-              {pos(inv.gst_on_fare)        && <Row label="GST on Ride (5%)"       value={fmt(inv.gst_on_fare)} sub="collected from passenger, remitted to govt" />}
+              {/* Platform revenue — ri fields if available, else rides.platform_share */}
+              {(pos(inv.ri_platform_fee) || pos(inv.ri_convenience_fee))
+                ? <>
+                    {pos(inv.ri_platform_fee)    && <Row label="Platform Fee"    value={fmt(inv.ri_platform_fee)} />}
+                    {pos(inv.ri_convenience_fee) && <Row label="Convenience Fee" value={fmt(inv.ri_convenience_fee)} />}
+                  </>
+                : <Row label="Platform Share" value={fmt(inv.platform_share)} />
+              }
+              {/* GST — collected & remitted to govt, not company revenue */}
+              {(pos(inv.gst_on_platform_fee) || pos(inv.gst_on_fare)) && (
+                <div style={{ marginTop: 10, marginBottom: 2, fontSize: 10, color: "rgba(255,255,255,0.28)", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+                  GST collected → remitted to Govt
+                </div>
+              )}
+              {pos(inv.gst_on_platform_fee) && <Row label="GST on Platform (18%)" value={fmt(inv.gst_on_platform_fee)} color="rgba(255,255,255,0.4)" sub="collected from passenger" />}
+              {pos(inv.gst_on_fare)         && <Row label="GST on Ride (5%)"      value={fmt(inv.gst_on_fare)}         color="rgba(255,255,255,0.4)" sub="collected from passenger" />}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 4px", marginTop: 4, borderTop: "1px solid rgba(212,175,55,0.2)" }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#D4AF37" }}>Total Company Revenue</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#D4AF37" }}>Company Revenue</span>
                 <span style={{ fontSize: 20, fontWeight: 800, color: "#D4AF37", fontFamily: "Cinzel,serif", fontVariantNumeric: "tabular-nums" }}>{fmt(companyEarned)}</span>
               </div>
             </div>
