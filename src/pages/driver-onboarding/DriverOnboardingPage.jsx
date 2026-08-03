@@ -755,6 +755,9 @@ export default function DriverOnboardingPage() {
   const [acting, setActing]     = useState({});
   const [exporting, setExporting] = useState(false);
 
+  // ── Onboarding status filter ──────────────────────────────────────────
+  const [onboardingStatus, setOnboardingStatus] = useState("all");
+
   // ── Period filter state ───────────────────────────────────────────────
   const [period, setPeriod]         = useState('all');
   const [customFrom, setCustomFrom] = useState('');
@@ -829,6 +832,7 @@ export default function DriverOnboardingPage() {
     }
     if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
     if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
+    if (onboardingStatus && onboardingStatus !== "all") params.onboarding_status = onboardingStatus;
     getDrivers(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -837,7 +841,7 @@ export default function DriverOnboardingPage() {
       })
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
-  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates]);
+  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates, onboardingStatus]);
 
   const handleExportDrivers = async () => {
     setExporting(true);
@@ -852,6 +856,7 @@ export default function DriverOnboardingPage() {
       }
       if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
+      if (onboardingStatus && onboardingStatus !== "all") params.onboarding_status = onboardingStatus;
 
       const res  = await getDrivers(params);
       const d    = res.data?.data || res.data || {};
@@ -1056,6 +1061,11 @@ export default function DriverOnboardingPage() {
             <DrvStatCard icon={Users}     label="Total All-Time"             value={stats.allTime}  color="#6366f1"   loading={statsLoading} />
           </div>
 
+          {/* Status filter */}
+          <div style={{ marginBottom: 14 }}>
+            <OnboardingStatusFilter value={onboardingStatus} onChange={(v) => { setOnboardingStatus(v); setOffset(0); }} />
+          </div>
+
           {/* Visibility toggles + reset */}
           <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
             <DrvVisibilityToggle active={includeInactive}          onToggle={() => { setIncludeInactive(v=>!v); setOffset(0); }}          label="Blocked" />
@@ -1099,13 +1109,19 @@ export default function DriverOnboardingPage() {
           </div>
 
           {/* Active filter chips */}
-          {(period !== 'all' || activeDriverFilters.length > 0) && (
+          {(period !== 'all' || onboardingStatus !== 'all' || activeDriverFilters.length > 0) && (
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14, alignItems:"center" }}>
               <FilterIcon size={13} color="#D4AF37" style={{ marginRight:2 }} />
               {period !== 'all' && (
                 <DrvPeriodChip
                   label={`Period: ${periodLabel}${period === 'custom' ? ` (${customFrom || '?'} → ${customTo || '?'})` : ''}`}
                   onRemove={() => { setPeriod('all'); setOffset(0); }}
+                />
+              )}
+              {onboardingStatus !== 'all' && (
+                <DrvPeriodChip
+                  label={`Status: ${ONBOARDING_STATUS_OPTIONS.find(o => o.value === onboardingStatus)?.label || onboardingStatus}`}
+                  onRemove={() => { setOnboardingStatus('all'); setOffset(0); }}
                 />
               )}
               {activeDriverFilters.map(({ key, filter, meta }) => (
@@ -1209,10 +1225,19 @@ export default function DriverOnboardingPage() {
                                 }
                               </TD>
                               <TD>
-                                {isVerified
-                                  ? <Badge label="Verified" color="#D4AF37" bg="rgba(212,175,55,0.12)" border="rgba(212,175,55,0.3)" />
-                                  : <Badge label="Pending" color="#f59e0b" bg="rgba(245,158,11,0.08)" border="rgba(245,158,11,0.2)" />
-                                }
+                                {(() => {
+                                  const s = d.onboarding_status || (isVerified ? 'verified' : 'not_started');
+                                  const opt = ONBOARDING_STATUS_OPTIONS.find(o => o.value === s);
+                                  const cfg = {
+                                    not_started: { bg: "rgba(148,163,184,0.1)",  border: "rgba(148,163,184,0.25)", label: "Not Started" },
+                                    in_progress: { bg: "rgba(96,165,250,0.1)",   border: "rgba(96,165,250,0.25)",  label: "In Progress" },
+                                    review:      { bg: "rgba(245,158,11,0.1)",   border: "rgba(245,158,11,0.3)",   label: "Review" },
+                                    verified:    { bg: "rgba(74,222,128,0.1)",   border: "rgba(74,222,128,0.3)",   label: "Verified" },
+                                    rejected:    { bg: "rgba(248,113,113,0.1)",  border: "rgba(248,113,113,0.3)",  label: "Rejected" },
+                                    suspended:   { bg: "rgba(251,146,60,0.1)",   border: "rgba(251,146,60,0.3)",   label: "Suspended" },
+                                  }[s] || { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.1)", label: s };
+                                  return <Badge label={cfg.label} color={opt?.color || "rgba(255,255,255,0.5)"} bg={cfg.bg} border={cfg.border} />;
+                                })()}
                               </TD>
                               <TD style={{ fontSize:12, fontVariantNumeric:"tabular-nums" }}>{fmtNum(d.total_rides)}</TD>
                               <TD style={{ fontSize:12, fontVariantNumeric:"tabular-nums", color:"#4ade80" }}>
@@ -1438,6 +1463,51 @@ function drvTh(isSorted) {
     whiteSpace:"nowrap", userSelect:"none", cursor:"pointer",
     background:"rgba(0,0,0,0.15)",
   };
+}
+
+const ONBOARDING_STATUS_OPTIONS = [
+  { value: "all",          label: "All",          color: "rgba(255,255,255,0.6)", dot: "rgba(255,255,255,0.3)" },
+  { value: "not_started",  label: "Not Started",  color: "#94a3b8",               dot: "#94a3b8" },
+  { value: "in_progress",  label: "In Progress",  color: "#60a5fa",               dot: "#60a5fa" },
+  { value: "review",       label: "Review",       color: "#f59e0b",               dot: "#f59e0b" },
+  { value: "verified",     label: "Verified",     color: "#4ade80",               dot: "#4ade80" },
+  { value: "rejected",     label: "Rejected",     color: "#f87171",               dot: "#f87171" },
+  { value: "suspended",    label: "Suspended",    color: "#fb923c",               dot: "#fb923c" },
+];
+
+function OnboardingStatusFilter({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const selected = ONBOARDING_STATUS_OPTIONS.find(o => o.value === value) || ONBOARDING_STATUS_OPTIONS[0];
+
+  return (
+    <div style={{ position: "relative", display: "inline-block" }}>
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5, fontWeight: 700 }}>Status</div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: "flex", alignItems: "center", gap: 10, height: 36, padding: "0 14px", minWidth: 160, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 10, cursor: "pointer", fontFamily: "Outfit,sans-serif", color: "rgba(255,255,255,0.85)", fontSize: 13, justifyContent: "space-between" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: selected.dot, flexShrink: 0 }} />
+          <span style={{ color: selected.color, fontWeight: 600 }}>{selected.label}</span>
+        </span>
+        <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, marginLeft: 4 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 999 }} onClick={() => setOpen(false)} />
+          <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 1000, background: "#0d1b2e", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 12, padding: "6px 0", minWidth: 180, boxShadow: "0 12px 40px rgba(0,0,0,0.6)" }}>
+            {ONBOARDING_STATUS_OPTIONS.map(opt => (
+              <button key={opt.value} onClick={() => { onChange(opt.value); setOpen(false); }}
+                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 16px", background: value === opt.value ? "rgba(212,175,55,0.08)" : "transparent", border: "none", cursor: "pointer", fontFamily: "Outfit,sans-serif", fontSize: 13, color: value === opt.value ? opt.color : "rgba(255,255,255,0.7)", fontWeight: value === opt.value ? 700 : 500, textAlign: "left" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />
+                {opt.label}
+                {value === opt.value && <span style={{ marginLeft: "auto", fontSize: 12, color: opt.color }}>✓</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function DrvVisibilityToggle({ active, onToggle, label }) {
