@@ -34,6 +34,8 @@ import ZoneEditorPage from "../pages/zones/ZoneEditorPage";
 import ZoneAnalyticsPage from "../pages/zones/ZoneAnalyticsPage";
 import LogsPage from "../pages/logs/LogsPage";
 import InvoicePage from "../pages/invoices/InvoicePage";
+import DriverMetricsPage from "../pages/driver-metrics/DriverMetricsPage";
+import DriverMetricsDetailPage from "../pages/driver-metrics/DriverMetricsDetailPage";
 
 const routes = [
   { path:"/signup", element:<SignupPage/> },
@@ -60,6 +62,8 @@ const routes = [
         { path:"reviews", element:<ReviewsPage/> },
         { path:"complaints-support", element:<ComplaintsSupportPage/> },
         { path:"operational-metrics", element:<OperationalMetricsPage/> },
+        { path:"driver-metrics",      element:<DriverMetricsPage/> },
+        { path:"driver-metrics/:driverId", element:<DriverMetricsDetailPage/> },
         { path:"notifications", element:<NotificationsPage/> },
         { path:"settings", element:<SettingsPage/> },
         { path:"logs", element:<LogsPage/> },

@@ -39,6 +39,7 @@ const ADMIN_MENU = [
     { label:"Reviews & Ratings",  to:"/reviews",              icon:Star        },
     { label:"Complaints & Support",to:"/complaints-support",  icon:MessageSquare},
     { label:"Operational Metrics",to:"/operational-metrics",  icon:BarChart3   },
+    { label:"Driver Metrics",    to:"/driver-metrics",       icon:Activity    },
     { label:"Push Notifications", to:"/notifications",        icon:Bell        },
   ]},
   { label:"System", items:[
