@@ -19,6 +19,7 @@ const P_FIELDS = [
   { key:'go_id',        label:'GO ID',      type:'text' },
   { key:'is_test_user', label:'Test User',  type:'bool' },
   { key:'wallet',       label:'Wallet',     type:'number', minValue:0 },
+  { key:'joined',       label:'Joined',     type:'date' },
   { key:'last_login',   label:'Last Login', type:'date' },
 ];
 
@@ -314,9 +315,19 @@ export default function PassengerOnboardingPage() {
   const [includeInactive,   setIncludeInactive]   = useState(false);
   const [includeUnverified, setIncludeUnverified] = useState(false);
 
+  // Extra quick filters
+  const [cityFilter,              setCityFilter]              = useState('');
+  const [isSubscribed,            setIsSubscribed]            = useState('');
+  const [ridesMin,                setRidesMin]                = useState('');
+  const [ridesMax,                setRidesMax]                = useState('');
+  const [passengerAccountStatus,  setPassengerAccountStatus]  = useState('all');
+
   const setFilter    = (key, next) => { setFilters(p => ({ ...p, [key]: next })); setOffset(0); };
   const clearFilter  = (key)       => { setFilters(p => { const n = { ...p }; delete n[key]; return n; }); setOffset(0); };
-  const clearAll     = ()          => { setFilters({}); setOffset(0); };
+  const clearAll     = ()          => {
+    setFilters({}); setOffset(0);
+    setCityFilter(''); setIsSubscribed(''); setRidesMin(''); setRidesMax(''); setPassengerAccountStatus('all');
+  };
 
   // Reset to page 1 when any filter changes
   useEffect(() => { setOffset(0); }, [periodDates, filters, includeInactive, includeUnverified]);
@@ -330,13 +341,19 @@ export default function PassengerOnboardingPage() {
       // Period dates applied to table via joined range (only if user hasn't set their own joined filter)
       if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
+      // Extra filters
+      if (cityFilter.trim())              params.city           = cityFilter.trim();
+      if (isSubscribed !== '')            params.is_subscribed  = isSubscribed;
+      if (ridesMin !== '')                params.rides_min      = ridesMin;
+      if (ridesMax !== '')                params.rides_max      = ridesMax;
+      if (passengerAccountStatus !== 'all') params.account_status = passengerAccountStatus;
 
       const res = await getUsers(params);
       setRows(res.data?.data?.users ?? []);
       setPagination(res.data?.data?.pagination ?? null);
     } catch (e) { console.error('[PassengerTable]', e); }
     setTableLoading(false);
-  }, [offset, filters, periodDates, includeInactive, includeUnverified]);
+  }, [offset, filters, periodDates, includeInactive, includeUnverified, cityFilter, isSubscribed, ridesMin, ridesMax, passengerAccountStatus]);
 
   useEffect(() => { loadPassengers(); }, [loadPassengers]);
 
@@ -348,6 +365,11 @@ export default function PassengerOnboardingPage() {
       if (includeUnverified) params.include_unverified = 'true';
       if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
+      if (cityFilter.trim())              params.city           = cityFilter.trim();
+      if (isSubscribed !== '')            params.is_subscribed  = isSubscribed;
+      if (ridesMin !== '')                params.rides_min      = ridesMin;
+      if (ridesMax !== '')                params.rides_max      = ridesMax;
+      if (passengerAccountStatus !== 'all') params.account_status = passengerAccountStatus;
 
       const res  = await getUsers(params);
       const all  = res.data?.data?.users ?? [];
@@ -362,6 +384,8 @@ export default function PassengerOnboardingPage() {
         "Signup City":      u.signup_city_name || "",
         "Last Login City":  u.last_login_city_name || "",
         "Wallet Balance":   u.wallet_balance != null ? Number(u.wallet_balance) : "",
+        "Total Rides":      u.total_rides != null ? Number(u.total_rides) : "",
+        "Subscribed":       u.is_subscribed ? "Yes" : "No",
         "Active":           u.is_active ? "Yes" : "No",
         "Verified":         u.is_verified ? "Yes" : "No",
         "Test User":        u.is_test_user ? "Yes" : "No",
@@ -499,6 +523,63 @@ export default function PassengerOnboardingPage() {
         </div>
       </div>
 
+      {/* ── Extra filter bar ──────────────────────────────────────────── */}
+      <div style={{ background: CARD_BG, border: CARD_BOR, borderRadius: 14, padding: '13px 18px', marginBottom: 20, display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
+        {/* City */}
+        <div>
+          <div style={{ fontSize: 10, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 5, fontWeight: 700 }}>City</div>
+          <input type="text" value={cityFilter} placeholder="Search city…"
+            onChange={e => { setCityFilter(e.target.value); setOffset(0); }}
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: TEXT_BRI, fontSize: 12.5, padding: '6px 12px', fontFamily: FONT_UI, outline: 'none', width: 150 }} />
+        </div>
+        {/* Rides range */}
+        <div>
+          <div style={{ fontSize: 10, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 5, fontWeight: 700 }}>Rides</div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input type="number" min="0" value={ridesMin} placeholder="Min"
+              onChange={e => { setRidesMin(e.target.value); setOffset(0); }}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: TEXT_BRI, fontSize: 12, padding: '6px 10px', fontFamily: FONT_UI, outline: 'none', width: 64 }} />
+            <span style={{ color: TEXT_DIM, fontSize: 11 }}>–</span>
+            <input type="number" min="0" value={ridesMax} placeholder="Max"
+              onChange={e => { setRidesMax(e.target.value); setOffset(0); }}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: TEXT_BRI, fontSize: 12, padding: '6px 10px', fontFamily: FONT_UI, outline: 'none', width: 64 }} />
+          </div>
+        </div>
+        {/* Subscription */}
+        <div>
+          <div style={{ fontSize: 10, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 5, fontWeight: 700 }}>Subscription</div>
+          <div style={{ display: 'flex', gap: 5 }}>
+            {[{ v: '', l: 'All' }, { v: 'true', l: 'Active' }, { v: 'false', l: 'None' }].map(({ v, l }) => (
+              <button key={v} onClick={() => { setIsSubscribed(v); setOffset(0); }}
+                style={{ padding: '5px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontFamily: FONT_UI, fontWeight: 600, transition: 'all .15s',
+                  border: `1px solid ${isSubscribed === v ? GOLD20 : 'rgba(255,255,255,0.1)'}`,
+                  background: isSubscribed === v ? GOLD10 : 'transparent',
+                  color: isSubscribed === v ? GOLD : TEXT_MED,
+                }}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Account Status */}
+        <div>
+          <div style={{ fontSize: 10, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 5, fontWeight: 700 }}>Account</div>
+          <select value={passengerAccountStatus} onChange={e => { setPassengerAccountStatus(e.target.value); setOffset(0); }}
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: TEXT_BRI, fontSize: 12.5, padding: '6px 12px', fontFamily: FONT_UI, outline: 'none', cursor: 'pointer', height: 34 }}>
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="blocked">Blocked</option>
+          </select>
+        </div>
+        {/* Clear extra filters */}
+        {(cityFilter || isSubscribed !== '' || ridesMin || ridesMax || passengerAccountStatus !== 'all') && (
+          <button onClick={() => { setCityFilter(''); setIsSubscribed(''); setRidesMin(''); setRidesMax(''); setPassengerAccountStatus('all'); setOffset(0); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, height: 34, padding: '0 12px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, color: '#f87171', fontSize: 11.5, cursor: 'pointer', fontFamily: FONT_UI, fontWeight: 600, marginLeft: 'auto', alignSelf: 'flex-end' }}>
+            <X size={12} /> Clear
+          </button>
+        )}
+      </div>
+
       {/* ── Stats error banner ─────────────────────────────────────────── */}
       {statsError && (
         <div style={{ marginBottom: 16, padding: '10px 16px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -576,7 +657,7 @@ export default function PassengerOnboardingPage() {
         </div>
 
         {/* Active filter chips */}
-        {(period !== 'all' || activePassengerFilters.length > 0) && (
+        {(period !== 'all' || activePassengerFilters.length > 0 || cityFilter || isSubscribed !== '' || ridesMin || ridesMax || passengerAccountStatus !== 'all') && (
           <div style={{ padding: '10px 20px', background: 'rgba(212,175,55,0.025)', borderBottom: '1px solid rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <FilterIcon size={12} color={GOLD} />
             {period !== 'all' && (
@@ -585,6 +666,12 @@ export default function PassengerOnboardingPage() {
                 onRemove={() => { setPeriod('all'); setOffset(0); }}
               />
             )}
+            {cityFilter && <Chip label={`City: ${cityFilter}`} onRemove={() => { setCityFilter(''); setOffset(0); }} />}
+            {isSubscribed === 'true'  && <Chip label="Subscribed: Active" onRemove={() => { setIsSubscribed(''); setOffset(0); }} />}
+            {isSubscribed === 'false' && <Chip label="Subscribed: None"   onRemove={() => { setIsSubscribed(''); setOffset(0); }} />}
+            {ridesMin && <Chip label={`Rides ≥ ${ridesMin}`} onRemove={() => { setRidesMin(''); setOffset(0); }} />}
+            {ridesMax && <Chip label={`Rides ≤ ${ridesMax}`} onRemove={() => { setRidesMax(''); setOffset(0); }} />}
+            {passengerAccountStatus !== 'all' && <Chip label={`Account: ${passengerAccountStatus.charAt(0).toUpperCase()+passengerAccountStatus.slice(1)}`} onRemove={() => { setPassengerAccountStatus('all'); setOffset(0); }} />}
             {activePassengerFilters.map(({ key, filter, meta }) => (
               <FilterChip
                 key={key}
@@ -623,7 +710,12 @@ export default function PassengerOnboardingPage() {
                     onChange={v => setFilter('is_test_user', v)} onClear={() => clearFilter('is_test_user')} />
                 </th>
                 <th style={psgTh}>Status</th>
-                <th style={psgTh}>Joined</th>
+                <th style={psgTh}>Rides</th>
+                <th style={psgTh}>Sub</th>
+                <th style={psgTh}>
+                  <FilterHead label="Joined" meta={fMeta('joined')} filter={filters.joined}
+                    onChange={v => setFilter('joined', v)} onClear={() => clearFilter('joined')} />
+                </th>
                 <th style={psgTh}>
                   <FilterHead label="Last Login" meta={fMeta('last_login')} filter={filters.last_login}
                     onChange={v => setFilter('last_login', v)} onClear={() => clearFilter('last_login')} align="right" />
@@ -635,7 +727,7 @@ export default function PassengerOnboardingPage() {
               {tableLoading
                 ? Array.from({ length: LIMIT }).map((_, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      {[120, 90, 160, 80, 40, 60, 80, 80, 100].map((w, j) => (
+                      {[120, 90, 160, 80, 40, 60, 40, 40, 80, 80, 100].map((w, j) => (
                         <td key={j} style={{ padding: '13px 16px' }}>
                           <div style={{ height: 13, borderRadius: 4, background: 'rgba(255,255,255,0.06)', width: w, animation: 'pulse 1.4s ease-in-out infinite' }} />
                         </td>
@@ -645,7 +737,7 @@ export default function PassengerOnboardingPage() {
                 : rows.length === 0
                   ? (
                       <tr>
-                        <td colSpan={9} style={{ padding: 52, textAlign: 'center' }}>
+                        <td colSpan={11} style={{ padding: 52, textAlign: 'center' }}>
                           <Users size={36} color="rgba(255,255,255,0.06)" style={{ display: 'block', margin: '0 auto 12px' }} />
                           <div style={{ color: TEXT_DIM, fontSize: 13 }}>No passengers found</div>
                           <div style={{ fontSize: 12, color: TEXT_DIM, marginTop: 6, opacity: 0.7 }}>
@@ -687,6 +779,16 @@ export default function PassengerOnboardingPage() {
                         </td>
                         {/* Status */}
                         <td style={{ padding: '12px 16px' }}><StatusBadge active={p.is_active} /></td>
+                        {/* Rides */}
+                        <td style={{ padding: '12px 16px', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', color: p.total_rides > 0 ? TEXT_BRI : TEXT_DIM }}>
+                          {p.total_rides != null ? p.total_rides : '—'}
+                        </td>
+                        {/* Subscribed */}
+                        <td style={{ padding: '12px 16px', fontSize: 11 }}>
+                          {p.is_subscribed
+                            ? <span style={{ padding:'2px 8px', borderRadius:20, background:'rgba(34,197,94,0.12)', color:'#4ade80', border:'1px solid rgba(34,197,94,0.25)', fontWeight:600 }}>Active</span>
+                            : <span style={{ color:TEXT_DIM }}>—</span>}
+                        </td>
                         {/* Joined */}
                         <td style={{ padding: '12px 16px', fontSize: 12, color: TEXT_DIM, whiteSpace: 'nowrap' }}>
                           {p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}

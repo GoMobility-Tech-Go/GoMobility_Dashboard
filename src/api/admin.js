@@ -1,7 +1,7 @@
 import api from './axios';
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
-export const getDashboard = () => api.get('/admin/dashboard');
+export const getDashboard = (params = {}) => api.get('/admin/dashboard', { params });
 export const getRevenueAnalytics = (days = 7) =>
   api.get(`/admin/analytics/revenue?days=${days}`);
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users, Car, MapPin, IndianRupee, TrendingUp, UserCheck, AlertCircle, Activity,
@@ -85,7 +85,7 @@ const QuickLink = ({ icon:Icon, label, sub, to, color="#D4AF37", badge, onClick 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SUPER ADMIN DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBreakdown, loadingStats, loadingChart, loadingAlerts, days, setDays, error }) {
+function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBreakdown, loadingStats, loadingChart, loadingAlerts, days, setDays, error, periodLabel }) {
   const nav = useNavigate();
   const totalRev = (analytics?.byDay || []).reduce((s,d) => s + Number(d.totalRevenue||0), 0);
   const totalRid = (analytics?.byVehicle || []).reduce((s,v) => s + Number(v.totalRides||0), 0);
@@ -121,12 +121,12 @@ function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBre
   }, [rideBreakdown, stats]);
 
   const SA_CARDS = [
-    { key:"totalUsers",    label:"Total Users",        icon:Users,       color:"#3b82f6", sub:`Platform registrations` },
-    { key:"totalDrivers",  label:"Total Drivers",      icon:Car,         color:"#8b5cf6", sub:`${stats?.pendingKyc||0} pending KYC` },
-    { key:"activeDrivers", label:"Online Now",         icon:UserCheck,   color:"#10b981", sub:`${kpis.utilization}% utilization` },
-    { key:"todayRides",    label:"Today's Rides",      icon:MapPin,      color:"#f59e0b", sub:`${stats?.totalRides||0} total rides` },
-    { key:"todayRevenue",  label:"Today Revenue",      icon:IndianRupee, color:"#D4AF37", rupee:true, sub:`₹${kpis.revPerRide}/ride avg` },
-    { key:"totalRevenue",  label:"Month Revenue",      icon:Activity,    color:"#22c55e", rupee:true },
+    { key:"totalUsers",    label:"Total Users",                        icon:Users,       color:"#3b82f6", sub:`Platform registrations` },
+    { key:"totalDrivers",  label:"Total Drivers",                      icon:Car,         color:"#8b5cf6", sub:`${stats?.pendingKyc||0} pending KYC` },
+    { key:"activeDrivers", label:"Online Now",                         icon:UserCheck,   color:"#10b981", sub:`${kpis.utilization}% utilization` },
+    { key:"todayRides",    label:`${periodLabel} Rides`,               icon:MapPin,      color:"#f59e0b", sub:`${stats?.totalRides||0} total rides` },
+    { key:"todayRevenue",  label:`${periodLabel} Revenue`,             icon:IndianRupee, color:"#D4AF37", rupee:true, sub:`₹${kpis.revPerRide}/ride avg` },
+    { key:"totalRevenue",  label:"Month Revenue",                      icon:Activity,    color:"#22c55e", rupee:true },
   ];
 
   const fraudCount = fraudAlerts.length;
@@ -363,11 +363,11 @@ function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBre
 // ─────────────────────────────────────────────────────────────────────────────
 //  ADMIN DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function AdminDashboard({ stats, loadingStats, error }) {
+function AdminDashboard({ stats, loadingStats, error, periodLabel }) {
   const nav = useNavigate();
 
   const ADMIN_CARDS = [
-    { key:"todayRides",    label:"Today's Rides",      icon:MapPin,      color:"#f59e0b" },
+    { key:"todayRides",    label:`${periodLabel} Rides`,   icon:MapPin,      color:"#f59e0b" },
     { key:"activeDrivers", label:"Online Drivers",     icon:UserCheck,   color:"#10b981" },
     { key:"pendingKyc",    label:"Pending KYC Review", icon:AlertCircle, color:"#ef4444" },
     { key:"totalDrivers",  label:"Total Drivers",      icon:Car,         color:"#8b5cf6" },
@@ -494,11 +494,50 @@ function AdminDashboard({ stats, loadingStats, error }) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  ROOT COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
+const DASH_PERIODS = [
+  { key: 'today', label: 'Today' },
+  { key: 'week',  label: 'This Week' },
+  { key: 'month', label: 'This Month' },
+  { key: 'year',  label: 'This Year' },
+  { key: 'custom',label: 'Custom' },
+];
+
+function getDashPeriodDates(period, customFrom, customTo) {
+  const now = new Date();
+  const sod = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
+  const eod = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString();
+  if (period === 'custom') {
+    return {
+      from: customFrom ? new Date(customFrom + 'T00:00:00').toISOString() : null,
+      to:   customTo   ? new Date(customTo   + 'T23:59:59').toISOString() : null,
+    };
+  }
+  if (period === 'today')  return { from: sod(now), to: eod(now) };
+  if (period === 'week') {
+    const s = new Date(now); s.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    return { from: sod(s), to: eod(now) };
+  }
+  if (period === 'month') return { from: sod(new Date(now.getFullYear(), now.getMonth(), 1)), to: eod(now) };
+  if (period === 'year')  return { from: sod(new Date(now.getFullYear(), 0, 1)), to: eod(now) };
+  return { from: null, to: null };
+}
+
 export default function DashboardPage() {
   const { user }                        = useAuth();
   const actualIsSA                      = user?.role === "Super Admin";
   const [previewSA, setPreviewSA]       = useState(false);
   const isSA                            = actualIsSA || previewSA;
+
+  // Period filter for stat cards
+  const [dashPeriod, setDashPeriod]         = useState('today');
+  const [dashCustomFrom, setDashCustomFrom] = useState('');
+  const [dashCustomTo, setDashCustomTo]     = useState('');
+
+  const dashPeriodDates = useMemo(
+    () => getDashPeriodDates(dashPeriod, dashCustomFrom, dashCustomTo),
+    [dashPeriod, dashCustomFrom, dashCustomTo],
+  );
+  const dashPeriodLabel = DASH_PERIODS.find(p => p.key === dashPeriod)?.label ?? 'Today';
 
   const [stats, setStats]               = useState(null);
   const [analytics, setAnalytics]       = useState(null);
@@ -513,9 +552,13 @@ export default function DashboardPage() {
   const [rideBreakdown, setRideBreakdown]   = useState({ completed:0, cancelled:0, loading:true });
   const [loadingAlerts, setLoadingAlerts]   = useState(true);
 
-  useEffect(() => {
+  const loadDashboardStats = useCallback(() => {
     setLoadingStats(true);
-    getDashboard()
+    const { from, to } = dashPeriodDates;
+    const params = {};
+    if (from) params.from = from;
+    if (to)   params.to   = to;
+    getDashboard(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
         setStats({
@@ -531,7 +574,9 @@ export default function DashboardPage() {
       })
       .catch(() => setError("Failed to load dashboard stats."))
       .finally(() => setLoadingStats(false));
-  }, []);
+  }, [dashPeriodDates]);
+
+  useEffect(() => { loadDashboardStats(); }, [loadDashboardStats]);
 
   useEffect(() => {
     if (!isSA) return;
@@ -593,6 +638,32 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ── Period filter bar for stat cards ──────────────────────────── */}
+      <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.12)", borderRadius:14, padding:"12px 18px", marginBottom:20, display:"flex", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+        <span style={{ fontSize:10, fontWeight:700, color:"rgba(255,255,255,0.4)", textTransform:"uppercase", letterSpacing:"0.8px", marginRight:4 }}>Stat Period</span>
+        {DASH_PERIODS.map(p => (
+          <button key={p.key} onClick={() => setDashPeriod(p.key)}
+            style={{ padding:"5px 13px", borderRadius:8, fontSize:12.5, cursor:"pointer", fontFamily:"Outfit,sans-serif",
+              border:`1px solid ${dashPeriod===p.key?"rgba(212,175,55,0.3)":"rgba(255,255,255,0.08)"}`,
+              background: dashPeriod===p.key?"rgba(212,175,55,0.1)":"transparent",
+              color: dashPeriod===p.key?"#D4AF37":"rgba(255,255,255,0.5)",
+              fontWeight: dashPeriod===p.key?700:500, transition:"all .15s",
+            }}>
+            {p.label}
+          </button>
+        ))}
+        {dashPeriod === 'custom' && (
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            <input type="date" value={dashCustomFrom} onChange={e => setDashCustomFrom(e.target.value)}
+              style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.85)", fontSize:12, padding:"5px 10px", outline:"none", colorScheme:"dark", fontFamily:"Outfit,sans-serif" }} />
+            <span style={{ color:"rgba(255,255,255,0.35)", fontSize:12 }}>to</span>
+            <input type="date" value={dashCustomTo} onChange={e => setDashCustomTo(e.target.value)}
+              style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.85)", fontSize:12, padding:"5px 10px", outline:"none", colorScheme:"dark", fontFamily:"Outfit,sans-serif" }} />
+          </div>
+        )}
+        <button onClick={loadDashboardStats} title="Refresh stats" style={{ marginLeft:"auto", width:30, height:30, borderRadius:8, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.4)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>↻</button>
+      </div>
+
       {isSA
         ? <SuperAdminDashboard
             stats={stats} analytics={analytics}
@@ -601,8 +672,9 @@ export default function DashboardPage() {
             loadingStats={loadingStats} loadingChart={loadingChart}
             loadingAlerts={loadingAlerts}
             days={days} setDays={setDays} error={error}
+            periodLabel={dashPeriodLabel}
           />
-        : <AdminDashboard stats={stats} loadingStats={loadingStats} error={error} />
+        : <AdminDashboard stats={stats} loadingStats={loadingStats} error={error} periodLabel={dashPeriodLabel} />
       }
     </div>
   );

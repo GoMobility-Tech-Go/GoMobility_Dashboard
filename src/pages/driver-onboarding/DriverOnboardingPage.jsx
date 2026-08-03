@@ -758,6 +758,13 @@ export default function DriverOnboardingPage() {
   // ── Onboarding status filter ──────────────────────────────────────────
   const [onboardingStatus, setOnboardingStatus] = useState("all");
 
+  // ── Additional quick filters ──────────────────────────────────────────
+  const [vehicleTypeFilter, setVehicleTypeFilter]     = useState('all');
+  const [cityFilter, setCityFilter]                   = useState('');
+  const [driverAccountStatus, setDriverAccountStatus] = useState('all');
+  const [showOnlyOnDuty, setShowOnlyOnDuty]           = useState(false);
+  const [showOnlyTestDrivers, setShowOnlyTestDrivers] = useState(false);
+
   // ── Period filter state ───────────────────────────────────────────────
   const [period, setPeriod]         = useState('all');
   const [customFrom, setCustomFrom] = useState('');
@@ -799,7 +806,11 @@ export default function DriverOnboardingPage() {
 
   const setFilter    = (key, next) => { setFilters(p => ({ ...p, [key]: next })); setOffset(0); };
   const clearFilter  = (key)       => { setFilters(p => { const n = { ...p }; delete n[key]; return n; }); setOffset(0); };
-  const clearAllFilters = ()       => { setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" }); };
+  const clearAllFilters = ()       => {
+    setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" });
+    setVehicleTypeFilter('all'); setCityFilter(''); setDriverAccountStatus('all');
+    setShowOnlyOnDuty(false); setShowOnlyTestDrivers(false);
+  };
 
   // Modals
   const [suspendTarget, setSuspendTarget]   = useState(null);
@@ -833,6 +844,11 @@ export default function DriverOnboardingPage() {
     if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
     if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
     if (onboardingStatus && onboardingStatus !== "all") params.onboarding_status = onboardingStatus;
+    if (vehicleTypeFilter && vehicleTypeFilter !== 'all') params.vehicle_type = vehicleTypeFilter;
+    if (cityFilter.trim()) params.city = cityFilter.trim();
+    if (driverAccountStatus && driverAccountStatus !== 'all') params.account_status = driverAccountStatus;
+    if (showOnlyOnDuty)      { params.is_on_duty_op = 'eq'; params.is_on_duty_val = 'true'; }
+    if (showOnlyTestDrivers) { params.is_test_user_op = 'eq'; params.is_test_user_val = 'true'; }
     getDrivers(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -841,7 +857,7 @@ export default function DriverOnboardingPage() {
       })
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
-  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates, onboardingStatus]);
+  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates, onboardingStatus, vehicleTypeFilter, cityFilter, driverAccountStatus, showOnlyOnDuty, showOnlyTestDrivers]);
 
   const handleExportDrivers = async () => {
     setExporting(true);
@@ -857,6 +873,11 @@ export default function DriverOnboardingPage() {
       if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
       if (onboardingStatus && onboardingStatus !== "all") params.onboarding_status = onboardingStatus;
+      if (vehicleTypeFilter && vehicleTypeFilter !== 'all') params.vehicle_type = vehicleTypeFilter;
+      if (cityFilter.trim()) params.city = cityFilter.trim();
+      if (driverAccountStatus && driverAccountStatus !== 'all') params.account_status = driverAccountStatus;
+      if (showOnlyOnDuty)      { params.is_on_duty_op = 'eq'; params.is_on_duty_val = 'true'; }
+      if (showOnlyTestDrivers) { params.is_test_user_op = 'eq'; params.is_test_user_val = 'true'; }
 
       const res  = await getDrivers(params);
       const d    = res.data?.data || res.data || {};
@@ -1061,9 +1082,49 @@ export default function DriverOnboardingPage() {
             <DrvStatCard icon={Users}     label="Total All-Time"             value={stats.allTime}  color="#6366f1"   loading={statsLoading} />
           </div>
 
-          {/* Status filter */}
-          <div style={{ marginBottom: 14 }}>
-            <OnboardingStatusFilter value={onboardingStatus} onChange={(v) => { setOnboardingStatus(v); setOffset(0); }} />
+          {/* Status filter + quick filter bar */}
+          <div style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(212,175,55,0.1)', borderRadius:14, padding:'14px 18px', marginBottom:14 }}>
+            {/* Row 1: Onboarding Status + Account Status + City */}
+            <div style={{ display:'flex', flexWrap:'wrap', gap:14, alignItems:'flex-end', marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:5, fontWeight:700 }}>KYC Status</div>
+                <OnboardingStatusFilter value={onboardingStatus} onChange={(v) => { setOnboardingStatus(v); setOffset(0); }} />
+              </div>
+              <div>
+                <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:5, fontWeight:700 }}>Account</div>
+                <DriverAccountStatusFilter value={driverAccountStatus} onChange={(v) => { setDriverAccountStatus(v); setOffset(0); }} />
+              </div>
+              <div>
+                <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:5, fontWeight:700 }}>City</div>
+                <input type="text" value={cityFilter} placeholder="Search city…"
+                  onChange={e => { setCityFilter(e.target.value); setOffset(0); }}
+                  style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:9, color:TEXT_BRI, fontSize:12.5, padding:'7px 12px', fontFamily:'Outfit,sans-serif', outline:'none', width:160 }} />
+              </div>
+            </div>
+            {/* Row 2: Vehicle Type chips */}
+            <div>
+              <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:7, fontWeight:700 }}>Vehicle Type</div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {[
+                  { v:'all',     l:'All Types' },
+                  { v:'bike',    l:'Bike' },
+                  { v:'auto',    l:'Auto' },
+                  { v:'car',     l:'Car' },
+                  { v:'xl',      l:'XL' },
+                  { v:'premium', l:'Premium' },
+                  { v:'luxury',  l:'Luxury' },
+                ].map(({ v, l }) => (
+                  <button key={v} onClick={() => { setVehicleTypeFilter(v); setOffset(0); }}
+                    style={{ padding:'5px 13px', borderRadius:8, fontSize:12, cursor:'pointer', fontFamily:'Outfit,sans-serif', fontWeight:600, transition:'all .15s',
+                      border:`1px solid ${vehicleTypeFilter===v?GOLD:'rgba(255,255,255,0.1)'}`,
+                      background: vehicleTypeFilter===v?GOLD10:'transparent',
+                      color: vehicleTypeFilter===v?GOLD:TEXT_MED,
+                    }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Visibility toggles + reset */}
@@ -1071,6 +1132,8 @@ export default function DriverOnboardingPage() {
             <DrvVisibilityToggle active={includeInactive}          onToggle={() => { setIncludeInactive(v=>!v); setOffset(0); }}          label="Blocked" />
             <DrvVisibilityToggle active={includeUnverifiedUsers}   onToggle={() => { setIncludeUnverifiedUsers(v=>!v); setOffset(0); }}   label="OTP-Unverified" />
             <DrvVisibilityToggle active={includeUnverifiedDrivers} onToggle={() => { setIncludeUnverifiedDrivers(v=>!v); setOffset(0); }} label="KYC-Incomplete" />
+            <DrvVisibilityToggle active={showOnlyOnDuty}           onToggle={() => { setShowOnlyOnDuty(v=>!v); setOffset(0); }}           label="On Duty" />
+            <DrvVisibilityToggle active={showOnlyTestDrivers}      onToggle={() => { setShowOnlyTestDrivers(v=>!v); setOffset(0); }}      label="Test Users" />
             <button
               onClick={handleExportDrivers}
               disabled={exporting}
@@ -1096,7 +1159,7 @@ export default function DriverOnboardingPage() {
             }}>
               <RefreshCw size={13} />
             </button>
-            {(activeDriverFilters.length > 0 || sort.col) && (
+            {(activeDriverFilters.length > 0 || sort.col || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus !== 'all' || showOnlyOnDuty || showOnlyTestDrivers) && (
               <button onClick={clearAllFilters} style={{
                 display:"flex", alignItems:"center", gap:6, height:32, padding:"0 14px",
                 background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)",
@@ -1109,7 +1172,7 @@ export default function DriverOnboardingPage() {
           </div>
 
           {/* Active filter chips */}
-          {(period !== 'all' || onboardingStatus !== 'all' || activeDriverFilters.length > 0) && (
+          {(period !== 'all' || onboardingStatus !== 'all' || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus !== 'all' || showOnlyOnDuty || showOnlyTestDrivers || activeDriverFilters.length > 0) && (
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14, alignItems:"center" }}>
               <FilterIcon size={13} color="#D4AF37" style={{ marginRight:2 }} />
               {period !== 'all' && (
@@ -1123,6 +1186,21 @@ export default function DriverOnboardingPage() {
                   label={`Status: ${ONBOARDING_STATUS_OPTIONS.find(o => o.value === onboardingStatus)?.label || onboardingStatus}`}
                   onRemove={() => { setOnboardingStatus('all'); setOffset(0); }}
                 />
+              )}
+              {vehicleTypeFilter !== 'all' && (
+                <DrvPeriodChip label={`Vehicle: ${vehicleTypeFilter.toUpperCase()}`} onRemove={() => { setVehicleTypeFilter('all'); setOffset(0); }} />
+              )}
+              {cityFilter.trim() && (
+                <DrvPeriodChip label={`City: ${cityFilter}`} onRemove={() => { setCityFilter(''); setOffset(0); }} />
+              )}
+              {driverAccountStatus !== 'all' && (
+                <DrvPeriodChip label={`Account: ${driverAccountStatus.charAt(0).toUpperCase()+driverAccountStatus.slice(1)}`} onRemove={() => { setDriverAccountStatus('all'); setOffset(0); }} />
+              )}
+              {showOnlyOnDuty && (
+                <DrvPeriodChip label="On Duty Only" onRemove={() => { setShowOnlyOnDuty(false); setOffset(0); }} />
+              )}
+              {showOnlyTestDrivers && (
+                <DrvPeriodChip label="Test Users Only" onRemove={() => { setShowOnlyTestDrivers(false); setOffset(0); }} />
               )}
               {activeDriverFilters.map(({ key, filter, meta }) => (
                 <FilterChip
@@ -1501,6 +1579,45 @@ function OnboardingStatusFilter({ value, onChange }) {
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />
                 {opt.label}
                 {value === opt.value && <span style={{ marginLeft: "auto", fontSize: 12, color: opt.color }}>✓</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const DRIVER_ACCT_STATUS_OPTIONS = [
+  { value:'all',       label:'All Status', color:'rgba(255,255,255,0.6)', dot:'rgba(255,255,255,0.3)' },
+  { value:'active',    label:'Active',     color:'#4ade80',               dot:'#4ade80' },
+  { value:'blocked',   label:'Blocked',    color:'#f87171',               dot:'#f87171' },
+  { value:'suspended', label:'Suspended',  color:'#fb923c',               dot:'#fb923c' },
+];
+
+function DriverAccountStatusFilter({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const selected = DRIVER_ACCT_STATUS_OPTIONS.find(o => o.value === value) || DRIVER_ACCT_STATUS_OPTIONS[0];
+  return (
+    <div style={{ position:'relative', display:'inline-block' }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ display:'flex', alignItems:'center', gap:10, height:36, padding:'0 14px', minWidth:148, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(212,175,55,0.2)', borderRadius:10, cursor:'pointer', fontFamily:'Outfit,sans-serif', color:'rgba(255,255,255,0.85)', fontSize:13, justifyContent:'space-between' }}>
+        <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ width:8, height:8, borderRadius:'50%', background:selected.dot, flexShrink:0 }} />
+          <span style={{ color:selected.color, fontWeight:600 }}>{selected.label}</span>
+        </span>
+        <span style={{ color:'rgba(255,255,255,0.3)', fontSize:10, marginLeft:4 }}>{open?'▲':'▼'}</span>
+      </button>
+      {open && (
+        <>
+          <div style={{ position:'fixed', inset:0, zIndex:999 }} onClick={() => setOpen(false)} />
+          <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:1000, background:'#0d1b2e', border:'1px solid rgba(212,175,55,0.2)', borderRadius:12, padding:'6px 0', minWidth:165, boxShadow:'0 12px 40px rgba(0,0,0,0.6)' }}>
+            {DRIVER_ACCT_STATUS_OPTIONS.map(opt => (
+              <button key={opt.value} onClick={() => { onChange(opt.value); setOpen(false); }}
+                style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 16px', background:value===opt.value?'rgba(212,175,55,0.08)':'transparent', border:'none', cursor:'pointer', fontFamily:'Outfit,sans-serif', fontSize:13, color:value===opt.value?opt.color:'rgba(255,255,255,0.7)', fontWeight:value===opt.value?700:500, textAlign:'left' }}>
+                <span style={{ width:8, height:8, borderRadius:'50%', background:opt.dot, flexShrink:0 }} />
+                {opt.label}
+                {value===opt.value && <span style={{ marginLeft:'auto', fontSize:12, color:opt.color }}>✓</span>}
               </button>
             ))}
           </div>
