@@ -1289,11 +1289,12 @@ export default function DriverOnboardingPage() {
                             <tr key={d.id} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
                               <TD>
                                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                                  <div style={{ width:36, height:36, borderRadius:"50%", background:"rgba(212,175,55,0.12)", border:"1.5px solid rgba(212,175,55,0.28)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden", position:"relative" }}>
-                                    {d.profile_photo_url || d.profile_picture
-                                      ? <img src={d.profile_photo_url||d.profile_picture} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={(e)=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}}/>
+                                  <div style={{ width:38, height:38, borderRadius:"50%", background:"rgba(212,175,55,0.12)", border:"1.5px solid rgba(212,175,55,0.28)", flexShrink:0, overflow:"hidden", position:"relative", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                                    {(d.profile_picture || d.profile_photo_url)
+                                      ? <img src={d.profile_picture||d.profile_photo_url} alt={d.full_name||""} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
+                                          onError={(e)=>{ e.target.style.display="none"; const fb=e.target.nextSibling; if(fb) fb.style.display="flex"; }}/>
                                       : null}
-                                    <div style={{ display:(d.profile_photo_url||d.profile_picture)?"none":"flex", position:"absolute", inset:0, alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700, color:"#D4AF37", fontFamily:"Cinzel,serif" }}>
+                                    <div style={{ display:(d.profile_picture||d.profile_photo_url)?"none":"flex", position:"absolute", inset:0, alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700, color:"#D4AF37", fontFamily:"Cinzel,serif", background:"rgba(212,175,55,0.12)" }}>
                                       {(d.full_name||d.name||"?")[0].toUpperCase()}
                                     </div>
                                   </div>
