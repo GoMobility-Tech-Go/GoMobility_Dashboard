@@ -808,6 +808,7 @@ export default function DriverOnboardingPage() {
   const clearFilter  = (key)       => { setFilters(p => { const n = { ...p }; delete n[key]; return n; }); setOffset(0); };
   const clearAllFilters = ()       => {
     setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" });
+    setOnboardingStatus('all');
     setVehicleTypeFilter('all'); setCityFilter(''); setDriverAccountStatus('all');
     setShowOnlyOnDuty(false); setShowOnlyTestDrivers(false);
   };
@@ -847,8 +848,8 @@ export default function DriverOnboardingPage() {
     if (vehicleTypeFilter && vehicleTypeFilter !== 'all') params.vehicle_type = vehicleTypeFilter;
     if (cityFilter.trim()) params.city = cityFilter.trim();
     if (driverAccountStatus && driverAccountStatus !== 'all') params.account_status = driverAccountStatus;
-    if (showOnlyOnDuty)      { params.is_on_duty_op = 'eq'; params.is_on_duty_val = 'true'; }
-    if (showOnlyTestDrivers) { params.is_test_user_op = 'eq'; params.is_test_user_val = 'true'; }
+    if (showOnlyOnDuty)      params.is_on_duty   = 'true';
+    if (showOnlyTestDrivers) params.is_test_user = 'true';
     getDrivers(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -1159,7 +1160,7 @@ export default function DriverOnboardingPage() {
             }}>
               <RefreshCw size={13} />
             </button>
-            {(activeDriverFilters.length > 0 || sort.col || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus !== 'all' || showOnlyOnDuty || showOnlyTestDrivers) && (
+            {(activeDriverFilters.length > 0 || sort.col || onboardingStatus !== 'all' || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus !== 'all' || showOnlyOnDuty || showOnlyTestDrivers) && (
               <button onClick={clearAllFilters} style={{
                 display:"flex", alignItems:"center", gap:6, height:32, padding:"0 14px",
                 background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)",
@@ -1559,7 +1560,6 @@ function OnboardingStatusFilter({ value, onChange }) {
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5, fontWeight: 700 }}>Status</div>
       <button
         onClick={() => setOpen(o => !o)}
         style={{ display: "flex", alignItems: "center", gap: 10, height: 36, padding: "0 14px", minWidth: 160, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 10, cursor: "pointer", fontFamily: "Outfit,sans-serif", color: "rgba(255,255,255,0.85)", fontSize: 13, justifyContent: "space-between" }}>
