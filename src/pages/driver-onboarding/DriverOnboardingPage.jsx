@@ -350,6 +350,10 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
   const isActive    = p?.is_active    || p?.isActive;
   const isVerified  = !!(p?.is_verified || p?.isVerified || p?.verified_at || p?.verifiedAt);
 
+  // Use selfie KYC doc as profile photo (admin API doesn't return u.profile_picture)
+  const selfiePic = docs.find(d => (d.document_type||d.type) === "SELFIE")?.file_url || null;
+  const photoSrc  = p?.profile_photo_url || p?.profilePicture || p?.profile_picture || selfiePic;
+
   const docTypeLabel = (t) => (t||"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
 
   // Extract vehicle info from VEHICLE_RC KYC document (since admin API doesn't join driver_vehicle table)
@@ -413,11 +417,23 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
             <>
               {/* ── Profile Header ── */}
               <div style={{ display:"flex", alignItems:"center", gap:18, marginBottom:22, padding:"18px 20px", background:"rgba(212,175,55,0.05)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:16 }}>
-                <div style={{ width:64, height:64, borderRadius:"50%", background:"rgba(212,175,55,0.12)", border:"2px solid rgba(212,175,55,0.35)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden" }}>
-                  {(p.profile_photo_url||p.profilePicture||p.profile_picture)
-                    ? <img src={p.profile_photo_url||p.profilePicture||p.profile_picture} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={(e)=>{e.target.style.display="none";}} />
-                    : <User size={28} color="rgba(212,175,55,0.5)" />
-                  }
+                <div
+                  onClick={() => photoSrc && setImgPrev(photoSrc)}
+                  style={{ width:72, height:72, borderRadius:"50%", background:"rgba(212,175,55,0.12)", border:`2px solid ${photoSrc?"rgba(212,175,55,0.6)":"rgba(212,175,55,0.25)"}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden", cursor:photoSrc?"pointer":"default", position:"relative" }}>
+                  {photoSrc
+                    ? <img src={photoSrc} alt={p.full_name||"Driver"} style={{ width:"100%", height:"100%", objectFit:"cover" }}
+                        onError={(e)=>{ e.target.style.display="none"; e.target.nextSibling.style.display="flex"; }} />
+                    : null}
+                  <div style={{ display:photoSrc?"none":"flex", width:"100%", height:"100%", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:700, color:"#D4AF37", fontFamily:"Cinzel,serif", position:"absolute", inset:0 }}>
+                    {(p.full_name||p.name||"?")[0].toUpperCase()}
+                  </div>
+                  {photoSrc && (
+                    <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0)", display:"flex", alignItems:"center", justifyContent:"center", transition:".2s", opacity:0 }}
+                      onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,0,0,0.45)";e.currentTarget.style.opacity=1;}}
+                      onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,0,0,0)";e.currentTarget.style.opacity=0;}}>
+                      <Eye size={18} color="#fff"/>
+                    </div>
+                  )}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontFamily:"Cinzel,serif", fontSize:18, fontWeight:700, color:"#fff" }}>{p.full_name || p.fullName || p.name || "—"}</div>
@@ -1273,11 +1289,13 @@ export default function DriverOnboardingPage() {
                             <tr key={d.id} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
                               <TD>
                                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                                  <div style={{ width:34, height:34, borderRadius:"50%", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.2)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden" }}>
-                                    {d.profile_photo_url
-                                      ? <img src={d.profile_photo_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={(e)=>{e.target.style.display="none";}}/>
-                                      : <User size={14} color="rgba(212,175,55,0.5)"/>
-                                    }
+                                  <div style={{ width:36, height:36, borderRadius:"50%", background:"rgba(212,175,55,0.12)", border:"1.5px solid rgba(212,175,55,0.28)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden", position:"relative" }}>
+                                    {d.profile_photo_url || d.profile_picture
+                                      ? <img src={d.profile_photo_url||d.profile_picture} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={(e)=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}}/>
+                                      : null}
+                                    <div style={{ display:(d.profile_photo_url||d.profile_picture)?"none":"flex", position:"absolute", inset:0, alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700, color:"#D4AF37", fontFamily:"Cinzel,serif" }}>
+                                      {(d.full_name||d.name||"?")[0].toUpperCase()}
+                                    </div>
                                   </div>
                                   <div>
                                     <div style={{ fontWeight:600, color:"#fff" }}>{d.full_name || d.name || "—"}</div>
