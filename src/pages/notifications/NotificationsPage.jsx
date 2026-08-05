@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Bell, Send, Calendar, X, Clock, ToggleLeft, ToggleRight, Play, Edit2, Check, History, Zap } from "lucide-react";
+import { Bell, Send, X, Clock, ToggleLeft, ToggleRight, Play, Edit2, Check, History, Zap, Calendar, Users, AlertCircle } from "lucide-react";
 import {
   triggerEngagement,
   getNotificationSchedule,
@@ -27,7 +27,7 @@ const Toast = ({ msg, type, onClose }) => (
   </div>
 );
 
-// ── Audience options for manual send ────────────────────────────────────────
+// ── Audience options ──────────────────────────────────────────────────────────
 const AUDIENCES = [
   { value:"all_users",             label:"All Users",                    icon:"👥", group:"Mixed",      desc:"All passengers + online drivers" },
   { value:"passengers",            label:"All Passengers",               icon:"🧑", group:"Passengers", desc:"Every registered passenger" },
@@ -78,12 +78,66 @@ const fmtRelative = (iso) => {
 
 const SCHEDULE_LABEL = { daily:"Daily · 9 AM", weekly:"Weekly · Mon 9 AM" };
 
+// ── Phone Mockup Preview ──────────────────────────────────────────────────────
+const PhonePreview = ({ title, body }) => (
+  <div style={{ display:"flex", flexDirection:"column", alignItems:"center" }}>
+    {/* Phone frame */}
+    <div style={{
+      width:220, background:"#0d1117", borderRadius:28, padding:"16px 10px",
+      border:"2px solid rgba(255,255,255,0.1)", position:"relative",
+      boxShadow:"0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)",
+    }}>
+      {/* Status bar */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0 8px", marginBottom:10 }}>
+        <span style={{ fontSize:9, color:"rgba(255,255,255,0.6)", fontFamily:"monospace" }}>9:41</span>
+        <div style={{ width:40, height:6, borderRadius:3, background:"rgba(255,255,255,0.15)" }}/>
+        <div style={{ display:"flex", gap:3 }}>
+          {[1,2,3].map(i=><div key={i} style={{ width:3, height:i*3, borderRadius:1, background:"rgba(255,255,255,0.5)" }}/>)}
+        </div>
+      </div>
+
+      {/* Notification card */}
+      <div style={{
+        background:"rgba(30,35,48,0.95)", borderRadius:16,
+        padding:"11px 13px", border:"1px solid rgba(255,255,255,0.08)",
+        backdropFilter:"blur(10px)",
+      }}>
+        {/* App header */}
+        <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:7 }}>
+          <div style={{
+            width:20, height:20, borderRadius:5,
+            background:"linear-gradient(135deg,#f0d060,#D4AF37)",
+            display:"flex", alignItems:"center", justifyContent:"center", fontSize:10,
+          }}>🚗</div>
+          <span style={{ fontSize:9, color:"rgba(255,255,255,0.5)", fontWeight:600, letterSpacing:"0.5px" }}>GO MOBILITY</span>
+          <span style={{ fontSize:9, color:"rgba(255,255,255,0.25)", marginLeft:"auto" }}>now</span>
+        </div>
+
+        {/* Notification content */}
+        <div style={{ fontSize:11, fontWeight:700, color: title ? "#fff" : "rgba(255,255,255,0.2)", marginBottom:4, lineHeight:1.3 }}>
+          {title || "Notification title appears here"}
+        </div>
+        <div style={{ fontSize:10, color: body ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.15)", lineHeight:1.4 }}>
+          {body ? (body.length > 80 ? body.slice(0,80) + "…" : body) : "Your message body will appear here in this space…"}
+        </div>
+      </div>
+
+      {/* Home indicator */}
+      <div style={{ width:60, height:4, borderRadius:2, background:"rgba(255,255,255,0.2)", margin:"14px auto 0" }}/>
+    </div>
+
+    <div style={{ marginTop:10, fontSize:10, color:"rgba(255,255,255,0.2)", textAlign:"center", letterSpacing:"0.5px" }}>
+      LIVE PREVIEW
+    </div>
+  </div>
+);
+
 // ── Tab 1 — Send Now ─────────────────────────────────────────────────────────
 function SendNowTab({ showToast }) {
-  const [title, setTitle]     = useState("");
-  const [body, setBody]       = useState("");
+  const [title, setTitle]       = useState("");
+  const [body, setBody]         = useState("");
   const [audience, setAudience] = useState("all_users");
-  const [sending, setSending] = useState(false);
+  const [sending, setSending]   = useState(false);
   const [schedule, setSchedule] = useState(null);
   const [history, setHistory]   = useState([]);
 
@@ -95,9 +149,9 @@ function SendNowTab({ showToast }) {
   }, []);
 
   const handleSend = async () => {
-    if (!title.trim() || !body.trim()) { showToast("Title aur message dono required hain.", "error"); return; }
+    if (!title.trim() || !body.trim()) { showToast("Title and message are required.", "error"); return; }
     const label = AUDIENCES.find(a => a.value === audience)?.label || audience;
-    if (!window.confirm(`"${title}" ko "${label}" ko bhejna hai?`)) return;
+    if (!window.confirm(`Send "${title}" to "${label}"?`)) return;
     setSending(true);
     try {
       const res = await triggerEngagement({ title, body, target_audience: audience });
@@ -108,10 +162,10 @@ function SendNowTab({ showToast }) {
       const updated = [entry, ...history].slice(0, 10);
       setHistory(updated);
       try { sessionStorage.setItem("notif_sent_log", JSON.stringify(updated)); } catch {}
-      showToast(`✅ Bhej diya! ${pSent + dSent} devices ko notification gayi.`);
+      showToast(`✅ Sent! ${pSent + dSent} devices notified.`);
       setTitle(""); setBody("");
     } catch (err) {
-      showToast(err.response?.data?.message || "Notification send nahi ho payi.", "error");
+      showToast(err.response?.data?.message || "Failed to send notification.", "error");
     } finally {
       setSending(false);
     }
@@ -123,12 +177,12 @@ function SendNowTab({ showToast }) {
   }, {});
 
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.2fr) minmax(0,1fr)", gap:20, alignItems:"start" }}>
+    <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.3fr) minmax(0,1fr)", gap:20, alignItems:"start" }}>
 
-      {/* Left */}
+      {/* ── Left column ── */}
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
-        {/* Quick templates */}
+        {/* Quick Templates */}
         <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
           <div style={{ padding:"13px 18px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", gap:8 }}>
             <Zap size={13} color="#D4AF37"/>
@@ -161,7 +215,8 @@ function SendNowTab({ showToast }) {
           </div>
 
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            {/* Audience grouped */}
+
+            {/* Audience */}
             <div>
               <label style={LABEL_STYLE}>Target Audience *</label>
               {Object.entries(grouped).map(([grp, opts]) => (
@@ -205,22 +260,6 @@ function SendNowTab({ showToast }) {
               </div>
             </div>
 
-            {/* Preview */}
-            {(title||body) && (
-              <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:12, padding:"13px 15px" }}>
-                <div style={{ fontSize:10, color:"rgba(212,175,55,0.5)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:8 }}>📱 Preview</div>
-                <div style={{ background:"rgba(255,255,255,0.06)", borderRadius:9, padding:"11px 13px" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:5 }}>
-                    <div style={{ width:18, height:18, borderRadius:4, background:"rgba(212,175,55,0.3)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>🚗</div>
-                    <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>GO Mobility</span>
-                    <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)", marginLeft:"auto" }}>now</span>
-                  </div>
-                  <div style={{ fontSize:13, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:2 }}>{title||"Title here"}</div>
-                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", lineHeight:1.4 }}>{body||"Message here…"}</div>
-                </div>
-              </div>
-            )}
-
             <button onClick={handleSend} disabled={sending} style={{
               height:46, background:"linear-gradient(135deg,#f0d060,#D4AF37,#b8922a)",
               border:"none", borderRadius:11, color:"#0a1840", fontSize:13,
@@ -228,37 +267,41 @@ function SendNowTab({ showToast }) {
               opacity:sending?0.7:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8,
             }}>
               <Send size={13}/>
-              {sending ? "Bhejna jaa raha hai…" : "Abhi Bhejo"}
+              {sending ? "Sending…" : "Send Now"}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Right */}
+      {/* ── Right column ── */}
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+        {/* Phone Preview — always visible */}
+        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, padding:"20px 16px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+            <div style={{ width:6, height:6, borderRadius:"50%", background: (title||body) ? "#34D399" : "rgba(255,255,255,0.2)" }}/>
+            <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:600, color:"rgba(255,255,255,0.7)" }}>
+              {(title||body) ? "Live Preview" : "Notification Preview"}
+            </span>
+          </div>
+          <div style={{ display:"flex", justifyContent:"center" }}>
+            <PhonePreview title={title} body={body}/>
+          </div>
+        </div>
 
         {/* Schedule info */}
         {schedule && (
-          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.12)", borderRadius:16, overflow:"hidden" }}>
-            <div style={{ padding:"14px 18px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", gap:8 }}>
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
+            <div style={{ padding:"13px 18px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", gap:8 }}>
               <Calendar size={13} color="rgba(212,175,55,0.7)"/>
-              <span style={{ fontFamily:"Cinzel,serif", fontSize:13, fontWeight:600, color:"#fff" }}>Auto-send Schedule</span>
+              <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:600, color:"#fff" }}>Auto-send Schedule</span>
             </div>
-            <div style={{ padding:14, display:"flex", flexDirection:"column", gap:8 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 13px", background:"rgba(212,175,55,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:9 }}>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)" }}>Server Time</div>
-                <div style={{ fontSize:13, fontWeight:600, color:"#D4AF37", fontFamily:"monospace" }}>
-                  {new Date(schedule.currentTime).toLocaleTimeString("en-IN",{ hour:"2-digit", minute:"2-digit" })}
-                  <span style={{ marginLeft:8, fontSize:10, padding:"2px 8px", borderRadius:20, background: schedule.isWeekend?"rgba(245,158,11,0.1)":"rgba(52,211,153,0.1)", color: schedule.isWeekend?"#F59E0B":"#34D399", border:`1px solid ${schedule.isWeekend?"rgba(245,158,11,0.25)":"rgba(52,211,153,0.25)"}` }}>
-                    {schedule.day}
-                  </span>
-                </div>
-              </div>
+            <div style={{ padding:12, display:"flex", flexDirection:"column", gap:6 }}>
               {Object.entries(schedule.notificationTimes||{}).map(([slot,time]) => {
                 const icons = { morning:"🌅", afternoon:"☀️", evening:"🌆" };
                 return (
                   <div key={slot} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 11px", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:8 }}>
-                    <span style={{ fontSize:12, color:"rgba(255,255,255,0.55)", textTransform:"capitalize" }}>{icons[slot]||"🔔"} {slot}</span>
+                    <span style={{ fontSize:11, color:"rgba(255,255,255,0.5)", textTransform:"capitalize" }}>{icons[slot]||"🔔"} {slot}</span>
                     <span style={{ fontSize:12, fontWeight:600, color:"#D4AF37", fontFamily:"monospace" }}>{time}</span>
                   </div>
                 );
@@ -267,19 +310,39 @@ function SendNowTab({ showToast }) {
           </div>
         )}
 
-        {/* Session sent history */}
+        {/* Tips */}
+        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(96,165,250,0.12)", borderRadius:16, padding:"14px 16px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:12 }}>
+            <AlertCircle size={13} color="rgba(96,165,250,0.7)"/>
+            <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:600, color:"rgba(255,255,255,0.7)" }}>Tips</span>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {[
+              ["Keep title under 50 chars", "Longer titles get cut off on most phones."],
+              ["Best time to send", "10 AM – 12 PM or 6 PM – 8 PM for highest open rates."],
+              ["Be specific", "\"₹50 off today\" performs better than \"great offers\"."],
+            ].map(([tip, detail]) => (
+              <div key={tip} style={{ padding:"8px 10px", background:"rgba(96,165,250,0.04)", border:"1px solid rgba(96,165,250,0.08)", borderRadius:8 }}>
+                <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.65)", marginBottom:2 }}>💡 {tip}</div>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", lineHeight:1.4 }}>{detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sent This Session */}
         <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
           <div style={{ padding:"13px 17px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ display:"flex", alignItems:"center", gap:7 }}>
               <Clock size={12} color="rgba(212,175,55,0.6)"/>
-              <span style={{ fontFamily:"Cinzel,serif", fontSize:13, fontWeight:600, color:"#fff" }}>Sent This Session</span>
+              <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:600, color:"#fff" }}>Sent This Session</span>
             </div>
             {history.length > 0 && (
               <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:"rgba(212,175,55,0.12)", color:"#D4AF37" }}>{history.length}</span>
             )}
           </div>
           {history.length === 0
-            ? <div style={{ padding:"28px 20px", textAlign:"center", fontSize:12, color:"rgba(255,255,255,0.25)" }}>Is session mein koi notification nahi bheji gayi</div>
+            ? <div style={{ padding:"22px 20px", textAlign:"center", fontSize:12, color:"rgba(255,255,255,0.2)" }}>No notifications sent this session</div>
             : history.map((h,i) => (
               <div key={i} style={{ padding:"11px 15px", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", gap:8, marginBottom:3 }}>
@@ -307,7 +370,7 @@ function AutomatedTab({ showToast }) {
   const [loading, setLoading]       = useState(true);
   const [toggling, setToggling]     = useState({});
   const [running, setRunning]       = useState({});
-  const [editing, setEditing]       = useState(null); // campaign key being edited
+  const [editing, setEditing]       = useState(null);
   const [editTitle, setEditTitle]   = useState("");
   const [editBody, setEditBody]     = useState("");
   const [saving, setSaving]         = useState(false);
@@ -316,7 +379,7 @@ function AutomatedTab({ showToast }) {
     setLoading(true);
     getCampaigns()
       .then(r => setCampaigns(r.data?.data || []))
-      .catch(() => showToast("Campaigns load nahi ho paye.", "error"))
+      .catch(() => showToast("Failed to load campaigns.", "error"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -327,43 +390,43 @@ function AutomatedTab({ showToast }) {
     try {
       await toggleCampaign(key, !current);
       setCampaigns(cs => cs.map(c => c.key===key ? { ...c, is_enabled:!current } : c));
-      showToast(`Campaign ${!current ? "chalu" : "band"} kar diya.`);
+      showToast(`Campaign ${!current ? "enabled" : "disabled"}.`);
     } catch {
-      showToast("Toggle nahi ho paya.", "error");
+      showToast("Failed to toggle campaign.", "error");
     } finally {
       setToggling(p => ({ ...p, [key]: false }));
     }
   };
 
   const handleRunNow = async (key) => {
-    if (!window.confirm(`"${key}" campaign abhi chalana hai?`)) return;
+    if (!window.confirm(`Run "${key}" campaign now?`)) return;
     setRunning(p => ({ ...p, [key]: true }));
     try {
       const r  = await runCampaignNow(key);
       const d  = r.data?.data;
       const s  = (d?.passengers?.sent||0) + (d?.drivers?.sent||0);
-      showToast(`✅ Campaign chali! ${s} devices ko notification gayi.`);
+      showToast(`✅ Campaign sent! ${s} devices notified.`);
       load();
     } catch {
-      showToast("Campaign nahi chal payi.", "error");
+      showToast("Failed to run campaign.", "error");
     } finally {
       setRunning(p => ({ ...p, [key]: false }));
     }
   };
 
-  const startEdit = (c) => { setEditing(c.key); setEditTitle(c.title); setEditBody(c.body); };
+  const startEdit  = (c) => { setEditing(c.key); setEditTitle(c.title); setEditBody(c.body); };
   const cancelEdit = () => { setEditing(null); setEditTitle(""); setEditBody(""); };
 
   const handleSaveMessage = async () => {
-    if (!editTitle.trim() || !editBody.trim()) { showToast("Title aur body dono chahiye.", "error"); return; }
+    if (!editTitle.trim() || !editBody.trim()) { showToast("Title and body are required.", "error"); return; }
     setSaving(true);
     try {
       await updateCampaignMessage(editing, editTitle, editBody);
       setCampaigns(cs => cs.map(c => c.key===editing ? { ...c, title:editTitle, body:editBody } : c));
-      showToast("Message update ho gaya.");
+      showToast("Message updated.");
       cancelEdit();
     } catch {
-      showToast("Save nahi ho paya.", "error");
+      showToast("Failed to save.", "error");
     } finally {
       setSaving(false);
     }
@@ -400,7 +463,7 @@ function AutomatedTab({ showToast }) {
                   onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.15)"}/>
                 <div style={{ display:"flex", gap:8 }}>
                   <button onClick={handleSaveMessage} disabled={saving} style={{ flex:1, height:32, background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.35)", borderRadius:8, color:"#D4AF37", fontSize:12, fontFamily:"Cinzel,serif", cursor:"pointer" }}>
-                    <Check size={11} style={{ marginRight:4 }}/>{saving?"Saving…":"Save"}
+                    <Check size={11} style={{ marginRight:4 }}/>{saving ? "Saving…" : "Save"}
                   </button>
                   <button onClick={cancelEdit} style={{ flex:1, height:32, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.5)", fontSize:12, cursor:"pointer" }}>Cancel</button>
                 </div>
@@ -414,21 +477,22 @@ function AutomatedTab({ showToast }) {
 
             <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:10, color:"rgba(255,255,255,0.3)" }}>
               <span>⏱ {SCHEDULE_LABEL[c.schedule_type] || c.schedule_type}</span>
-              {c.last_run_at && (
+              {c.last_run_at ? (
                 <>
                   <span>Last: {fmtRelative(c.last_run_at)}</span>
                   <span style={{ color:"#34D399" }}>✓ {c.last_run_sent} sent</span>
                   {c.last_run_failed > 0 && <span style={{ color:"#ef4444" }}>✗ {c.last_run_failed} failed</span>}
                 </>
+              ) : (
+                <span>Never run</span>
               )}
-              {!c.last_run_at && <span>Abhi tak run nahi hua</span>}
             </div>
           </div>
 
           {/* Controls */}
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10, flexShrink:0 }}>
             <button onClick={() => handleToggle(c.key, c.is_enabled)} disabled={!!toggling[c.key]}
-              title={c.is_enabled ? "Band karo" : "Chalu karo"}
+              title={c.is_enabled ? "Disable" : "Enable"}
               style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
               {c.is_enabled
                 ? <ToggleRight size={30} color="#34D399"/>
@@ -436,12 +500,12 @@ function AutomatedTab({ showToast }) {
               }
             </button>
             {!isEditing && (
-              <button onClick={() => startEdit(c)} title="Message edit karo"
+              <button onClick={() => startEdit(c)} title="Edit message"
                 style={{ width:30, height:30, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
                 <Edit2 size={13} color="rgba(255,255,255,0.5)"/>
               </button>
             )}
-            <button onClick={() => handleRunNow(c.key)} disabled={!!running[c.key]} title="Abhi chalao"
+            <button onClick={() => handleRunNow(c.key)} disabled={!!running[c.key]} title="Run now"
               style={{ width:30, height:30, background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:7, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
               {running[c.key] ? <span style={{ fontSize:10 }}>…</span> : <Play size={12} color="#D4AF37"/>}
             </button>
@@ -462,10 +526,8 @@ function AutomatedTab({ showToast }) {
   return (
     <div>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
-        <div>
-          <div style={{ fontSize:13, color:"rgba(255,255,255,0.5)", marginTop:3 }}>
-            {campaigns.filter(c=>c.is_enabled).length} active · {campaigns.length} total — runs automatically, toggle ON/OFF
-          </div>
+        <div style={{ fontSize:13, color:"rgba(255,255,255,0.5)" }}>
+          {campaigns.filter(c=>c.is_enabled).length} active · {campaigns.length} total — runs automatically, toggle ON/OFF
         </div>
         <button onClick={load} style={{ height:34, padding:"0 14px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.6)", fontSize:12, cursor:"pointer" }}>
           Refresh
@@ -500,7 +562,7 @@ function HistoryTab({ showToast }) {
   const [logs, setLogs]       = useState([]);
   const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter]   = useState("all"); // 'all' | 'manual' | 'automated'
+  const [filter, setFilter]   = useState("all");
   const [page, setPage]       = useState(0);
   const LIMIT = 20;
 
@@ -510,7 +572,7 @@ function HistoryTab({ showToast }) {
     if (f !== "all") params.type = f;
     getNotificationHistory(params)
       .then(r => { setLogs(r.data?.data || []); setTotal(r.data?.total || 0); })
-      .catch(() => showToast("History load nahi ho payi.", "error"))
+      .catch(() => showToast("Failed to load history.", "error"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -527,15 +589,19 @@ function HistoryTab({ showToast }) {
     <div>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
         <div style={{ display:"flex", gap:6 }}>
-          {["all","manual","automated"].map(f => (
-            <button key={f} onClick={()=>switchFilter(f)} style={{
+          {[
+            { key:"all",       label:"All" },
+            { key:"manual",    label:"Manual" },
+            { key:"automated", label:"Automated" },
+          ].map(f => (
+            <button key={f.key} onClick={()=>switchFilter(f.key)} style={{
               padding:"6px 14px", borderRadius:20, fontSize:12, cursor:"pointer",
-              background: filter===f ? "rgba(212,175,55,0.12)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${filter===f ? "rgba(212,175,55,0.35)" : "rgba(255,255,255,0.08)"}`,
-              color: filter===f ? "#D4AF37" : "rgba(255,255,255,0.4)",
-              fontFamily: "Cinzel,serif", textTransform:"capitalize",
+              background: filter===f.key ? "rgba(212,175,55,0.12)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${filter===f.key ? "rgba(212,175,55,0.35)" : "rgba(255,255,255,0.08)"}`,
+              color: filter===f.key ? "#D4AF37" : "rgba(255,255,255,0.4)",
+              fontFamily:"Cinzel,serif",
             }}>
-              {f === "all" ? "Sab" : f === "manual" ? "Manual" : "Automated"}
+              {f.label}
             </button>
           ))}
         </div>
@@ -551,7 +617,7 @@ function HistoryTab({ showToast }) {
       ) : logs.length === 0 ? (
         <div style={{ padding:"60px 20px", textAlign:"center" }}>
           <History size={36} color="rgba(255,255,255,0.1)" style={{ marginBottom:10, display:"block", margin:"0 auto 10px" }}/>
-          <div style={{ fontSize:13, color:"rgba(255,255,255,0.3)" }}>Koi notification history nahi mili</div>
+          <div style={{ fontSize:13, color:"rgba(255,255,255,0.3)" }}>No notification history found</div>
         </div>
       ) : (
         <>
@@ -593,17 +659,16 @@ function HistoryTab({ showToast }) {
             })}
           </div>
 
-          {/* Pagination */}
           {total > LIMIT && (
             <div style={{ display:"flex", justifyContent:"center", gap:10, marginTop:16 }}>
               <button onClick={()=>setPage(p=>p-1)} disabled={page===0} style={{ padding:"7px 16px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"rgba(255,255,255,0.5)", fontSize:12, cursor:"pointer", opacity:page===0?0.4:1 }}>
-                ← Pehle
+                ← Prev
               </button>
               <span style={{ padding:"7px 14px", fontSize:12, color:"rgba(255,255,255,0.4)" }}>
                 {page+1} / {Math.ceil(total/LIMIT)}
               </span>
               <button onClick={()=>setPage(p=>p+1)} disabled={(page+1)*LIMIT>=total} style={{ padding:"7px 16px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"rgba(255,255,255,0.5)", fontSize:12, cursor:"pointer", opacity:(page+1)*LIMIT>=total?0.4:1 }}>
-                Agle →
+                Next →
               </button>
             </div>
           )}
@@ -624,9 +689,9 @@ export default function NotificationsPage() {
   };
 
   const TABS = [
-    { label:"Send Now",   icon:<Send size={13}/> },
-    { label:"Automated",  icon:<Zap  size={13}/> },
-    { label:"History",    icon:<History size={13}/> },
+    { label:"Send Now",  icon:<Send size={13}/> },
+    { label:"Automated", icon:<Zap  size={13}/> },
+    { label:"History",   icon:<History size={13}/> },
   ];
 
   return (
@@ -645,9 +710,9 @@ export default function NotificationsPage() {
       {/* Stats row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:22 }}>
         {[
-          { label:"Audience Types",  value:AUDIENCES.length,         icon:"🎯", color:"#D4AF37", bg:"rgba(212,175,55,0.08)" },
-          { label:"Auto Campaigns",  value:"10",                     icon:"⚡", color:"#60a5fa", bg:"rgba(96,165,250,0.08)" },
-          { label:"Quick Templates", value:QUICK_TEMPLATES.length,   icon:"📝", color:"#4ade80", bg:"rgba(52,211,153,0.08)" },
+          { label:"Audience Types",  value:AUDIENCES.length,       icon:"🎯", color:"#D4AF37", bg:"rgba(212,175,55,0.08)" },
+          { label:"Auto Campaigns",  value:"10",                   icon:"⚡", color:"#60a5fa", bg:"rgba(96,165,250,0.08)" },
+          { label:"Quick Templates", value:QUICK_TEMPLATES.length, icon:"📝", color:"#4ade80", bg:"rgba(52,211,153,0.08)" },
         ].map(({ label, value, icon, color, bg }) => (
           <div key={label} style={{ background:bg, border:`1px solid ${color}22`, borderRadius:13, padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
             <span style={{ fontSize:22 }}>{icon}</span>
