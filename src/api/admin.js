@@ -88,6 +88,20 @@ export const triggerEngagement = (data) =>
   api.post('/notifications/admin/trigger-engagement', data);
 export const getNotificationSchedule = () => api.get('/notifications/admin/schedule');
 
+// Automated campaigns
+export const getCampaigns = () =>
+  api.get('/notifications/admin/campaigns');
+export const toggleCampaign = (key, is_enabled) =>
+  api.patch(`/notifications/admin/campaigns/${key}/toggle`, { is_enabled });
+export const updateCampaignMessage = (key, title, body) =>
+  api.patch(`/notifications/admin/campaigns/${key}/message`, { title, body });
+export const runCampaignNow = (key) =>
+  api.post(`/notifications/admin/campaigns/${key}/run-now`);
+
+// Send history
+export const getNotificationHistory = (params = {}) =>
+  api.get('/notifications/admin/history', { params });
+
 // ── Support / Complaints ───────────────────────────────────────────────────────
 export const getSupportTickets = (params = {}) =>
   api.get('/support/search', { params: { limit: 50, ...params } });
