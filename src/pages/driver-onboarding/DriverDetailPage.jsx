@@ -105,7 +105,7 @@ const EditDocumentModal = ({ doc, onSave, onCancel }) => {
 
   const docLabel = (doc.document_type || "").replace(/_/g, " ");
   const currentStatus = doc.status || "pending";
-  const statusColor = ["approved","auto_verified"].includes(currentStatus) ? "#4ade80" : currentStatus === "rejected" ? "#f87171" : "#facc15";
+  const statusColor = ["approved","auto_verified","verified"].includes(currentStatus) ? "#4ade80" : currentStatus === "rejected" ? "#f87171" : "#facc15";
 
   return (
     <div style={{ position:"fixed", inset:0, zIndex:2000, background:"rgba(0,0,0,0.85)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
@@ -180,6 +180,7 @@ const DocStatusBadge = ({ status }) => {
   const s = (status || "").toLowerCase();
   if (s === "approved")      return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(34,197,94,0.12)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.3)" }}><CheckCircle size={11} />Approved</span>;
   if (s === "auto_verified") return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(34,197,94,0.10)", color: "#34d399", border: "1px solid rgba(34,197,94,0.28)" }}><CheckCircle size={11} />Verified</span>;
+  if (s === "verified")      return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(34,197,94,0.10)", color: "#34d399", border: "1px solid rgba(34,197,94,0.28)" }}><CheckCircle size={11} />Verified</span>;
   if (s === "rejected")      return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(239,68,68,0.10)", color: "#f87171", border: "1px solid rgba(239,68,68,0.25)" }}><XCircle size={11} />Rejected</span>;
   if (s === "manual_review") return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(245,158,11,0.12)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.35)" }}><Eye size={11} />Needs Review</span>;
   return                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(148,163,184,0.10)", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.2)" }}><Clock size={11} />Pending</span>;
@@ -775,7 +776,7 @@ export default function DriverDetailPage() {
                     const docId  = doc.id;
                     const status = (doc.status || "pending").toLowerCase();
                     const needsReview = status === "manual_review";
-                    const borderColor = (status === "approved" || status === "auto_verified") ? "rgba(34,197,94,0.2)"
+                    const borderColor = (status === "approved" || status === "auto_verified" || status === "verified") ? "rgba(34,197,94,0.2)"
                       : status === "rejected"      ? "rgba(239,68,68,0.18)"
                       : status === "manual_review" ? "rgba(245,158,11,0.2)"
                       : "rgba(255,255,255,0.08)";
