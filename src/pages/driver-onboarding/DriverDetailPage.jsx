@@ -81,32 +81,21 @@ const RejectModal = ({ onConfirm, onCancel }) => {
 
 // ── Edit Document Modal ───────────────────────────────────────────────────────
 const EditDocumentModal = ({ doc, onSave, onCancel }) => {
-  const [status,   setStatus]   = useState(doc.status || "");
-  const [docNum,   setDocNum]   = useState(doc.document_number || "");
-  const [notes,    setNotes]    = useState("");
-  const [extJson,  setExtJson]  = useState(() => {
-    try {
-      const raw = typeof doc.extracted_data === "string" ? JSON.parse(doc.extracted_data) : doc.extracted_data;
-      const { cashfree_ocr, ...rest } = raw || {};
-      return JSON.stringify(rest, null, 2);
-    } catch { return "{}"; }
-  });
-  const [file,     setFile]     = useState(null);
-  const [saving,   setSaving]   = useState(false);
-  const [jsonErr,  setJsonErr]  = useState(false);
+  const [status,  setStatus]  = useState(doc.status || "");
+  const [notes,   setNotes]   = useState("");
+  const [saving,  setSaving]  = useState(false);
+  const [noteErr, setNoteErr] = useState(false);
 
   const handleSave = async () => {
-    let parsed;
-    try { parsed = JSON.parse(extJson); setJsonErr(false); }
-    catch { setJsonErr(true); return; }
-
+    if (status === "rejected" && !notes.trim()) {
+      setNoteErr(true);
+      return;
+    }
+    setNoteErr(false);
     setSaving(true);
     const fd = new FormData();
-    fd.append("extracted_data",  JSON.stringify(parsed));
-    if (status)  fd.append("status",          status);
-    if (docNum)  fd.append("document_number", docNum);
-    if (notes)   fd.append("notes",           notes);
-    if (file)    fd.append("file",            file);
+    if (status) fd.append("status", status);
+    if (notes)  fd.append("notes",  notes);
     await onSave(fd);
     setSaving(false);
   };
@@ -114,26 +103,34 @@ const EditDocumentModal = ({ doc, onSave, onCancel }) => {
   const inp = { background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:10, padding:"8px 12px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", width:"100%", boxSizing:"border-box" };
   const lbl = { display:"block", fontSize:11, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:6, fontFamily:"Cinzel,serif" };
 
+  const docLabel = (doc.document_type || "").replace(/_/g, " ");
+  const currentStatus = doc.status || "pending";
+  const statusColor = ["approved","auto_verified"].includes(currentStatus) ? "#4ade80" : currentStatus === "rejected" ? "#f87171" : "#facc15";
+
   return (
     <div style={{ position:"fixed", inset:0, zIndex:2000, background:"rgba(0,0,0,0.85)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:28, width:520, maxWidth:"95vw", maxHeight:"90vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, padding:28, width:460, maxWidth:"95vw" }} onClick={e=>e.stopPropagation()}>
 
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
           <h3 style={{ fontFamily:"Cinzel,serif", color:"#fff", fontSize:15, margin:0 }}>
-            Edit — {(doc.document_type||"").replace(/_/g," ")}
+            Review — {docLabel}
           </h3>
           <button onClick={onCancel} style={{ background:"rgba(255,255,255,0.06)", border:"none", borderRadius:8, width:30, height:30, cursor:"pointer", color:"rgba(255,255,255,0.6)", display:"flex", alignItems:"center", justifyContent:"center" }}>
             <X size={14}/>
           </button>
         </div>
 
+        {/* Current status chip */}
+        <p style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:22 }}>
+          Current status: <span style={{ color: statusColor, fontWeight:600 }}>{currentStatus.replace(/_/g," ")}</span>
+        </p>
+
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
           {/* Status */}
           <div>
-            <label style={lbl}>Status</label>
+            <label style={lbl}>Change Status To</label>
             <select value={status} onChange={e=>setStatus(e.target.value)} style={{ ...inp, cursor:"pointer" }}>
               <option value="">— No change —</option>
-              <option value="auto_verified">Verified</option>
               <option value="approved">Approved</option>
               <option value="manual_review">Needs Review</option>
               <option value="rejected">Rejected</option>
@@ -141,46 +138,26 @@ const EditDocumentModal = ({ doc, onSave, onCancel }) => {
             </select>
           </div>
 
-          {/* Document Number */}
+          {/* Notes — required when rejecting */}
           <div>
-            <label style={lbl}>Document Number</label>
-            <input value={docNum} onChange={e=>setDocNum(e.target.value)} style={inp} placeholder="e.g. DL1ZD1976, MHXX1234…" />
-          </div>
-
-          {/* Extracted Data */}
-          <div>
-            <label style={{ ...lbl, color: jsonErr ? "#f87171" : "rgba(212,175,55,0.7)" }}>
-              Extracted Data (JSON){jsonErr && " — Invalid JSON!"}
+            <label style={{ ...lbl, color: noteErr ? "#f87171" : "rgba(212,175,55,0.7)" }}>
+              Notes{status === "rejected" ? " (required for rejection)" : " (optional)"}
             </label>
-            <textarea value={extJson} onChange={e=>{setExtJson(e.target.value);setJsonErr(false);}} rows={8}
-              style={{ ...inp, resize:"vertical", fontFamily:"monospace", fontSize:12, border:`1px solid ${jsonErr?"rgba(239,68,68,0.5)":"rgba(212,175,55,0.15)"}` }} />
-          </div>
-
-          {/* Re-upload File */}
-          <div>
-            <label style={lbl}>Re-upload Document (optional)</label>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <label style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px", background:"rgba(212,175,55,0.08)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, cursor:"pointer", color:"#D4AF37", fontSize:12, fontWeight:600 }}>
-                <Upload size={13}/>
-                {file ? file.name : "Choose File"}
-                <input type="file" accept="image/jpeg,image/jpg,image/png,application/pdf" onChange={e=>setFile(e.target.files[0]||null)} style={{ display:"none" }} />
-              </label>
-              {file && <button onClick={()=>setFile(null)} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.4)", cursor:"pointer", fontSize:12 }}>✕ Remove</button>}
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label style={lbl}>Notes (optional)</label>
-            <input value={notes} onChange={e=>setNotes(e.target.value)} style={inp} placeholder="Reason for manual edit…" />
+            <input
+              value={notes}
+              onChange={e=>{ setNotes(e.target.value); setNoteErr(false); }}
+              style={{ ...inp, border:`1px solid ${noteErr ? "rgba(239,68,68,0.5)" : "rgba(212,175,55,0.15)"}` }}
+              placeholder={status === "rejected" ? "Reason for rejection (shown to driver)…" : "Admin note…"}
+            />
+            {noteErr && <p style={{ fontSize:11, color:"#f87171", marginTop:4 }}>Rejection reason is required.</p>}
           </div>
         </div>
 
         <div style={{ display:"flex", gap:10, marginTop:24 }}>
           <button onClick={onCancel} style={{ flex:1, height:42, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:13 }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving}
-            style={{ flex:2, height:42, background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.35)", borderRadius:10, color:"#D4AF37", cursor:"pointer", fontSize:13, fontWeight:700, opacity:saving?0.6:1 }}>
-            {saving ? "Saving…" : "Save Changes"}
+          <button onClick={handleSave} disabled={saving || !status}
+            style={{ flex:2, height:42, background: status === "rejected" ? "rgba(239,68,68,0.15)" : "rgba(212,175,55,0.15)", border:`1px solid ${status === "rejected" ? "rgba(239,68,68,0.35)" : "rgba(212,175,55,0.35)"}`, borderRadius:10, color: status === "rejected" ? "#f87171" : "#D4AF37", cursor: (saving || !status) ? "not-allowed" : "pointer", fontSize:13, fontWeight:700, opacity:(saving || !status)?0.5:1 }}>
+            {saving ? "Saving…" : "Update Status"}
           </button>
         </div>
       </div>
@@ -354,10 +331,11 @@ export default function DriverDetailPage() {
   const [pLoading,   setPLoad]      = useState(true);
   const [dLoading,   setDLoad]      = useState(true);
   const [acting,     setActing]     = useState({});
-  const [rejectDocId, setRejectDocId] = useState(null);
-  const [editDoc,    setEditDoc]    = useState(null);
-  const [imgPrev,    setImgPrev]    = useState(null);
-  const [toast,      setToast]      = useState(null);
+  const [rejectDocId,      setRejectDocId]      = useState(null);
+  const [editDoc,          setEditDoc]          = useState(null);
+  const [imgPrev,          setImgPrev]          = useState(null);
+  const [toast,            setToast]            = useState(null);
+  const [verifyBlockModal, setVerifyBlockModal] = useState(null);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -412,6 +390,33 @@ export default function DriverDetailPage() {
     try { await fn(); showToast(msg); reload(); }
     catch (e) { showToast(e.response?.data?.message || "Action failed.", "error"); }
     finally { setActing(p => ({ ...p, [key]: false })); }
+  };
+
+  const REQUIRED_KYC_DOCS = ["AADHAAR", "PAN", "DRIVING_LICENCE", "VEHICLE_RC", "SELFIE", "BANK_ACCOUNT"];
+  const VALID_DOC_STATUSES = ["approved", "auto_verified"];
+
+  const handleVerifyClick = () => {
+    // Unverify path — no doc check needed
+    if (isVerified) {
+      doAct("verify", () => verifyDriver(driverId, false), "Driver unverified.");
+      return;
+    }
+    // Verify path — check all required docs
+    const missing = REQUIRED_KYC_DOCS.reduce((acc, type) => {
+      const doc = docs.find(d => d.document_type === type);
+      if (!doc) {
+        acc.push({ type, label: type.replace(/_/g, " "), reason: "Not uploaded" });
+      } else if (!VALID_DOC_STATUSES.includes((doc.status || "").toLowerCase())) {
+        acc.push({ type, label: type.replace(/_/g, " "), reason: doc.status || "Pending" });
+      }
+      return acc;
+    }, []);
+
+    if (missing.length > 0) {
+      setVerifyBlockModal({ missing });
+      return;
+    }
+    doAct("verify", () => verifyDriver(driverId, true), "Driver verified successfully.");
   };
 
   const p          = profile;
@@ -489,6 +494,37 @@ export default function DriverDetailPage() {
       {imgPrev && <ImgPreview src={imgPrev} onClose={() => setImgPrev(null)} />}
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
+      {/* ── KYC VERIFY BLOCK MODAL ── */}
+      {verifyBlockModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.82)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#020d26", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 20, padding: 28, width: 460, maxWidth: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <AlertTriangle size={18} color="#f87171" />
+              <h3 style={{ fontFamily: "Cinzel,serif", color: "#fff", fontSize: 14, margin: 0 }}>Cannot Verify — Documents Pending</h3>
+            </div>
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 18, lineHeight: 1.6 }}>
+              All 6 documents must be <strong style={{ color: "#4ade80" }}>Approved</strong> or <strong style={{ color: "#4ade80" }}>Auto-Verified</strong> before verifying this driver.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+              {verifyBlockModal.missing.map((item, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 10 }}>
+                  <XCircle size={13} color="#f87171" style={{ flexShrink: 0 }} />
+                  <div>
+                    <span style={{ fontSize: 12, color: "#f87171", fontWeight: 600 }}>{item.label}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginLeft: 8 }}>{item.reason}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setVerifyBlockModal(null)}
+              style={{ width: "100%", height: 42, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "rgba(255,255,255,0.65)", cursor: "pointer", fontSize: 13, fontFamily: "Outfit,sans-serif" }}>
+              OK, I'll Review Documents
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── TOP NAV ── */}
       <div style={{
         position: "sticky", top: 0, zIndex: 100,
@@ -518,7 +554,7 @@ export default function DriverDetailPage() {
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexShrink: 0 }}>
           <button
-            onClick={() => doAct("verify", () => verifyDriver(driverId, !isVerified), `Driver ${isVerified ? "unverified" : "verified"}.`)}
+            onClick={handleVerifyClick}
             disabled={acting["verify"] || pLoading}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: isMobile ? "7px 10px" : "8px 16px", background: isVerified ? "rgba(239,68,68,0.1)" : "rgba(212,175,55,0.12)", border: `1px solid ${isVerified ? "rgba(239,68,68,0.3)" : "rgba(212,175,55,0.35)"}`, borderRadius: 10, color: isVerified ? "#f87171" : "#D4AF37", fontSize: 11, cursor: "pointer", fontWeight: 600, opacity: (acting["verify"] || pLoading) ? 0.5 : 1 }}>
             <ShieldCheck size={12} />{!isMobile && (isVerified ? "Unverify" : "Verify KYC")}
