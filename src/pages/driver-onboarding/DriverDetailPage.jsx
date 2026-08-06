@@ -393,7 +393,7 @@ export default function DriverDetailPage() {
   };
 
   const REQUIRED_KYC_DOCS = ["AADHAAR", "PAN", "DRIVING_LICENCE", "VEHICLE_RC", "SELFIE", "BANK_ACCOUNT"];
-  const VALID_DOC_STATUSES = ["approved", "auto_verified"];
+  const VALID_DOC_STATUSES = ["approved", "auto_verified", "verified"];
 
   const handleVerifyClick = () => {
     // Unverify path — no doc check needed
