@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ShieldCheck, ShieldX, UserCheck, UserX,
   X, FileCheck, FileX, AlertTriangle, Eye, EyeOff, Car, Star, MapPin, Phone,
   CheckCircle, Clock, XCircle, RefreshCw, ExternalLink, User, Wallet,
-  CreditCard, Calendar, Filter as FilterIcon, UserPlus, Users, Download,
+  CreditCard, Calendar, Filter as FilterIcon, UserPlus, Users, Download, Check,
 } from "lucide-react";
 import { Pagination } from "../../components/ui/index.jsx";
 import {
@@ -772,12 +772,12 @@ export default function DriverOnboardingPage() {
   const [exporting, setExporting] = useState(false);
 
   // ── Onboarding status filter ──────────────────────────────────────────
-  const [onboardingStatus, setOnboardingStatus] = useState("all");
+  const [onboardingStatus, setOnboardingStatus] = useState([]);
 
   // ── Additional quick filters ──────────────────────────────────────────
   const [vehicleTypeFilter, setVehicleTypeFilter]     = useState('all');
   const [cityFilter, setCityFilter]                   = useState('');
-  const [driverAccountStatus, setDriverAccountStatus] = useState('all');
+  const [driverAccountStatus, setDriverAccountStatus] = useState([]);
   const [showOnlyOnDuty, setShowOnlyOnDuty]           = useState(false);
   const [showOnlyTestDrivers, setShowOnlyTestDrivers] = useState(false);
 
@@ -824,8 +824,8 @@ export default function DriverOnboardingPage() {
   const clearFilter  = (key)       => { setFilters(p => { const n = { ...p }; delete n[key]; return n; }); setOffset(0); };
   const clearAllFilters = ()       => {
     setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" });
-    setOnboardingStatus('all');
-    setVehicleTypeFilter('all'); setCityFilter(''); setDriverAccountStatus('all');
+    setOnboardingStatus([]);
+    setVehicleTypeFilter('all'); setCityFilter(''); setDriverAccountStatus([]);
     setShowOnlyOnDuty(false); setShowOnlyTestDrivers(false);
   };
 
@@ -860,10 +860,10 @@ export default function DriverOnboardingPage() {
     }
     if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
     if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
-    if (onboardingStatus && onboardingStatus !== "all") params.onboarding_status = onboardingStatus;
+    if (onboardingStatus.length > 0) params.onboarding_status = onboardingStatus.join(',');
     if (vehicleTypeFilter && vehicleTypeFilter !== 'all') params.vehicle_type = vehicleTypeFilter;
     if (cityFilter.trim()) params.city = cityFilter.trim();
-    if (driverAccountStatus && driverAccountStatus !== 'all') params.account_status = driverAccountStatus;
+    if (driverAccountStatus.length > 0) params.account_status = driverAccountStatus.join(',');
     if (showOnlyOnDuty)      params.is_on_duty   = 'true';
     if (showOnlyTestDrivers) params.is_test_user = 'true';
     getDrivers(params)
@@ -889,10 +889,10 @@ export default function DriverOnboardingPage() {
       }
       if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
-      if (onboardingStatus && onboardingStatus !== "all") params.onboarding_status = onboardingStatus;
+      if (onboardingStatus.length > 0) params.onboarding_status = onboardingStatus.join(',');
       if (vehicleTypeFilter && vehicleTypeFilter !== 'all') params.vehicle_type = vehicleTypeFilter;
       if (cityFilter.trim()) params.city = cityFilter.trim();
-      if (driverAccountStatus && driverAccountStatus !== 'all') params.account_status = driverAccountStatus;
+      if (driverAccountStatus.length > 0) params.account_status = driverAccountStatus.join(',');
       if (showOnlyOnDuty)      { params.is_on_duty_op = 'eq'; params.is_on_duty_val = 'true'; }
       if (showOnlyTestDrivers) { params.is_test_user_op = 'eq'; params.is_test_user_val = 'true'; }
 
@@ -1176,7 +1176,7 @@ export default function DriverOnboardingPage() {
             }}>
               <RefreshCw size={13} />
             </button>
-            {(activeDriverFilters.length > 0 || sort.col || onboardingStatus !== 'all' || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus !== 'all' || showOnlyOnDuty || showOnlyTestDrivers) && (
+            {(activeDriverFilters.length > 0 || sort.col || onboardingStatus.length > 0 || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus.length > 0 || showOnlyOnDuty || showOnlyTestDrivers) && (
               <button onClick={clearAllFilters} style={{
                 display:"flex", alignItems:"center", gap:6, height:32, padding:"0 14px",
                 background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)",
@@ -1189,7 +1189,7 @@ export default function DriverOnboardingPage() {
           </div>
 
           {/* Active filter chips */}
-          {(period !== 'all' || onboardingStatus !== 'all' || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus !== 'all' || showOnlyOnDuty || showOnlyTestDrivers || activeDriverFilters.length > 0) && (
+          {(period !== 'all' || onboardingStatus.length > 0 || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus.length > 0 || showOnlyOnDuty || showOnlyTestDrivers || activeDriverFilters.length > 0) && (
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14, alignItems:"center" }}>
               <FilterIcon size={13} color="#D4AF37" style={{ marginRight:2 }} />
               {period !== 'all' && (
@@ -1198,10 +1198,10 @@ export default function DriverOnboardingPage() {
                   onRemove={() => { setPeriod('all'); setOffset(0); }}
                 />
               )}
-              {onboardingStatus !== 'all' && (
+              {onboardingStatus.length > 0 && (
                 <DrvPeriodChip
-                  label={`Status: ${ONBOARDING_STATUS_OPTIONS.find(o => o.value === onboardingStatus)?.label || onboardingStatus}`}
-                  onRemove={() => { setOnboardingStatus('all'); setOffset(0); }}
+                  label={`KYC: ${onboardingStatus.length === 1 ? (ONBOARDING_STATUS_OPTIONS.find(o => o.value === onboardingStatus[0])?.label || onboardingStatus[0]) : `${onboardingStatus.length} selected`}`}
+                  onRemove={() => { setOnboardingStatus([]); setOffset(0); }}
                 />
               )}
               {vehicleTypeFilter !== 'all' && (
@@ -1210,8 +1210,11 @@ export default function DriverOnboardingPage() {
               {cityFilter.trim() && (
                 <DrvPeriodChip label={`City: ${cityFilter}`} onRemove={() => { setCityFilter(''); setOffset(0); }} />
               )}
-              {driverAccountStatus !== 'all' && (
-                <DrvPeriodChip label={`Account: ${driverAccountStatus.charAt(0).toUpperCase()+driverAccountStatus.slice(1)}`} onRemove={() => { setDriverAccountStatus('all'); setOffset(0); }} />
+              {driverAccountStatus.length > 0 && (
+                <DrvPeriodChip
+                  label={`Account: ${driverAccountStatus.length === 1 ? (DRIVER_ACCT_STATUS_OPTIONS.find(o => o.value === driverAccountStatus[0])?.label || driverAccountStatus[0]) : `${driverAccountStatus.length} selected`}`}
+                  onRemove={() => { setDriverAccountStatus([]); setOffset(0); }}
+                />
               )}
               {showOnlyOnDuty && (
                 <DrvPeriodChip label="On Duty Only" onRemove={() => { setShowOnlyOnDuty(false); setOffset(0); }} />
@@ -1575,33 +1578,71 @@ const ONBOARDING_STATUS_OPTIONS = [
 
 function OnboardingStatusFilter({ value, onChange }) {
   const [open, setOpen] = useState(false);
-  const selected = ONBOARDING_STATUS_OPTIONS.find(o => o.value === value) || ONBOARDING_STATUS_OPTIONS[0];
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const toggle = (v) => {
+    const next = value.includes(v) ? value.filter(x => x !== v) : [...value, v];
+    onChange(next);
+    // don't close — let user pick multiple
+  };
+
+  const opts = ONBOARDING_STATUS_OPTIONS.filter(o => o.value !== "all");
+
+  const btnLabel = value.length === 0 ? "All"
+    : value.length === 1 ? (opts.find(o => o.value === value[0])?.label || value[0])
+    : `${value.length} Selected`;
+  const btnDot   = value.length === 0 ? "rgba(255,255,255,0.3)"
+    : value.length === 1 ? (opts.find(o => o.value === value[0])?.dot || GOLD)
+    : GOLD;
+  const btnColor = value.length === 0 ? "rgba(255,255,255,0.6)"
+    : value.length === 1 ? (opts.find(o => o.value === value[0])?.color || GOLD)
+    : GOLD;
 
   return (
-    <div style={{ position: "relative", display: "inline-block" }}>
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button
         onClick={() => setOpen(o => !o)}
-        style={{ display: "flex", alignItems: "center", gap: 10, height: 36, padding: "0 14px", minWidth: 160, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 10, cursor: "pointer", fontFamily: "Outfit,sans-serif", color: "rgba(255,255,255,0.85)", fontSize: 13, justifyContent: "space-between" }}>
+        style={{ display: "flex", alignItems: "center", gap: 10, height: 36, padding: "0 14px", minWidth: 170, background: "rgba(255,255,255,0.04)", border: `1px solid ${value.length > 0 ? "rgba(212,175,55,0.45)" : "rgba(212,175,55,0.2)"}`, borderRadius: 10, cursor: "pointer", fontFamily: "Outfit,sans-serif", color: "rgba(255,255,255,0.85)", fontSize: 13, justifyContent: "space-between" }}>
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: selected.dot, flexShrink: 0 }} />
-          <span style={{ color: selected.color, fontWeight: 600 }}>{selected.label}</span>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: btnDot, flexShrink: 0 }} />
+          <span style={{ color: btnColor, fontWeight: 600 }}>{btnLabel}</span>
         </span>
         <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, marginLeft: 4 }}>{open ? "▲" : "▼"}</span>
       </button>
+
       {open && (
-        <>
-          <div style={{ position: "fixed", inset: 0, zIndex: 999 }} onClick={() => setOpen(false)} />
-          <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 1000, background: "#0d1b2e", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 12, padding: "6px 0", minWidth: 180, boxShadow: "0 12px 40px rgba(0,0,0,0.6)" }}>
-            {ONBOARDING_STATUS_OPTIONS.map(opt => (
-              <button key={opt.value} onClick={() => { onChange(opt.value); setOpen(false); }}
-                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 16px", background: value === opt.value ? "rgba(212,175,55,0.08)" : "transparent", border: "none", cursor: "pointer", fontFamily: "Outfit,sans-serif", fontSize: 13, color: value === opt.value ? opt.color : "rgba(255,255,255,0.7)", fontWeight: value === opt.value ? 700 : 500, textAlign: "left" }}>
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 1000, background: "#0d1b2e", border: "1px solid rgba(212,175,55,0.22)", borderRadius: 12, padding: "6px 0 8px", minWidth: 190, boxShadow: "0 12px 40px rgba(0,0,0,0.65)" }}>
+          {/* All — clears selection */}
+          <button
+            onClick={() => onChange([])}
+            style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 14px 9px", background: value.length === 0 ? "rgba(212,175,55,0.08)" : "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,0.06)", cursor: "pointer", fontFamily: "Outfit,sans-serif", fontSize: 13, color: value.length === 0 ? GOLD : "rgba(255,255,255,0.55)", fontWeight: value.length === 0 ? 700 : 500, textAlign: "left", marginBottom: 2 }}>
+            <div style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${value.length === 0 ? GOLD : "rgba(255,255,255,0.2)"}`, background: value.length === 0 ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {value.length === 0 && <Check size={10} color="#020d26" strokeWidth={3} />}
+            </div>
+            All
+          </button>
+
+          {opts.map(opt => {
+            const active = value.includes(opt.value);
+            return (
+              <button key={opt.value} onClick={() => toggle(opt.value)}
+                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 14px", background: active ? "rgba(212,175,55,0.06)" : "transparent", border: "none", cursor: "pointer", fontFamily: "Outfit,sans-serif", fontSize: 13, color: active ? opt.color : "rgba(255,255,255,0.72)", fontWeight: active ? 700 : 500, textAlign: "left" }}>
+                <div style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${active ? opt.dot : "rgba(255,255,255,0.2)"}`, background: active ? opt.dot : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {active && <Check size={10} color="#020d26" strokeWidth={3} />}
+                </div>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />
                 {opt.label}
-                {value === opt.value && <span style={{ marginLeft: "auto", fontSize: 12, color: opt.color }}>✓</span>}
               </button>
-            ))}
-          </div>
-        </>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -1616,31 +1657,69 @@ const DRIVER_ACCT_STATUS_OPTIONS = [
 
 function DriverAccountStatusFilter({ value, onChange }) {
   const [open, setOpen] = useState(false);
-  const selected = DRIVER_ACCT_STATUS_OPTIONS.find(o => o.value === value) || DRIVER_ACCT_STATUS_OPTIONS[0];
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const toggle = (v) => {
+    const next = value.includes(v) ? value.filter(x => x !== v) : [...value, v];
+    onChange(next);
+  };
+
+  const opts = DRIVER_ACCT_STATUS_OPTIONS.filter(o => o.value !== "all");
+
+  const btnLabel = value.length === 0 ? "All Status"
+    : value.length === 1 ? (opts.find(o => o.value === value[0])?.label || value[0])
+    : `${value.length} Selected`;
+  const btnDot   = value.length === 0 ? "rgba(255,255,255,0.3)"
+    : value.length === 1 ? (opts.find(o => o.value === value[0])?.dot || GOLD)
+    : GOLD;
+  const btnColor = value.length === 0 ? "rgba(255,255,255,0.6)"
+    : value.length === 1 ? (opts.find(o => o.value === value[0])?.color || GOLD)
+    : GOLD;
+
   return (
-    <div style={{ position:'relative', display:'inline-block' }}>
-      <button onClick={() => setOpen(o => !o)}
-        style={{ display:'flex', alignItems:'center', gap:10, height:36, padding:'0 14px', minWidth:148, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(212,175,55,0.2)', borderRadius:10, cursor:'pointer', fontFamily:'Outfit,sans-serif', color:'rgba(255,255,255,0.85)', fontSize:13, justifyContent:'space-between' }}>
-        <span style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ width:8, height:8, borderRadius:'50%', background:selected.dot, flexShrink:0 }} />
-          <span style={{ color:selected.color, fontWeight:600 }}>{selected.label}</span>
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: "flex", alignItems: "center", gap: 10, height: 36, padding: "0 14px", minWidth: 155, background: "rgba(255,255,255,0.04)", border: `1px solid ${value.length > 0 ? "rgba(212,175,55,0.45)" : "rgba(212,175,55,0.2)"}`, borderRadius: 10, cursor: "pointer", fontFamily: "Outfit,sans-serif", color: "rgba(255,255,255,0.85)", fontSize: 13, justifyContent: "space-between" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: btnDot, flexShrink: 0 }} />
+          <span style={{ color: btnColor, fontWeight: 600 }}>{btnLabel}</span>
         </span>
-        <span style={{ color:'rgba(255,255,255,0.3)', fontSize:10, marginLeft:4 }}>{open?'▲':'▼'}</span>
+        <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, marginLeft: 4 }}>{open ? "▲" : "▼"}</span>
       </button>
+
       {open && (
-        <>
-          <div style={{ position:'fixed', inset:0, zIndex:999 }} onClick={() => setOpen(false)} />
-          <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:1000, background:'#0d1b2e', border:'1px solid rgba(212,175,55,0.2)', borderRadius:12, padding:'6px 0', minWidth:165, boxShadow:'0 12px 40px rgba(0,0,0,0.6)' }}>
-            {DRIVER_ACCT_STATUS_OPTIONS.map(opt => (
-              <button key={opt.value} onClick={() => { onChange(opt.value); setOpen(false); }}
-                style={{ display:'flex', alignItems:'center', gap:10, width:'100%', padding:'9px 16px', background:value===opt.value?'rgba(212,175,55,0.08)':'transparent', border:'none', cursor:'pointer', fontFamily:'Outfit,sans-serif', fontSize:13, color:value===opt.value?opt.color:'rgba(255,255,255,0.7)', fontWeight:value===opt.value?700:500, textAlign:'left' }}>
-                <span style={{ width:8, height:8, borderRadius:'50%', background:opt.dot, flexShrink:0 }} />
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 1000, background: "#0d1b2e", border: "1px solid rgba(212,175,55,0.22)", borderRadius: 12, padding: "6px 0 8px", minWidth: 175, boxShadow: "0 12px 40px rgba(0,0,0,0.65)" }}>
+          <button
+            onClick={() => onChange([])}
+            style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 14px 9px", background: value.length === 0 ? "rgba(212,175,55,0.08)" : "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,0.06)", cursor: "pointer", fontFamily: "Outfit,sans-serif", fontSize: 13, color: value.length === 0 ? GOLD : "rgba(255,255,255,0.55)", fontWeight: value.length === 0 ? 700 : 500, textAlign: "left", marginBottom: 2 }}>
+            <div style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${value.length === 0 ? GOLD : "rgba(255,255,255,0.2)"}`, background: value.length === 0 ? GOLD : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {value.length === 0 && <Check size={10} color="#020d26" strokeWidth={3} />}
+            </div>
+            All Status
+          </button>
+
+          {opts.map(opt => {
+            const active = value.includes(opt.value);
+            return (
+              <button key={opt.value} onClick={() => toggle(opt.value)}
+                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 14px", background: active ? "rgba(212,175,55,0.06)" : "transparent", border: "none", cursor: "pointer", fontFamily: "Outfit,sans-serif", fontSize: 13, color: active ? opt.color : "rgba(255,255,255,0.72)", fontWeight: active ? 700 : 500, textAlign: "left" }}>
+                <div style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${active ? opt.dot : "rgba(255,255,255,0.2)"}`, background: active ? opt.dot : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {active && <Check size={10} color="#020d26" strokeWidth={3} />}
+                </div>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: opt.dot, flexShrink: 0 }} />
                 {opt.label}
-                {value===opt.value && <span style={{ marginLeft:'auto', fontSize:12, color:opt.color }}>✓</span>}
               </button>
-            ))}
-          </div>
-        </>
+            );
+          })}
+        </div>
       )}
     </div>
   );
