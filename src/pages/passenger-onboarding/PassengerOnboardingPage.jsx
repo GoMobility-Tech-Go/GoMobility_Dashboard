@@ -161,12 +161,11 @@ function PassengerDetailPanel({ passenger, detail, loading, onClose, onToggleSta
                 <DpRow icon={Clock}    label="Last Login" value={user.last_login  ? new Date(user.last_login).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never'} />
                 <DpRow icon={Activity} label="Role"       value="Passenger" />
               </DpSection>
-              {user.device_info && Object.keys(user.device_info).length > 0 && (
-                <DpSection title="Device Info">
-                  {user.device_info.platform    && <DpRow icon={Activity} label="Platform"    value={user.device_info.platform} />}
-                  {user.device_info.app_version && <DpRow icon={Activity} label="App Version" value={user.device_info.app_version} />}
-                </DpSection>
-              )}
+              <DpSection title="Device Info">
+                <DpRow icon={Activity} label="Platform"    value={user.device_info?.platform    || "—"} />
+                <DpRow icon={Activity} label="OS Version"  value={user.device_info?.os_version  || "—"} />
+                <DpRow icon={Activity} label="App Version" value={user.device_info?.app_version || "—"} />
+              </DpSection>
               {(user.signup_city_name || user.signup_latitude != null) && (
                 <DpSection title="Signup Location">
                   {user.signup_city_name  && <DpRow icon={MapPin}   label="City"        value={user.signup_city_name} />}
