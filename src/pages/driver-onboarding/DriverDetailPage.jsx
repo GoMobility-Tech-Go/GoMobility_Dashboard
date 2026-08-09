@@ -628,6 +628,14 @@ export default function DriverDetailPage() {
               <InfoRow label="Driver ID"   value={driverId} />
             </div>
 
+            {/* ── DEVICE INFO ── */}
+            <div style={cardStyle}>
+              <SectionHead icon={<Phone size={15} />} title="Device Info" />
+              <InfoRow label="Platform"    value={p.device_info?.platform} />
+              <InfoRow label="OS Version"  value={p.device_info?.os_version} />
+              <InfoRow label="App Version" value={p.device_info?.app_version} />
+            </div>
+
             {/* ── LAST LOGIN LOCATION ── */}
             {(p.last_login_at || p.last_login_latitude != null) && (
               <div style={cardStyle}>
