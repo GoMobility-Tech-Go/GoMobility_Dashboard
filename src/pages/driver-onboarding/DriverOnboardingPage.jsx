@@ -518,9 +518,9 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
                 <div style={{ fontSize:10, color:"rgba(212,175,55,0.55)", textTransform:"uppercase", letterSpacing:"1px", marginBottom:8 }}>Device Info</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
                   {[
-                    ["Platform",    p.device_info?.platform],
-                    ["OS Version",  p.device_info?.os_version],
-                    ["App Version", p.device_info?.app_version],
+                    ["OS",          p.device_info?.os         || p.device_info?.os_version  || p.device_info?.platform],
+                    ["Model",       p.device_info?.model      || p.device_info?.device_model],
+                    ["App Version", p.device_info?.appVersion || p.device_info?.app_version],
                   ].map(([l,v]) => (
                     <div key={l} style={{ padding:"9px 12px", background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:8 }}>
                       <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:3 }}>{l}</div>

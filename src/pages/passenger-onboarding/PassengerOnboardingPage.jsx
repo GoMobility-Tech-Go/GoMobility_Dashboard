@@ -162,9 +162,9 @@ function PassengerDetailPanel({ passenger, detail, loading, onClose, onToggleSta
                 <DpRow icon={Activity} label="Role"       value="Passenger" />
               </DpSection>
               <DpSection title="Device Info">
-                <DpRow icon={Activity} label="Platform"    value={user.device_info?.platform    || "—"} />
-                <DpRow icon={Activity} label="OS Version"  value={user.device_info?.os_version  || "—"} />
-                <DpRow icon={Activity} label="App Version" value={user.device_info?.app_version || "—"} />
+                <DpRow icon={Activity} label="OS"          value={user.device_info?.os         || user.device_info?.os_version  || user.device_info?.platform    || "—"} />
+                <DpRow icon={Activity} label="Model"       value={user.device_info?.model      || user.device_info?.device_model || "—"} />
+                <DpRow icon={Activity} label="App Version" value={user.device_info?.appVersion || user.device_info?.app_version || "—"} />
               </DpSection>
               {(user.signup_city_name || user.signup_latitude != null) && (
                 <DpSection title="Signup Location">

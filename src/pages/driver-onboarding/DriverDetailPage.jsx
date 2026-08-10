@@ -631,9 +631,9 @@ export default function DriverDetailPage() {
             {/* ── DEVICE INFO ── */}
             <div style={cardStyle}>
               <SectionHead icon={<Phone size={15} />} title="Device Info" />
-              <InfoRow label="Platform"    value={p.device_info?.platform} />
-              <InfoRow label="OS Version"  value={p.device_info?.os_version} />
-              <InfoRow label="App Version" value={p.device_info?.app_version} />
+              <InfoRow label="OS"          value={p.device_info?.os         || p.device_info?.os_version  || p.device_info?.platform} />
+              <InfoRow label="Model"       value={p.device_info?.model      || p.device_info?.device_model} />
+              <InfoRow label="App Version" value={p.device_info?.appVersion || p.device_info?.app_version} />
             </div>
 
             {/* ── LAST LOGIN LOCATION ── */}
