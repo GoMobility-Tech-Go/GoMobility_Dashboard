@@ -500,18 +500,15 @@ export default function RideMonitoringPage() {
 
   const loadOngoing = useCallback(() => {
     setOngoingLoading(true);
-    // Backend statuses: driver_assigned | driver_arrived | in_progress
-    Promise.all([
-      getRides({ status:"in_progress",     limit:100 }),
-      getRides({ status:"driver_assigned", limit:100 }),
-      getRides({ status:"driver_arrived",  limit:100 }),
-    ])
-      .then(([r1, r2, r3]) => {
-        const extract = (res) => { const d = res.data?.data || res.data || {}; return d.rides || d.items || d.data || []; };
-        const merged = [...extract(r1), ...extract(r2), ...extract(r3)];
-        // deduplicate by id
-        const seen = new Set();
-        setOngoing(merged.filter((r) => { if (seen.has(r.id)) return false; seen.add(r.id); return true; }));
+    // Validator only allows: requested|accepted|ongoing|completed|cancelled
+    // But DB stores: requested|driver_assigned|driver_arrived|in_progress|completed|cancelled
+    // So fetch recent rides without status filter, then filter client-side
+    const ACTIVE = new Set(["requested","accepted","ongoing","in_progress","driver_assigned","driver_arrived"]);
+    getRides({ limit: 100 })
+      .then((res) => {
+        const d = res.data?.data || res.data || {};
+        const all = d.rides || d.items || d.data || [];
+        setOngoing(all.filter((r) => ACTIVE.has(r.status)));
       })
       .catch(() => showToast("Failed to load ongoing rides."))
       .finally(() => setOngoingLoading(false));
