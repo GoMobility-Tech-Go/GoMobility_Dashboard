@@ -500,10 +500,18 @@ export default function RideMonitoringPage() {
 
   const loadOngoing = useCallback(() => {
     setOngoingLoading(true);
-    getRides({ status:"ongoing", limit:100 })
-      .then((res) => {
-        const d = res.data?.data || res.data || {};
-        setOngoing(d.rides || d.items || d.data || []);
+    // Backend statuses: driver_assigned | driver_arrived | in_progress
+    Promise.all([
+      getRides({ status:"in_progress",     limit:100 }),
+      getRides({ status:"driver_assigned", limit:100 }),
+      getRides({ status:"driver_arrived",  limit:100 }),
+    ])
+      .then(([r1, r2, r3]) => {
+        const extract = (res) => { const d = res.data?.data || res.data || {}; return d.rides || d.items || d.data || []; };
+        const merged = [...extract(r1), ...extract(r2), ...extract(r3)];
+        // deduplicate by id
+        const seen = new Set();
+        setOngoing(merged.filter((r) => { if (seen.has(r.id)) return false; seen.add(r.id); return true; }));
       })
       .catch(() => showToast("Failed to load ongoing rides."))
       .finally(() => setOngoingLoading(false));
