@@ -44,7 +44,9 @@ const DOC_SHORT = {
   AADHAAR: 'Aadhaar', PAN: 'PAN', DRIVING_LICENCE: 'DL',
   VEHICLE_RC: 'RC', SELFIE: 'Selfie', BANK_ACCOUNT: 'Bank',
 };
+const REQUIRED_DOC_TYPES = ['AADHAAR', 'PAN', 'DRIVING_LICENCE', 'VEHICLE_RC', 'SELFIE', 'BANK_ACCOUNT'];
 const DOC_STATUS_COLOR = {
+  missing:       { color: 'rgba(255,255,255,0.35)', bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.12)' },
   pending:       { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.28)' },
   under_review:  { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.28)' },
   manual_review: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.35)' },
@@ -933,27 +935,63 @@ export default function DriverOnboardingPage() {
       const all  = d.drivers || d.items || d.data || [];
       if (!all.length) { showToast("No data to export.", "error"); return; }
 
+      // For in_progress drivers fetch their KYC docs in parallel so
+      // we can show exactly which documents are missing or pending in Excel
+      const kycMap = {}; // userId → "Aadhaar(missing), DL(pending)" etc.
+      const inProg = all.filter(dr => (dr.onboarding_status || '') === 'in_progress');
+      if (inProg.length > 0) {
+        await Promise.allSettled(
+          inProg.map(async (dr) => {
+            const uid = dr.user_id || dr.userId;
+            if (!uid) return;
+            try {
+              const kycRes = await getDriverKycStatus(uid);
+              const kycData = kycRes.data?.data || kycRes.data || {};
+              const docs = kycData.documents || kycData.items || (Array.isArray(kycData) ? kycData : []);
+              const uploadedTypes = new Set(docs.map(doc => doc.document_type || doc.type));
+              const missingTypes  = REQUIRED_DOC_TYPES.filter(t => !uploadedTypes.has(t));
+              const notOk = docs.filter(doc => !['approved', 'auto_verified'].includes((doc.status || '').toLowerCase()));
+              const parts = [
+                ...missingTypes.map(t => `${DOC_SHORT[t] || t}(not uploaded)`),
+                ...notOk.map(doc => {
+                  const lbl = DOC_SHORT[doc.document_type || doc.type] || doc.document_type || '?';
+                  return `${lbl}(${doc.status || 'pending'})`;
+                }),
+              ];
+              kycMap[uid] = parts.length > 0 ? parts.join(', ') : 'All docs uploaded';
+            } catch {
+              kycMap[uid] = '';
+            }
+          })
+        );
+      }
+
       const today = new Date().toISOString().slice(0, 10);
-      const rows  = all.map((dr) => ({
-        "GO ID":              dr.go_id || "",
-        "Full Name":          dr.full_name || "",
-        "Phone":              dr.phone_number || "",
-        "Email":              dr.email || "",
-        "Vehicle Type":       (() => { const vt = Array.isArray(dr.vehicle_type) ? dr.vehicle_type.join(" / ") : (dr.vehicle_type || ""); return vt ? vt.charAt(0).toUpperCase() + vt.slice(1) : ""; })(),
-        "Vehicle Number":     dr.vehicle_number || "",
-        "Vehicle Model":      dr.vehicle_model_from_rc || "",
-        "Vehicle Color":      dr.vehicle_color || "",
-        "Last Login City":    dr.last_login_city_name || "",
-        "KYC Status":         dr.kyc_status || "",
-        "Driver Verified":    dr.is_verified ? "Yes" : "No",
-        "Account Active":     dr.is_active ? "Yes" : "No",
-        "Currently Online":   dr.is_online ? "Yes" : "No",
-        "Avg Rating":         dr.avg_rating != null ? Number(Number(dr.avg_rating).toFixed(2)) : "",
-        "Total Rides":        dr.total_rides != null ? Number(dr.total_rides) : "",
-        "Total Earnings":     dr.total_earnings != null ? Number(dr.total_earnings) : "",
-        "Last Login":         xlsDate(dr.last_login),
-        "Joined On":          xlsDate(dr.created_at),
-      }));
+      const rows  = all.map((dr) => {
+        const uid = dr.user_id || dr.userId;
+        const isInProg = (dr.onboarding_status || '') === 'in_progress';
+        return {
+          "GO ID":              dr.go_id || "",
+          "Full Name":          dr.full_name || "",
+          "Phone":              dr.phone_number || "",
+          "Email":              dr.email || "",
+          "Vehicle Type":       (() => { const vt = Array.isArray(dr.vehicle_type) ? dr.vehicle_type.join(" / ") : (dr.vehicle_type || ""); return vt ? vt.charAt(0).toUpperCase() + vt.slice(1) : ""; })(),
+          "Vehicle Number":     dr.vehicle_number || "",
+          "Vehicle Model":      dr.vehicle_model_from_rc || "",
+          "Vehicle Color":      dr.vehicle_color || "",
+          "Last Login City":    dr.last_login_city_name || "",
+          "KYC Status":         dr.onboarding_status || dr.kyc_status || "",
+          "Pending Docs":       isInProg ? (kycMap[uid] || "") : "",
+          "Driver Verified":    dr.is_verified ? "Yes" : "No",
+          "Account Active":     dr.is_active ? "Yes" : "No",
+          "Currently Online":   dr.is_online ? "Yes" : "No",
+          "Avg Rating":         dr.avg_rating != null ? Number(Number(dr.avg_rating).toFixed(2)) : "",
+          "Total Rides":        dr.total_rides != null ? Number(dr.total_rides) : "",
+          "Total Earnings":     dr.total_earnings != null ? Number(dr.total_earnings) : "",
+          "Last Login":         xlsDate(dr.last_login),
+          "Joined On":          xlsDate(dr.created_at),
+        };
+      });
 
       exportToExcel(rows, `go-mobility-drivers-${today}`, "Drivers");
       showToast(`Exported ${rows.length} drivers successfully.`);
@@ -1403,17 +1441,32 @@ export default function DriverOnboardingPage() {
                                   const docMap = inProgressDocs[uid];
                                   if (!Object.prototype.hasOwnProperty.call(inProgressDocs, uid) || docMap === null)
                                     return <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>loading…</span>;
-                                  const pending = docMap.filter(doc => !['approved','auto_verified'].includes((doc.status||'').toLowerCase()));
-                                  if (pending.length === 0)
+                                  // Docs uploaded by driver
+                                  const uploadedTypes = new Set(docMap.map(doc => doc.document_type || doc.type));
+                                  // Missing = required but not uploaded at all
+                                  const missingTypes  = REQUIRED_DOC_TYPES.filter(t => !uploadedTypes.has(t));
+                                  // Pending/rejected = uploaded but not approved
+                                  const notOk = docMap.filter(doc => !['approved','auto_verified'].includes((doc.status||'').toLowerCase()));
+                                  if (missingTypes.length === 0 && notOk.length === 0)
                                     return <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 600 }}>All docs ✓</span>;
                                   return (
                                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                      {pending.map((doc) => {
+                                      {/* not-yet-uploaded docs — gray */}
+                                      {missingTypes.map((t) => {
+                                        const col = DOC_STATUS_COLOR.missing;
+                                        return (
+                                          <span key={'miss-'+t} title="Not uploaded yet" style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: col.bg, color: col.color, border: `1px solid ${col.border}`, whiteSpace: 'nowrap' }}>
+                                            {DOC_SHORT[t] || t}
+                                          </span>
+                                        );
+                                      })}
+                                      {/* uploaded but pending/rejected docs — colored */}
+                                      {notOk.map((doc) => {
                                         const s   = (doc.status || 'pending').toLowerCase();
                                         const col = DOC_STATUS_COLOR[s] || DOC_STATUS_COLOR.pending;
                                         const lbl = DOC_SHORT[doc.document_type || doc.type] || (doc.document_type || doc.type || '?');
                                         return (
-                                          <span key={doc.id} style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: col.bg, color: col.color, border: `1px solid ${col.border}`, whiteSpace: 'nowrap' }}>
+                                          <span key={doc.id} title={`Status: ${s}`} style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: col.bg, color: col.color, border: `1px solid ${col.border}`, whiteSpace: 'nowrap' }}>
                                             {lbl}
                                           </span>
                                         );
