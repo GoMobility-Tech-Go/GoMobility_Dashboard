@@ -67,6 +67,14 @@ function InvoiceModal({ inv, onClose }) {
   const driverEarned  = Number(inv.driver_net_earnings || 0);
   const companyEarned = Number(inv.company_total || inv.platform_share || 0);
 
+  // Use settled rides-table values for accurate fare components (same fix as rideInvoiceService)
+  const corrBaseFare  = parseFloat(inv.ride_base_fare  || inv.ri_base_fare  || 0);
+  const corrTimeFare  = parseFloat(inv.ride_time_fare  || inv.ri_time_fare  || 0);
+  const fareBeforeGst = parseFloat(inv.fare_before_gst || 0);
+  const corrDistFare  = fareBeforeGst > 0
+    ? Math.max(0, parseFloat((fareBeforeGst - corrBaseFare - corrTimeFare).toFixed(2)))
+    : parseFloat(inv.ri_distance_fare || 0);
+
   const BRow = ({ label, value, color, minus, sub, dim }) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
       <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
@@ -162,12 +170,11 @@ function InvoiceModal({ inv, onClose }) {
               <span style={{ fontSize: 10, fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", letterSpacing: "1px" }}>Fare Breakdown</span>
             </div>
             <div style={{ padding: "4px 16px 12px", overflowY: "auto", flex: 1 }}>
-              {pos(inv.ri_base_fare)             && <BRow label="Base Fare"             value={fmt(inv.ri_base_fare)} />}
-              {pos(inv.ri_distance_fare)         && <BRow label="Distance Charge"       value={fmt(inv.ri_distance_fare)} />}
-              {pos(inv.ri_time_fare)             && <BRow label="Time Charge"           value={fmt(inv.ri_time_fare)} />}
+              {pos(corrBaseFare)                 && <BRow label="Base Fare"             value={fmt(corrBaseFare)} />}
+              {pos(corrDistFare)                 && <BRow label="Distance Charge"       value={fmt(corrDistFare)} />}
+              {pos(corrTimeFare)                 && <BRow label="Time Charge"           value={fmt(corrTimeFare)} />}
               {pos(inv.ri_surge_charge)          && <BRow label="Surge Charge"          value={fmt(inv.ri_surge_charge)} sub={`×${Number(inv.surge_multiplier||1).toFixed(1)} surge`} />}
               {pos(inv.ri_waiting_charges)       && <BRow label="Waiting Charges"       value={fmt(inv.ri_waiting_charges)} />}
-              {pos(inv.ri_pickup_charges)        && <BRow label="Pickup Compensation"   value={fmt(inv.ri_pickup_charges)} />}
               {pos(inv.ri_toll_charges)          && <BRow label="Toll Charges"          value={fmt(inv.ri_toll_charges)} />}
               {pos(inv.ri_convenience_fee)       && <BRow label="Convenience Fee"       value={fmt(inv.ri_convenience_fee)} />}
               {pos(inv.ri_tip_amount)            && <BRow label="Tip"                   value={fmt(inv.ri_tip_amount)} />}
@@ -186,11 +193,14 @@ function InvoiceModal({ inv, onClose }) {
               <span style={{ fontSize: 10, fontWeight: 700, color: "#34D399", textTransform: "uppercase", letterSpacing: "1px" }}>Driver Earnings</span>
             </div>
             <div style={{ padding: "4px 16px 12px", overflowY: "auto", flex: 1 }}>
-              <BRow label="Trip Fare"          value={fmt(inv.actual_fare)} />
-              {pos(inv.ri_waiting_charges) && <BRow label="Waiting Bonus"       value={fmt(inv.ri_waiting_charges)} />}
-              {pos(inv.ri_tip_amount)      && <BRow label="Tip Received"        value={fmt(inv.ri_tip_amount)} />}
-              {pos(inv.ri_pickup_charges)  && <BRow label="Pickup Compensation" value={fmt(inv.ri_pickup_charges)} />}
-              <BRow label="Platform Fee Deducted" value={fmt(inv.platform_share)} color="#f87171" minus />
+              <BRow label="Trip Fare"               value={fmt(inv.actual_fare)} />
+              {pos(inv.ri_waiting_charges)     && <BRow label="Waiting Bonus"          value={fmt(inv.ri_waiting_charges)} />}
+              {pos(inv.ri_tip_amount)          && <BRow label="Tip Received"           value={fmt(inv.ri_tip_amount)} />}
+              {pos(inv.ce_gst_on_ride_fare)    && <BRow label="Ride GST (5%)"          value={fmt(inv.ce_gst_on_ride_fare)}    color="#f87171" minus sub="collected → govt" />}
+              {pos(inv.ce_gst_on_conv_fee)     && <BRow label="Conv GST (18%)"         value={fmt(inv.ce_gst_on_conv_fee)}     color="#f87171" minus sub="collected → govt" />}
+              <BRow label="Platform Fee Deducted"  value={fmt(inv.platform_share)}                                             color="#f87171" minus />
+              {pos(inv.ce_gst_on_platform_fee) && <BRow label="Platform GST (18%)"     value={fmt(inv.ce_gst_on_platform_fee)} color="#f87171" minus sub="on platform fee → govt" />}
+              {pos(inv.pickup_compensation)    && <BRow label="Pickup Compensation"    value={fmt(inv.pickup_compensation)}    color="#34D399" />}
               <ColTotal label="Net Earnings" value={driverEarned} color="#34D399" border="rgba(52,211,153,0.2)" />
             </div>
           </div>
@@ -228,7 +238,7 @@ function InvoiceModal({ inv, onClose }) {
           ))}
           <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "8px 12px", border: "1px solid rgba(255,255,255,0.06)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 10px" }}>
             {[
-              ["Status",    inv.payment_status || inv.ride_payment_status || "—"],
+              ["Status",    (inv.ride_payment_status || inv.payment_status || "—").replace(/_/g, " ")],
               ["Paid At",   fmtD(inv.paid_at)],
               ["Invoice",   inv.invoice_number || "—"],
               ["Started",   fmtD(inv.started_at)],

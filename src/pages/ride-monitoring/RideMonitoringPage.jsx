@@ -46,6 +46,20 @@ const fmtRupee    = (n) => n != null ? "₹" + new Intl.NumberFormat("en-IN").fo
 const fmtMin      = (sec) => sec ? `${Math.ceil(sec / 60)} min` : "—";
 const fmtKm       = (m) => m ? `${(m / 1000).toFixed(1)} km` : "—";
 
+// Smooth ease-in-out animation between two lat/lng positions over `duration` ms
+const animateMarker = (marker, fromLat, fromLng, toLat, toLng, duration, cancelRef) => {
+  if (cancelRef.current) cancelAnimationFrame(cancelRef.current);
+  const start = performance.now();
+  const step = (now) => {
+    const t = Math.min((now - start) / duration, 1);
+    const e = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    marker.setPosition({ lat: fromLat + (toLat - fromLat) * e, lng: fromLng + (toLng - fromLng) * e });
+    if (t < 1) cancelRef.current = requestAnimationFrame(step);
+    else cancelRef.current = null;
+  };
+  cancelRef.current = requestAnimationFrame(step);
+};
+
 const STATUS_COLORS = {
   requested:       { color:"#60a5fa", bg:"rgba(59,130,246,0.12)",  border:"rgba(59,130,246,0.3)"  },
   accepted:        { color:"#a78bfa", bg:"rgba(139,92,246,0.12)",  border:"rgba(139,92,246,0.3)"  },
@@ -101,7 +115,7 @@ const RideDetailModal = ({ ride, onClose }) => {
 };
 
 // ── MapPanel — shows all rides + live tracking overlay ────────────────────────
-const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking }) => {
+const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking, onTrackRide }) => {
   const containerRef      = useRef(null);
   const gMapRef           = useRef(null);
   const staticMarkersRef  = useRef([]);   // pickup/dropoff for all rides
@@ -109,6 +123,7 @@ const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking
   const trackingLinesRef  = useRef([]);   // live route polylines
   const pickupMarkerRef   = useRef(null); // live pickup
   const dropoffMarkerRef  = useRef(null); // live dropoff
+  const animFrameRef   = useRef(null);
   const [mapReady, setMapReady]   = useState(false);
   const [mapError, setMapError]   = useState(false);
 
@@ -134,24 +149,29 @@ const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking
     if (!mapReady || !gMapRef.current || !window.google?.maps) return;
     staticMarkersRef.current.forEach((m) => m.setMap(null));
     staticMarkersRef.current = [];
+    Object.keys(window).filter(k => k.startsWith('__gmTrack_')).forEach(k => delete window[k]);
 
     const ridesWithCoords = rides.filter((r) => r.pickup_latitude && r.pickup_longitude);
     if (!ridesWithCoords.length) return;
 
     const bounds = new window.google.maps.LatLngBounds();
+    const TRACK_STS = new Set(["driver_assigned","driver_arrived","in_progress","ongoing","accepted"]);
 
     ridesWithCoords.forEach((ride) => {
       const hasPickup = !!(ride.pickup_latitude && ride.pickup_longitude);
       const hasDrop   = !!(ride.dropoff_latitude && ride.dropoff_longitude);
+      const canTrack  = TRACK_STS.has(ride.status) || !!ride.tracking_token;
 
       const infoContent = `
         <div style="font-family:'Outfit',sans-serif;padding:10px 12px;min-width:200px;color:#0c1f5e">
           <div style="font-weight:700;font-size:13px;margin-bottom:6px">Ride #${ride.id}</div>
           <div style="font-size:12px;margin-bottom:3px">🧑 ${ride.passenger_name || "—"}</div>
           <div style="font-size:12px;margin-bottom:3px">🚗 ${ride.driver_name || "—"} · ${ride.vehicle_type || ""}</div>
-          <div style="font-size:12px;color:#666">💰 ${fmtRupee(ride.final_fare)}</div>
+          <div style="font-size:12px;color:#666;${canTrack ? "margin-bottom:8px" : ""}">💰 ${fmtRupee(ride.final_fare)}</div>
+          ${canTrack ? `<button onclick="window['__gmTrack_${ride.id}']()" style="background:#D4AF37;color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;width:100%;font-family:sans-serif">🎯 Track Live</button>` : ""}
         </div>`;
       const infoWindow = new window.google.maps.InfoWindow({ content: infoContent });
+      window[`__gmTrack_${ride.id}`] = () => { infoWindow.close(); onTrackRide?.(ride); };
 
       if (hasPickup) {
         const pos = { lat: parseFloat(ride.pickup_latitude), lng: parseFloat(ride.pickup_longitude) };
@@ -202,6 +222,7 @@ const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking
 
   // ── Live tracking overlay ──────────────────────────────────────────────────
   const clearTrackingOverlay = () => {
+    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
     if (driverMarkerRef.current)  { driverMarkerRef.current.setMap(null);  driverMarkerRef.current  = null; }
     if (pickupMarkerRef.current)  { pickupMarkerRef.current.setMap(null);  pickupMarkerRef.current  = null; }
     if (dropoffMarkerRef.current) { dropoffMarkerRef.current.setMap(null); dropoffMarkerRef.current = null; }
@@ -224,8 +245,8 @@ const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking
       const pos = { lat: parseFloat(loc.current.latitude), lng: parseFloat(loc.current.longitude) };
 
       if (driverMarkerRef.current) {
-        // Smooth update — just move the marker
-        driverMarkerRef.current.setPosition(pos);
+        const old = driverMarkerRef.current.getPosition();
+        animateMarker(driverMarkerRef.current, old.lat(), old.lng(), pos.lat, pos.lng, POLL_MS, animFrameRef);
       } else {
         // Create driver marker (car emoji on gold circle)
         const driverSVG = `
@@ -304,7 +325,10 @@ const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking
   }, [trackingData, mapReady]);
 
   // Cleanup on unmount
-  useEffect(() => () => clearTrackingOverlay(), []);
+  useEffect(() => () => {
+    clearTrackingOverlay();
+    Object.keys(window).filter(k => k.startsWith('__gmTrack_')).forEach(k => delete window[k]);
+  }, []);
 
   if (mapError) return (
     <div style={{ height:480, borderRadius:16, border:"1px solid rgba(212,175,55,0.1)", display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.02)", color:"#f87171", fontFamily:"Outfit,sans-serif", fontSize:13 }}>
@@ -610,6 +634,7 @@ export default function RideMonitoringPage() {
             onRideClick={(id) => setSelectedMapRide(id)}
             trackingData={trackingData}
             onStopTracking={stopLiveTracking}
+            onTrackRide={startLiveTracking}
           />
 
           {/* Live Tracking Info Panel */}
