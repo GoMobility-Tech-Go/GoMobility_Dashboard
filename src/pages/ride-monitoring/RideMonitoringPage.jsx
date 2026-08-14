@@ -479,6 +479,78 @@ const TrackingPanel = ({ trackingData, trackedRide, error }) => {
   );
 };
 
+// ── Route Map Panel (Route History) ──────────────────────────────────────────
+const RouteMapPanel = ({ ride }) => {
+  const containerRef = useRef(null);
+  const gMapRef      = useRef(null);
+  const overlaysRef  = useRef([]);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    loadGoogleMaps().then(() => {
+      if (!containerRef.current || gMapRef.current) return;
+      gMapRef.current = new window.google.maps.Map(containerRef.current, {
+        center: { lat: 28.6, lng: 77.2 },
+        zoom: 11,
+        styles: DARK_MAP_STYLES,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        zoomControl: true,
+      });
+      setReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !gMapRef.current || !ride) return;
+    overlaysRef.current.forEach(o => o.setMap(null));
+    overlaysRef.current = [];
+    const bounds = new window.google.maps.LatLngBounds();
+
+    const mkr = (lat, lng, color, title) => {
+      const pos = { lat: parseFloat(lat), lng: parseFloat(lng) };
+      bounds.extend(pos);
+      const m = new window.google.maps.Marker({
+        position: pos, map: gMapRef.current, title,
+        icon: { path: window.google.maps.SymbolPath.CIRCLE, fillColor: color, fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3, scale: 11 },
+        zIndex: 10,
+      });
+      overlaysRef.current.push(m);
+    };
+
+    if (ride.pickup_latitude)  mkr(ride.pickup_latitude,  ride.pickup_longitude,  "#4ade80", "Pickup");
+    if (ride.dropoff_latitude) mkr(ride.dropoff_latitude, ride.dropoff_longitude, "#f87171", "Dropoff");
+
+    const geom = window.google?.maps?.geometry?.encoding;
+    if (ride.route_polyline && geom) {
+      try {
+        const path = geom.decodePath(ride.route_polyline);
+        path.forEach(p => bounds.extend(p));
+        const pl = new window.google.maps.Polyline({ path, geodesic: true, strokeColor: "#D4AF37", strokeOpacity: 0.9, strokeWeight: 5, map: gMapRef.current });
+        overlaysRef.current.push(pl);
+      } catch (_) { /* no polyline fallback */ }
+    } else if (ride.pickup_latitude && ride.dropoff_latitude) {
+      const pl = new window.google.maps.Polyline({
+        path: [
+          { lat: parseFloat(ride.pickup_latitude), lng: parseFloat(ride.pickup_longitude) },
+          { lat: parseFloat(ride.dropoff_latitude), lng: parseFloat(ride.dropoff_longitude) },
+        ],
+        geodesic: true, strokeColor: "#D4AF37", strokeOpacity: 0.35, strokeWeight: 3,
+        icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 1, scale: 3 }, offset: "0", repeat: "12px" }],
+        map: gMapRef.current,
+      });
+      overlaysRef.current.push(pl);
+    }
+
+    if (!bounds.isEmpty()) gMapRef.current.fitBounds(bounds, 60);
+  }, [ride, ready]);
+
+  useEffect(() => () => { overlaysRef.current.forEach(o => o.setMap(null)); }, []);
+
+  return <div ref={containerRef} style={{ width:"100%", height:380, borderRadius:14, overflow:"hidden", border:"1px solid rgba(212,175,55,0.15)" }} />;
+};
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function RideMonitoringPage() {
   const [rides, setRides]           = useState([]);
@@ -501,7 +573,15 @@ export default function RideMonitoringPage() {
   const [trackingData, setTrackingData] = useState(null);
   const [trackingErr, setTrackingErr]   = useState(null);
   const pollRef = useRef(null);
-  const LIMIT = 10;
+  const LIMIT  = 10;
+  const HLIMIT = 20;
+
+  // Route History state
+  const [historyRides, setHistoryRides]       = useState([]);
+  const [historyTotal, setHistoryTotal]       = useState(0);
+  const [historyLoading, setHistoryLoading]   = useState(false);
+  const [historyOffset, setHistoryOffset]     = useState(0);
+  const [selectedHistory, setSelectedHistory] = useState(null);
 
   const showToast = (msg, type="error") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
 
@@ -575,6 +655,22 @@ export default function RideMonitoringPage() {
     setTrackingErr(null);
   }, []);
 
+  const loadHistory = useCallback(() => {
+    setHistoryLoading(true);
+    getRides({ status:"completed", limit:HLIMIT, offset:historyOffset })
+      .then((res) => {
+        const d = res.data?.data || res.data || {};
+        const items = d.rides || d.items || d.data || [];
+        setHistoryRides(items);
+        setHistoryTotal(d.pagination?.total || d.total || 0);
+        if (items.length > 0) setSelectedHistory(prev => prev ?? items[0]);
+      })
+      .catch(() => showToast("Failed to load route history."))
+      .finally(() => setHistoryLoading(false));
+  }, [historyOffset]);
+
+  useEffect(() => { if (viewMode === "history") loadHistory(); }, [viewMode, loadHistory]);
+
   // Cleanup on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
@@ -609,7 +705,7 @@ export default function RideMonitoringPage() {
 
       {/* View Mode Tabs */}
       <div style={{ display:"flex", gap:8, marginBottom:20 }}>
-        {[["table","📋 Table View"],["map","🗺 Live Map"]].map(([v,l]) => (
+        {[["table","📋 Table View"],["map","🗺 Live Map"],["history","📍 Route History"]].map(([v,l]) => (
           <button key={v} onClick={()=>{ setViewMode(v); if(v==="table") stopLiveTracking(); }} style={{ padding:"8px 18px", borderRadius:10, border:"1px solid", fontSize:13, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600, transition:"all .2s", borderColor:viewMode===v?"#D4AF37":"rgba(212,175,55,0.2)", background:viewMode===v?"rgba(212,175,55,0.12)":"transparent", color:viewMode===v?"#D4AF37":"rgba(255,255,255,0.5)" }}>
             {l}
           </button>
@@ -693,6 +789,170 @@ export default function RideMonitoringPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── ROUTE HISTORY ── */}
+      {viewMode === "history" && (
+        <div>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+            <span style={{ fontSize:13, color:"rgba(255,255,255,0.5)" }}>
+              {historyLoading ? "Loading completed rides…" : `${historyTotal} completed rides · select a ride to view its route`}
+            </span>
+            <button onClick={loadHistory} disabled={historyLoading} style={{ display:"flex", alignItems:"center", gap:6, height:36, padding:"0 14px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, color:"#D4AF37", fontSize:12, cursor:"pointer", opacity:historyLoading?0.5:1, fontFamily:"Outfit,sans-serif" }}>
+              <RefreshCw size={12}/> Refresh
+            </button>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"300px 1fr", gap:14, alignItems:"start" }}>
+            {/* Left: completed rides list */}
+            <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:14, overflow:"hidden" }}>
+              <div style={{ padding:"10px 14px", borderBottom:"1px solid rgba(212,175,55,0.08)", fontFamily:"Cinzel,serif", fontSize:11, color:"rgba(255,255,255,0.45)", letterSpacing:"1px" }}>
+                COMPLETED RIDES
+              </div>
+              <div style={{ maxHeight:600, overflowY:"auto" }}>
+                {historyLoading
+                  ? Array(6).fill(0).map((_,i) => (
+                      <div key={i} style={{ height:72, margin:"6px 10px", borderRadius:10, background:"rgba(255,255,255,0.03)", animation:"gmPulse 1.5s ease-in-out infinite" }}/>
+                    ))
+                  : historyRides.length === 0
+                    ? <div style={{ padding:32, textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:13 }}>No completed rides found</div>
+                    : historyRides.map(r => {
+                        const isSel = selectedHistory?.id === r.id;
+                        return (
+                          <div key={r.id} onClick={() => setSelectedHistory(r)} style={{ padding:"11px 14px", cursor:"pointer", borderBottom:"1px solid rgba(255,255,255,0.03)", background:isSel?"rgba(212,175,55,0.07)":"transparent", borderLeft:isSel?"3px solid #D4AF37":"3px solid transparent", transition:"all .15s" }}>
+                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
+                              <span style={{ fontFamily:"monospace", fontSize:11, color:isSel?"#D4AF37":"rgba(212,175,55,0.5)" }}>#{r.id}</span>
+                              <span style={{ fontSize:10, color:"rgba(255,255,255,0.25)" }}>{fmtDateTime(r.completed_at || r.created_at)}</span>
+                            </div>
+                            <div style={{ fontSize:13, color:"rgba(255,255,255,0.85)", fontWeight:500 }}>{r.passenger_name || "—"}</div>
+                            <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:1 }}>Driver: {r.driver_name || "—"}</div>
+                            <div style={{ display:"flex", gap:8, marginTop:5 }}>
+                              <span style={{ fontSize:12, color:"#D4AF37", fontWeight:700 }}>{fmtRupee(r.final_fare)}</span>
+                              {r.actual_distance_km && <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{parseFloat(r.actual_distance_km).toFixed(1)} km</span>}
+                              {r.vehicle_type && <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)", textTransform:"capitalize" }}>{r.vehicle_type}</span>}
+                            </div>
+                          </div>
+                        );
+                      })
+                }
+              </div>
+              {historyTotal > HLIMIT && (
+                <div style={{ padding:"10px 14px", borderTop:"1px solid rgba(212,175,55,0.08)" }}>
+                  <Pagination
+                    page={Math.floor(historyOffset/HLIMIT)+1}
+                    total={historyTotal}
+                    perPage={HLIMIT}
+                    onChange={(p) => { setHistoryOffset((p-1)*HLIMIT); setSelectedHistory(null); }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Right: Map + Details */}
+            <div>
+              {selectedHistory ? (
+                <>
+                  <RouteMapPanel ride={selectedHistory} />
+                  <div style={{ marginTop:12, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:14, overflow:"hidden" }}>
+                    {/* Details header */}
+                    <div style={{ padding:"10px 18px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                      <span style={{ fontFamily:"Cinzel,serif", fontSize:11, color:"rgba(255,255,255,0.5)", letterSpacing:"1px" }}>
+                        RIDE DETAILS — #{selectedHistory.id}
+                      </span>
+                      {selectedHistory.ride_number && (
+                        <span style={{ fontFamily:"monospace", fontSize:11, color:"rgba(212,175,55,0.6)", background:"rgba(212,175,55,0.08)", padding:"3px 10px", borderRadius:6 }}>
+                          {selectedHistory.ride_number}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:0 }}>
+                      {/* Route */}
+                      <div style={{ padding:"14px 18px", borderRight:"1px solid rgba(255,255,255,0.04)", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:8, display:"flex", alignItems:"center", gap:5 }}>
+                          <Navigation size={10}/> Route
+                        </div>
+                        <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
+                          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:1, flexShrink:0, paddingTop:3 }}>
+                            <span style={{ color:"#4ade80", fontSize:12, lineHeight:1 }}>●</span>
+                            <span style={{ color:"rgba(255,255,255,0.12)", fontSize:9, letterSpacing:"-2px" }}>│││</span>
+                            <span style={{ color:"#f87171", fontSize:12, lineHeight:1 }}>●</span>
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", marginBottom:12 }}>{selectedHistory.pickup_address || "—"}</div>
+                            <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)" }}>{selectedHistory.dropoff_address || "—"}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Trip info */}
+                      <div style={{ padding:"14px 18px", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:8 }}>Trip Info</div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                          <div>
+                            <div style={{ fontSize:10, color:"rgba(255,255,255,0.28)" }}>Distance</div>
+                            <div style={{ fontSize:14, fontWeight:600, color:"rgba(255,255,255,0.85)", marginTop:2 }}>
+                              {selectedHistory.actual_distance_km ? `${parseFloat(selectedHistory.actual_distance_km).toFixed(1)} km` : "—"}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize:10, color:"rgba(255,255,255,0.28)" }}>Vehicle</div>
+                            <div style={{ fontSize:14, fontWeight:600, color:"rgba(255,255,255,0.85)", marginTop:2, textTransform:"capitalize" }}>{selectedHistory.vehicle_type || "—"}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize:10, color:"rgba(255,255,255,0.28)" }}>Started</div>
+                            <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginTop:2 }}>{fmtDateTime(selectedHistory.started_at)}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize:10, color:"rgba(255,255,255,0.28)" }}>Completed</div>
+                            <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginTop:2 }}>{fmtDateTime(selectedHistory.completed_at)}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Passenger */}
+                      <div style={{ padding:"14px 18px", borderRight:"1px solid rgba(255,255,255,0.04)" }}>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:6 }}>Passenger</div>
+                        <div style={{ fontSize:14, fontWeight:600, color:"rgba(255,255,255,0.85)" }}>{selectedHistory.passenger_name || "—"}</div>
+                        {selectedHistory.passenger_phone && <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:2 }}>{selectedHistory.passenger_phone}</div>}
+                      </div>
+
+                      {/* Driver */}
+                      <div style={{ padding:"14px 18px" }}>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:6 }}>Driver</div>
+                        <div style={{ fontSize:14, fontWeight:600, color:"rgba(255,255,255,0.85)" }}>{selectedHistory.driver_name || "—"}</div>
+                        {selectedHistory.driver_phone && <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:2 }}>{selectedHistory.driver_phone}</div>}
+                      </div>
+                    </div>
+
+                    {/* Fare footer */}
+                    <div style={{ padding:"12px 18px", borderTop:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", gap:24, flexWrap:"wrap" }}>
+                      <div>
+                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginRight:8 }}>Fare</span>
+                        <span style={{ fontSize:18, fontWeight:700, color:"#D4AF37" }}>{fmtRupee(selectedHistory.final_fare)}</span>
+                      </div>
+                      {selectedHistory.payment_method && (
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", textTransform:"capitalize" }}>
+                          Payment: {selectedHistory.payment_method.replace(/_/g," ")}
+                        </div>
+                      )}
+                      {(selectedHistory.ride_payment_status || selectedHistory.payment_status) && (
+                        <div style={{ fontSize:12, textTransform:"capitalize", color:(selectedHistory.ride_payment_status||selectedHistory.payment_status)==="completed"||(selectedHistory.ride_payment_status||selectedHistory.payment_status)==="cash_collected"?"#4ade80":"rgba(255,255,255,0.4)" }}>
+                          Status: {(selectedHistory.ride_payment_status||selectedHistory.payment_status||"—").replace(/_/g," ")}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:420, background:"rgba(255,255,255,0.01)", border:"1px solid rgba(212,175,55,0.07)", borderRadius:14, color:"rgba(255,255,255,0.2)", fontSize:14, gap:10 }}>
+                  <MapPin size={32} color="rgba(212,175,55,0.2)"/>
+                  <span>Select a completed ride to view its route</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
