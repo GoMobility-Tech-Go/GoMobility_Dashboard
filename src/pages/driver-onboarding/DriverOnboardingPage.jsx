@@ -40,6 +40,17 @@ function getPeriodDates(period) {
   }
 }
 
+const DOC_SHORT = {
+  AADHAAR: 'Aadhaar', PAN: 'PAN', DRIVING_LICENCE: 'DL',
+  VEHICLE_RC: 'RC', SELFIE: 'Selfie', BANK_ACCOUNT: 'Bank',
+};
+const DOC_STATUS_COLOR = {
+  pending:       { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.28)' },
+  under_review:  { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.28)' },
+  manual_review: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.35)' },
+  rejected:      { color: '#f87171', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.28)' },
+};
+
 const GOLD    = '#D4AF37';
 const GOLD20  = 'rgba(212,175,55,0.20)';
 const GOLD10  = 'rgba(212,175,55,0.10)';
@@ -852,6 +863,9 @@ export default function DriverOnboardingPage() {
   const [rejectTarget, setRejectTarget]     = useState(null);
   const [viewDriver, setViewDriver]         = useState(null); // { driverId, userId }
 
+  // pending-doc map for in_progress drivers: userId → docs[] | null (loading)
+  const [inProgressDocs, setInProgressDocs] = useState({});
+
   // KYC
   const [kycDocs, setKycDocs]           = useState([]);
   const [kycLoading, setKycLoading]     = useState(false);
@@ -888,6 +902,7 @@ export default function DriverOnboardingPage() {
         const d = res.data?.data || res.data || {};
         setDrivers(d.drivers || d.items || d.data || []);
         setPagination(d.pagination || null);
+        setInProgressDocs({});       // reset on each page load
       })
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
@@ -988,6 +1003,28 @@ export default function DriverOnboardingPage() {
   }, [severity]);
 
   useEffect(() => { loadDrivers(); }, [loadDrivers]);
+
+  // For each in_progress driver, lazily fetch their KYC docs to show pending items
+  useEffect(() => {
+    drivers.forEach((d) => {
+      if ((d.onboarding_status || '') !== 'in_progress') return;
+      const userId = d.user_id || d.userId;
+      if (!userId) return;
+      setInProgressDocs((prev) => {
+        if (Object.prototype.hasOwnProperty.call(prev, userId)) return prev; // already fetched/fetching
+        // mark as loading (null) immediately so we don't double-fetch
+        getDriverKycStatus(userId)
+          .then((res) => {
+            const data = res.data?.data || res.data || {};
+            const docs = data.documents || data.items || (Array.isArray(data) ? data : []);
+            setInProgressDocs((p) => ({ ...p, [userId]: docs }));
+          })
+          .catch(() => setInProgressDocs((p) => ({ ...p, [userId]: [] })));
+        return { ...prev, [userId]: null };
+      });
+    });
+  }, [drivers]);
+
   useEffect(() => { if (tab === "KYC Queue") loadKyc(); }, [tab, loadKyc]);
   useEffect(() => { if (tab === "Fraud Alerts") loadFraud(); }, [tab, loadFraud]);
 
@@ -1277,6 +1314,7 @@ export default function DriverOnboardingPage() {
                       <FilterHead label="KYC" meta={fMeta("is_verified")} filter={filters.is_verified}
                         onChange={v => setFilter("is_verified", v)} onClear={() => clearFilter("is_verified")} />
                     </th>
+                    <th style={{ ...drvTh(false), cursor: 'default' }}>Pending Docs</th>
                     <th style={drvTh(sort.col==="rides")} onClick={()=>toggleDriverSort("rides")}>
                       <FilterHead label="Rides" meta={fMeta("rides")} filter={filters.rides}
                         onChange={v => setFilter("rides", v)} onClear={() => clearFilter("rides")} />
@@ -1296,10 +1334,10 @@ export default function DriverOnboardingPage() {
                 <tbody>
                   {loading
                     ? Array(6).fill(0).map((_,i)=>(
-                        <tr key={i}><td colSpan={11}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
+                        <tr key={i}><td colSpan={12}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
                       ))
                     : drivers.length === 0
-                      ? <tr><td colSpan={11} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers match these filters</td></tr>
+                      ? <tr><td colSpan={12} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers match these filters</td></tr>
                       : drivers.map((d) => {
                           const isSuspended = d.is_suspended || d.suspended;
                           const userId = d.user_id || d.userId;
@@ -1355,6 +1393,33 @@ export default function DriverOnboardingPage() {
                                     suspended:   { bg: "rgba(251,146,60,0.1)",   border: "rgba(251,146,60,0.3)",   label: "Suspended" },
                                   }[s] || { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.1)", label: s };
                                   return <Badge label={cfg.label} color={opt?.color || "rgba(255,255,255,0.5)"} bg={cfg.bg} border={cfg.border} />;
+                                })()}
+                              </TD>
+                              <TD>
+                                {(() => {
+                                  const onbS = d.onboarding_status || (isVerified ? 'verified' : 'not_started');
+                                  if (onbS !== 'in_progress') return <span style={{ color: 'rgba(255,255,255,0.18)' }}>—</span>;
+                                  const uid   = d.user_id || d.userId;
+                                  const docMap = inProgressDocs[uid];
+                                  if (!Object.prototype.hasOwnProperty.call(inProgressDocs, uid) || docMap === null)
+                                    return <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>loading…</span>;
+                                  const pending = docMap.filter(doc => !['approved','auto_verified'].includes((doc.status||'').toLowerCase()));
+                                  if (pending.length === 0)
+                                    return <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 600 }}>All docs ✓</span>;
+                                  return (
+                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                      {pending.map((doc) => {
+                                        const s   = (doc.status || 'pending').toLowerCase();
+                                        const col = DOC_STATUS_COLOR[s] || DOC_STATUS_COLOR.pending;
+                                        const lbl = DOC_SHORT[doc.document_type || doc.type] || (doc.document_type || doc.type || '?');
+                                        return (
+                                          <span key={doc.id} style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: col.bg, color: col.color, border: `1px solid ${col.border}`, whiteSpace: 'nowrap' }}>
+                                            {lbl}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  );
                                 })()}
                               </TD>
                               <TD style={{ fontSize:12, fontVariantNumeric:"tabular-nums" }}>{fmtNum(d.total_rides)}</TD>
