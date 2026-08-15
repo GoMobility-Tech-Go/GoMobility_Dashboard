@@ -108,22 +108,20 @@ function DetailModal({ row, type, onClose }) {
   const stop = e => e.stopPropagation();
 
   const SecHead = ({ t }) => (
-    <div style={{ fontSize:10, fontWeight:700, letterSpacing:"1.5px", textTransform:"uppercase", color:"rgba(212,175,55,0.48)", margin:"16px 0 8px", paddingBottom:5, borderBottom:"1px solid rgba(212,175,55,0.1)" }}>{t}</div>
+    <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1.5px", textTransform:"uppercase", color:"rgba(212,175,55,0.48)", margin:"10px 0 6px", paddingBottom:4, borderBottom:"1px solid rgba(212,175,55,0.1)" }}>{t}</div>
   );
 
-  // Two-column row pair — label on left, value on right, inside a shaded cell
-  const Field = ({ label, value, color, bold, span2 }) => (
-    <div style={{ gridColumn: span2 ? "1 / -1" : undefined, padding:"9px 13px", borderRadius:9, background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.07)" }}>
-      <div style={{ fontSize:10, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(212,175,55,0.42)", marginBottom:3 }}>{label}</div>
-      <div style={{ fontSize:13.5, fontWeight:bold?700:500, color:color||"rgba(255,255,255,0.86)", fontVariantNumeric:"tabular-nums" }}>{value ?? "—"}</div>
+  const Field = ({ label, value, color, bold }) => (
+    <div style={{ padding:"7px 11px", borderRadius:8, background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.07)" }}>
+      <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(212,175,55,0.42)", marginBottom:2 }}>{label}</div>
+      <div style={{ fontSize:13, fontWeight:bold?700:500, color:color||"rgba(255,255,255,0.86)", fontVariantNumeric:"tabular-nums" }}>{value ?? "—"}</div>
     </div>
   );
 
-  // Big money highlight card
   const MoneyCard = ({ label, value, color }) => (
-    <div style={{ flex:1, padding:"11px 14px", borderRadius:11, background:"rgba(2,12,32,0.8)", border:`1px solid ${color}2a`, textAlign:"center" }}>
-      <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1.1px", textTransform:"uppercase", color:"rgba(255,255,255,0.35)", marginBottom:5 }}>{label}</div>
-      <div style={{ fontSize:20, fontWeight:800, color, fontVariantNumeric:"tabular-nums" }}>{value}</div>
+    <div style={{ flex:1, padding:"9px 12px", borderRadius:10, background:"rgba(2,12,32,0.8)", border:`1px solid ${color}2a`, textAlign:"center" }}>
+      <div style={{ fontSize:9, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(255,255,255,0.32)", marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:18, fontWeight:800, color, fontVariantNumeric:"tabular-nums" }}>{value}</div>
     </div>
   );
 
@@ -132,7 +130,7 @@ function DetailModal({ row, type, onClose }) {
 
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(1,9,23,0.88)", backdropFilter:"blur(10px)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px" }}>
-      <div onClick={stop} style={{ background:"linear-gradient(160deg,#020e24 0%,#031525 100%)", border:"1px solid rgba(212,175,55,0.22)", borderRadius:22, width:"100%", maxWidth:700, boxShadow:"0 40px 100px rgba(0,0,0,0.75)" }}>
+      <div onClick={stop} style={{ background:"linear-gradient(160deg,#020e24 0%,#031525 100%)", border:"1px solid rgba(212,175,55,0.22)", borderRadius:22, width:"100%", maxWidth:920, boxShadow:"0 40px 100px rgba(0,0,0,0.75)" }}>
 
         {/* ── Header ── */}
         <div style={{ padding:"16px 22px 14px", borderBottom:"1px solid rgba(255,255,255,0.06)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -150,7 +148,7 @@ function DetailModal({ row, type, onClose }) {
         </div>
 
         {/* ── Body — fixed layout, NO scroll ── */}
-        <div style={{ padding:"6px 22px 22px" }}>
+        <div style={{ padding:"4px 18px 18px" }}>
 
           {/* ════ TYPE 0: Driver / Cash Dues ════ */}
           {type === 0 && <>
@@ -190,26 +188,24 @@ function DetailModal({ row, type, onClose }) {
           {/* ════ TYPE 1: Ride Detail ════ */}
           {type === 1 && <>
             <SecHead t="Ride Info" />
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr 1fr 1.5fr", gap:7 }}>
               <Field label="Ride Number"    value={row.ride_number || `#${row.id}`} bold color="#D4AF37" />
               <Field label="Vehicle"        value={row.vehicle_type} color={vColor} />
               <Field label="Payment Method" value={row.payment_method} color={PAY_C[row.payment_method]?.color} />
               <Field label="Status"         value={row.payment_status?.replace("_"," ")} color="#f59e0b" bold />
-            </div>
-            <div style={{ marginTop:8 }}>
-              <Field label="Completed At" value={fmtDT(row.completed_at)} span2 color="rgba(255,255,255,0.55)" />
+              <Field label="Completed At"   value={fmtDT(row.completed_at)} color="rgba(255,255,255,0.55)" />
             </div>
 
             <SecHead t="Passenger & Driver" />
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-              <div style={{ padding:"11px 14px", borderRadius:10, background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.15)" }}>
-                <div style={{ fontSize:10, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(96,165,250,0.6)", marginBottom:6 }}>👤 Passenger</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:3 }}>{row.passenger_name || "—"}</div>
+              <div style={{ padding:"10px 13px", borderRadius:10, background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.15)" }}>
+                <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(96,165,250,0.6)", marginBottom:5 }}>👤 Passenger</div>
+                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:2 }}>{row.passenger_name || "—"}</div>
                 <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)" }}>{row.passenger_phone || "—"}</div>
               </div>
-              <div style={{ padding:"11px 14px", borderRadius:10, background:"rgba(52,211,153,0.06)", border:"1px solid rgba(52,211,153,0.15)" }}>
-                <div style={{ fontSize:10, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(52,211,153,0.6)", marginBottom:6 }}>🧑‍✈️ Driver</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:3 }}>{row.driver_name || "—"}</div>
+              <div style={{ padding:"10px 13px", borderRadius:10, background:"rgba(52,211,153,0.06)", border:"1px solid rgba(52,211,153,0.15)" }}>
+                <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(52,211,153,0.6)", marginBottom:5 }}>🧑‍✈️ Driver</div>
+                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:2 }}>{row.driver_name || "—"}</div>
                 <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)" }}>{row.driver_phone || "—"}</div>
               </div>
             </div>
@@ -225,35 +221,33 @@ function DetailModal({ row, type, onClose }) {
           {/* ════ TYPE 2: Earnings Detail ════ */}
           {type === 2 && <>
             <SecHead t="Ride Info" />
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr 1fr 1.5fr", gap:7 }}>
               <Field label="Ride Number"    value={row.ride_number || `#${row.ride_id}`} bold color="#D4AF37" />
               <Field label="Vehicle"        value={row.vehicle_type} color={vColor} />
               <Field label="Payment Method" value={row.payment_method} color={PAY_C[row.payment_method]?.color} />
               <Field label="Status"         value={row.status} color={statusColor[row.status]||"#60a5fa"} bold />
-            </div>
-            <div style={{ marginTop:8 }}>
-              <Field label="Completed At" value={fmtDT(row.completed_at)} span2 color="rgba(255,255,255,0.55)" />
+              <Field label="Completed At"   value={fmtDT(row.completed_at)} color="rgba(255,255,255,0.55)" />
             </div>
 
             <SecHead t="Driver & Passenger" />
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-              <div style={{ padding:"11px 14px", borderRadius:10, background:"rgba(52,211,153,0.06)", border:"1px solid rgba(52,211,153,0.15)" }}>
-                <div style={{ fontSize:10, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(52,211,153,0.6)", marginBottom:6 }}>🧑‍✈️ Driver</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:3 }}>{row.driver_name || "—"}</div>
+              <div style={{ padding:"10px 13px", borderRadius:10, background:"rgba(52,211,153,0.06)", border:"1px solid rgba(52,211,153,0.15)" }}>
+                <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(52,211,153,0.6)", marginBottom:5 }}>🧑‍✈️ Driver</div>
+                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:2 }}>{row.driver_name || "—"}</div>
                 <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)" }}>{row.driver_phone || "—"}</div>
               </div>
-              <div style={{ padding:"11px 14px", borderRadius:10, background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.15)" }}>
-                <div style={{ fontSize:10, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(96,165,250,0.6)", marginBottom:6 }}>👤 Passenger</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:3 }}>{row.passenger_name || "—"}</div>
+              <div style={{ padding:"10px 13px", borderRadius:10, background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.15)" }}>
+                <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(96,165,250,0.6)", marginBottom:5 }}>👤 Passenger</div>
+                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:2 }}>{row.passenger_name || "—"}</div>
                 <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)" }}>{row.passenger_phone || "—"}</div>
               </div>
             </div>
 
             <SecHead t="Earnings Breakdown" />
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div style={{ display:"flex", gap:8 }}>
               <MoneyCard label="Gross Fare"    value={fmt(row.gross_fare)}   color="rgba(255,255,255,0.7)" />
               <MoneyCard label="Platform Fee"  value={fmt(row.platform_fee)} color="#a78bfa" />
-              <MoneyCard label="GST on Fee"    value={fmt(row.gst_on_fee)}   color="rgba(255,255,255,0.4)" />
+              <MoneyCard label="GST on Fee"    value={fmt(row.gst_on_fee)}   color="rgba(255,255,255,0.45)" />
               <MoneyCard label="Net to Driver" value={fmt(row.net_to_driver)}color="#4ade80" />
             </div>
           </>}
