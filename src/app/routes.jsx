@@ -36,6 +36,7 @@ import LogsPage from "../pages/logs/LogsPage";
 import InvoicePage from "../pages/invoices/InvoicePage";
 import DriverMetricsPage from "../pages/driver-metrics/DriverMetricsPage";
 import DriverMetricsDetailPage from "../pages/driver-metrics/DriverMetricsDetailPage";
+import SettlementsPage from "../pages/settlements/SettlementsPage";
 
 const routes = [
   { path:"/signup", element:<SignupPage/> },
@@ -55,6 +56,7 @@ const routes = [
         { path:"invoices", element:<InvoicePage/> },
         { path:"refunds", element:<RefundsPage/> },
         { path:"payouts", element:<PayoutsPage/> },
+        { path:"settlements", element:<SettlementsPage/> },
         { path:"city-management", element:<CityManagementPage/> },
         { path:"pricing-engine", element:<PricingEnginePage/> },
         { path:"subscriptions", element:<SubscriptionsPage/> },

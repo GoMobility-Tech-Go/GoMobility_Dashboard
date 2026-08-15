@@ -4,7 +4,7 @@ import {
   UserPlus, SlidersHorizontal, ShieldCheck, ScrollText, ShieldAlert, LogOut,
   ChevronLeft, ChevronRight, Menu, X, Crown, Megaphone, AlertTriangle,
   Smartphone, Trophy, MessageCircle, Activity, Target, UserCog, Lock,
-  BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText
+  BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText, Banknote
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -28,6 +28,7 @@ const ADMIN_MENU = [
     { label:"Invoices",           to:"/invoices",             icon:ScrollText  },
     { label:"Refunds",            to:"/refunds",              icon:RotateCcw   },
     { label:"Driver Payouts",     to:"/payouts",              icon:Wallet      },
+    { label:"Settlements",        to:"/settlements",          icon:Banknote    },
   ]},
   { label:"Configuration", items:[
     { label:"Pricing Engine",     to:"/pricing-engine",       icon:TrendingUp  },

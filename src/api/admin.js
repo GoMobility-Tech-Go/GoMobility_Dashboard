@@ -33,6 +33,9 @@ export const getInvoices = (params = {}) =>
 export const getTransactions = (params = {}) =>
   api.get('/admin/transactions', { params: { limit: 20, offset: 0, ...params } });
 
+// ── Settlements ───────────────────────────────────────────────────────────────
+export const getSettlements = () => api.get('/admin/settlements');
+
 // ── Refunds ───────────────────────────────────────────────────────────────────
 // Unified endpoint (2026-07-12) — replaces old /wallet/refund, /wallet/referral-bonus, /payments/refund.
 // See docs/18_REFUNDS_API_MIGRATION.md for the full contract.
