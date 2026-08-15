@@ -70,9 +70,12 @@ function InvoiceModal({ inv, onClose }) {
   // Use settled rides-table values for accurate fare components (same fix as rideInvoiceService)
   const corrBaseFare  = parseFloat(inv.ride_base_fare  || inv.ri_base_fare  || 0);
   const corrTimeFare  = parseFloat(inv.ride_time_fare  || inv.ri_time_fare  || 0);
+  const corrSurgeFare = parseFloat(inv.ri_surge_charge || 0);
   const fareBeforeGst = parseFloat(inv.fare_before_gst || 0);
+  // fareBeforeGst already includes surge — subtract it so Distance Charge shows pre-surge amount
+  // and Surge Charge renders as a separate additive line (prevents visual double-count)
   const corrDistFare  = fareBeforeGst > 0
-    ? Math.max(0, parseFloat((fareBeforeGst - corrBaseFare - corrTimeFare).toFixed(2)))
+    ? Math.max(0, parseFloat((fareBeforeGst - corrBaseFare - corrTimeFare - corrSurgeFare).toFixed(2)))
     : parseFloat(inv.ri_distance_fare || 0);
 
   const BRow = ({ label, value, color, minus, sub, dim }) => (
