@@ -527,7 +527,7 @@ const RouteMapPanel = ({ ride }) => {
       try {
         const path = geom.decodePath(ride.route_polyline);
         path.forEach(p => bounds.extend(p));
-        const pl = new window.google.maps.Polyline({ path, geodesic: true, strokeColor: "#D4AF37", strokeOpacity: 0.9, strokeWeight: 5, map: gMapRef.current });
+        const pl = new window.google.maps.Polyline({ path, geodesic: true, strokeColor: "#4A90E2", strokeOpacity: 0.9, strokeWeight: 5, map: gMapRef.current });
         overlaysRef.current.push(pl);
       } catch (_) { /* no polyline fallback */ }
     } else if (ride.pickup_latitude && ride.dropoff_latitude) {
@@ -536,7 +536,7 @@ const RouteMapPanel = ({ ride }) => {
           { lat: parseFloat(ride.pickup_latitude), lng: parseFloat(ride.pickup_longitude) },
           { lat: parseFloat(ride.dropoff_latitude), lng: parseFloat(ride.dropoff_longitude) },
         ],
-        geodesic: true, strokeColor: "#D4AF37", strokeOpacity: 0.35, strokeWeight: 3,
+        geodesic: true, strokeColor: "#4A90E2", strokeOpacity: 0.35, strokeWeight: 3,
         icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 1, scale: 3 }, offset: "0", repeat: "12px" }],
         map: gMapRef.current,
       });
