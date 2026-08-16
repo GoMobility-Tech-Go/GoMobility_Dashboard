@@ -107,21 +107,37 @@ function DetailModal({ row, type, onClose }) {
   if (!row) return null;
   const stop = e => e.stopPropagation();
 
-  const SecHead = ({ t }) => (
-    <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1.5px", textTransform:"uppercase", color:"rgba(212,175,55,0.48)", margin:"10px 0 6px", paddingBottom:4, borderBottom:"1px solid rgba(212,175,55,0.1)" }}>{t}</div>
-  );
-
-  const Field = ({ label, value, color, bold }) => (
-    <div style={{ padding:"7px 11px", borderRadius:8, background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.07)" }}>
-      <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(212,175,55,0.42)", marginBottom:2 }}>{label}</div>
-      <div style={{ fontSize:13, fontWeight:bold?700:500, color:color||"rgba(255,255,255,0.86)", fontVariantNumeric:"tabular-nums" }}>{value ?? "—"}</div>
+  const SecHead = ({ t, color="#D4AF37" }) => (
+    <div style={{ display:"flex", alignItems:"center", gap:8, margin:"14px 0 8px" }}>
+      <div style={{ width:3, height:14, borderRadius:2, background:color, flexShrink:0 }} />
+      <span style={{ fontSize:10, fontWeight:700, letterSpacing:"1.8px", textTransform:"uppercase", color:"rgba(255,255,255,0.45)" }}>{t}</span>
+      <div style={{ flex:1, height:"1px", background:"rgba(255,255,255,0.06)" }} />
     </div>
   );
 
-  const MoneyCard = ({ label, value, color }) => (
-    <div style={{ flex:1, padding:"9px 12px", borderRadius:10, background:"rgba(2,12,32,0.8)", border:`1px solid ${color}2a`, textAlign:"center" }}>
-      <div style={{ fontSize:9, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(255,255,255,0.32)", marginBottom:4 }}>{label}</div>
-      <div style={{ fontSize:18, fontWeight:800, color, fontVariantNumeric:"tabular-nums" }}>{value}</div>
+  const Field = ({ label, value, color, bold }) => (
+    <div style={{ padding:"6px 10px 7px", borderRadius:8, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)" }}>
+      <div style={{ fontSize:9, fontWeight:700, letterSpacing:"1.2px", textTransform:"uppercase", color:"rgba(212,175,55,0.38)", marginBottom:3 }}>{label}</div>
+      <div style={{ fontSize:13, fontWeight:bold?700:500, color:color||"rgba(255,255,255,0.85)", fontVariantNumeric:"tabular-nums", lineHeight:1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{value ?? "—"}</div>
+    </div>
+  );
+
+  const MoneyCard = ({ label, value, color, accent }) => (
+    <div style={{ flex:1, padding:"11px 14px", borderRadius:12, background:`linear-gradient(145deg,rgba(2,12,32,0.9) 0%,rgba(5,18,40,0.7) 100%)`, border:`1px solid ${color}28`, boxShadow:`inset 0 1px 0 rgba(255,255,255,0.04), 0 0 18px ${color}12`, textAlign:"center", position:"relative", overflow:"hidden" }}>
+      <div style={{ position:"absolute", inset:0, background:`radial-gradient(ellipse at 50% 0%, ${color}10 0%, transparent 70%)`, pointerEvents:"none" }} />
+      <div style={{ fontSize:8.5, fontWeight:700, letterSpacing:"1.2px", textTransform:"uppercase", color:"rgba(255,255,255,0.28)", marginBottom:6 }}>{label}</div>
+      <div style={{ fontSize:19, fontWeight:800, color, fontVariantNumeric:"tabular-nums", lineHeight:1 }}>{value}</div>
+    </div>
+  );
+
+  const PersonCard = ({ emoji, role, name, phone, color }) => (
+    <div style={{ padding:"10px 13px", borderRadius:10, background:`${color}08`, border:`1px solid ${color}20`, display:"flex", alignItems:"center", gap:12 }}>
+      <div style={{ width:36, height:36, borderRadius:10, background:`${color}18`, border:`1px solid ${color}30`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{emoji}</div>
+      <div style={{ minWidth:0 }}>
+        <div style={{ fontSize:9, fontWeight:700, letterSpacing:"1.2px", textTransform:"uppercase", color:`${color}99`, marginBottom:3 }}>{role}</div>
+        <div style={{ fontSize:13.5, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name || "—"}</div>
+        <div style={{ fontSize:11.5, color:"rgba(255,255,255,0.4)" }}>{phone || "—"}</div>
+      </div>
     </div>
   );
 
@@ -129,48 +145,50 @@ function DetailModal({ row, type, onClose }) {
   const statusColor = { earned:"#4ade80", held:"#f59e0b", settled:"#60a5fa" };
 
   return (
-    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(1,9,23,0.88)", backdropFilter:"blur(10px)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px" }}>
-      <div onClick={stop} style={{ background:"linear-gradient(160deg,#020e24 0%,#031525 100%)", border:"1px solid rgba(212,175,55,0.22)", borderRadius:22, width:"100%", maxWidth:920, boxShadow:"0 40px 100px rgba(0,0,0,0.75)" }}>
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(1,9,23,0.9)", backdropFilter:"blur(12px)", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px" }}>
+      <div onClick={stop} style={{ background:"linear-gradient(160deg,#020e24 0%,#031828 100%)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:20, width:"100%", maxWidth:860, boxShadow:"0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.03) inset" }}>
 
         {/* ── Header ── */}
-        <div style={{ padding:"16px 22px 14px", borderBottom:"1px solid rgba(255,255,255,0.06)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div>
-            <div style={{ fontFamily:"Cinzel,serif", fontSize:15, fontWeight:700, color:"#D4AF37" }}>
-              {type === 0 ? "Driver Detail" : type === 1 ? "Ride Detail" : "Earnings Detail"}
+        <div style={{ padding:"15px 20px", borderBottom:"1px solid rgba(255,255,255,0.05)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>
+              {type === 0 ? "🧑‍✈️" : type === 1 ? "🚗" : "📊"}
             </div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>
-              {type === 0 ? (row.go_id ? `GO ID: ${row.go_id}` : row.driver_name) : (row.ride_number || `#${row.ride_id || row.id}`)}
+            <div>
+              <div style={{ fontFamily:"Cinzel,serif", fontSize:14.5, fontWeight:700, color:"#D4AF37", lineHeight:1.2 }}>
+                {type === 0 ? "Driver Detail" : type === 1 ? "Ride Detail" : "Earnings Detail"}
+              </div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.28)", marginTop:2 }}>
+                {type === 0 ? (row.go_id ? `GO ID: ${row.go_id}` : row.driver_name) : (row.ride_number || `#${row.ride_id || row.id}`)}
+              </div>
             </div>
           </div>
-          <button onClick={onClose} style={{ width:32, height:32, borderRadius:9, border:"1px solid rgba(255,255,255,0.1)", background:"rgba(255,255,255,0.05)", color:"rgba(255,255,255,0.5)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <X size={14}/>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:8, border:"1px solid rgba(255,255,255,0.09)", background:"rgba(255,255,255,0.04)", color:"rgba(255,255,255,0.45)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s" }}>
+            <X size={13}/>
           </button>
         </div>
 
-        {/* ── Body — fixed layout, NO scroll ── */}
+        {/* ── Body ── */}
         <div style={{ padding:"4px 18px 18px" }}>
 
           {/* ════ TYPE 0: Driver / Cash Dues ════ */}
           {type === 0 && <>
             <SecHead t="Driver Info" />
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 0.8fr", gap:7 }}>
               <Field label="Full Name" value={row.driver_name} bold />
               <Field label="Phone"     value={row.driver_phone} color="rgba(255,255,255,0.65)" />
-              <Field label="GO ID"     value={row.go_id} color="rgba(212,175,55,0.75)" />
+              <Field label="GO ID"     value={row.go_id} color="#D4AF37" bold />
             </div>
 
-            <SecHead t="Cash Balance" />
-
-            {/* Big 3 money cards in a row */}
+            <SecHead t="Cash Balance" color="#f59e0b" />
             <div style={{ display:"flex", gap:8, marginBottom:8 }}>
               <MoneyCard label="Owes Company (Pending)" value={fmt(row.pending_amount)}       color="#f59e0b" />
-              <MoneyCard label="Total Collected"         value={fmt(row.total_cash_collected)} color="rgba(255,255,255,0.65)" />
+              <MoneyCard label="Total Collected"         value={fmt(row.total_cash_collected)} color="rgba(255,255,255,0.6)" />
               <MoneyCard label="Total Deposited"         value={fmt(row.total_deposited)}      color="#4ade80" />
             </div>
 
-            {/* Secondary fields */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-              <Field label="Platform Share (total)" value={fmt(row.total_platform_share)} color="rgba(255,255,255,0.6)" />
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:7 }}>
+              <Field label="Platform Share (Total)" value={fmt(row.total_platform_share)} color="rgba(255,255,255,0.6)" />
               <Field label="Cash Limit"             value={fmt(row.cash_limit)} color="rgba(255,255,255,0.45)" />
               <Field label="Limit Status"
                 value={row.is_limit_exceeded ? "⚠ Exceeded" : "✓ Within Limit"}
@@ -179,8 +197,8 @@ function DetailModal({ row, type, onClose }) {
               />
             </div>
             {row.deposit_due_date && (
-              <div style={{ marginTop:8 }}>
-                <Field label="Deposit Due Date" value={fmtDT(row.deposit_due_date)} span2 color="rgba(255,255,255,0.55)" />
+              <div style={{ marginTop:7 }}>
+                <Field label="Deposit Due Date" value={fmtDT(row.deposit_due_date)} color="rgba(255,255,255,0.5)" />
               </div>
             )}
           </>}
@@ -188,29 +206,21 @@ function DetailModal({ row, type, onClose }) {
           {/* ════ TYPE 1: Ride Detail ════ */}
           {type === 1 && <>
             <SecHead t="Ride Info" />
-            <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr 1fr 1.5fr", gap:7 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1.5fr 0.9fr 0.9fr 0.9fr 1.4fr", gap:7 }}>
               <Field label="Ride Number"    value={row.ride_number || `#${row.id}`} bold color="#D4AF37" />
               <Field label="Vehicle"        value={row.vehicle_type} color={vColor} />
               <Field label="Payment Method" value={row.payment_method} color={PAY_C[row.payment_method]?.color} />
               <Field label="Status"         value={row.payment_status?.replace("_"," ")} color="#f59e0b" bold />
-              <Field label="Completed At"   value={fmtDT(row.completed_at)} color="rgba(255,255,255,0.55)" />
+              <Field label="Completed At"   value={fmtDT(row.completed_at)} color="rgba(255,255,255,0.5)" />
             </div>
 
-            <SecHead t="Passenger & Driver" />
+            <SecHead t="Passenger & Driver" color="#60a5fa" />
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-              <div style={{ padding:"10px 13px", borderRadius:10, background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.15)" }}>
-                <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(96,165,250,0.6)", marginBottom:5 }}>👤 Passenger</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:2 }}>{row.passenger_name || "—"}</div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)" }}>{row.passenger_phone || "—"}</div>
-              </div>
-              <div style={{ padding:"10px 13px", borderRadius:10, background:"rgba(52,211,153,0.06)", border:"1px solid rgba(52,211,153,0.15)" }}>
-                <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(52,211,153,0.6)", marginBottom:5 }}>🧑‍✈️ Driver</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:2 }}>{row.driver_name || "—"}</div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)" }}>{row.driver_phone || "—"}</div>
-              </div>
+              <PersonCard emoji="👤" role="Passenger" name={row.passenger_name} phone={row.passenger_phone} color="#60a5fa" />
+              <PersonCard emoji="🧑‍✈️" role="Driver"    name={row.driver_name}    phone={row.driver_phone}    color="#34D399" />
             </div>
 
-            <SecHead t="Fare Breakdown" />
+            <SecHead t="Fare Breakdown" color="#a78bfa" />
             <div style={{ display:"flex", gap:8 }}>
               <MoneyCard label="Passenger Paid"  value={fmt(row.final_fare)}          color="#60a5fa" />
               <MoneyCard label="Driver Earned"   value={fmt(row.driver_net_earnings)} color="#4ade80" />
@@ -221,33 +231,25 @@ function DetailModal({ row, type, onClose }) {
           {/* ════ TYPE 2: Earnings Detail ════ */}
           {type === 2 && <>
             <SecHead t="Ride Info" />
-            <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr 1fr 1fr 1.5fr", gap:7 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1.5fr 0.9fr 0.9fr 0.9fr 1.4fr", gap:7 }}>
               <Field label="Ride Number"    value={row.ride_number || `#${row.ride_id}`} bold color="#D4AF37" />
               <Field label="Vehicle"        value={row.vehicle_type} color={vColor} />
               <Field label="Payment Method" value={row.payment_method} color={PAY_C[row.payment_method]?.color} />
               <Field label="Status"         value={row.status} color={statusColor[row.status]||"#60a5fa"} bold />
-              <Field label="Completed At"   value={fmtDT(row.completed_at)} color="rgba(255,255,255,0.55)" />
+              <Field label="Completed At"   value={fmtDT(row.completed_at)} color="rgba(255,255,255,0.5)" />
             </div>
 
-            <SecHead t="Driver & Passenger" />
+            <SecHead t="Driver & Passenger" color="#34D399" />
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-              <div style={{ padding:"10px 13px", borderRadius:10, background:"rgba(52,211,153,0.06)", border:"1px solid rgba(52,211,153,0.15)" }}>
-                <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(52,211,153,0.6)", marginBottom:5 }}>🧑‍✈️ Driver</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:2 }}>{row.driver_name || "—"}</div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)" }}>{row.driver_phone || "—"}</div>
-              </div>
-              <div style={{ padding:"10px 13px", borderRadius:10, background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.15)" }}>
-                <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:"1px", textTransform:"uppercase", color:"rgba(96,165,250,0.6)", marginBottom:5 }}>👤 Passenger</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.88)", marginBottom:2 }}>{row.passenger_name || "—"}</div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.42)" }}>{row.passenger_phone || "—"}</div>
-              </div>
+              <PersonCard emoji="🧑‍✈️" role="Driver"    name={row.driver_name}    phone={row.driver_phone}    color="#34D399" />
+              <PersonCard emoji="👤" role="Passenger" name={row.passenger_name} phone={row.passenger_phone} color="#60a5fa" />
             </div>
 
-            <SecHead t="Earnings Breakdown" />
+            <SecHead t="Earnings Breakdown" color="#a78bfa" />
             <div style={{ display:"flex", gap:8 }}>
-              <MoneyCard label="Gross Fare"    value={fmt(row.gross_fare)}   color="rgba(255,255,255,0.7)" />
+              <MoneyCard label="Gross Fare"    value={fmt(row.gross_fare)}   color="rgba(255,255,255,0.65)" />
               <MoneyCard label="Platform Fee"  value={fmt(row.platform_fee)} color="#a78bfa" />
-              <MoneyCard label="GST on Fee"    value={fmt(row.gst_on_fee)}   color="rgba(255,255,255,0.45)" />
+              <MoneyCard label="GST on Fee"    value={fmt(row.gst_on_fee)}   color="rgba(255,255,255,0.4)" />
               <MoneyCard label="Net to Driver" value={fmt(row.net_to_driver)}color="#4ade80" />
             </div>
           </>}
