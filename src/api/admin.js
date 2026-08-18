@@ -105,11 +105,12 @@ export const runCampaignNow = (key) =>
 export const getNotificationHistory = (params = {}) =>
   api.get('/notifications/admin/history', { params });
 
-// ── Support / Complaints ───────────────────────────────────────────────────────
-export const getSupportTickets = (params = {}) =>
-  api.get('/support/search', { params: { limit: 50, ...params } });
-export const replyToTicket = (ticketId, message) =>
-  api.post(`/support/tickets/${ticketId}/reply`, { message });
+// ── Support / Complaints (admin) ───────────────────────────────────────────────
+export const getAdminSupportStats    = ()             => api.get('/admin/support/stats');
+export const getAdminSupportTickets  = (params = {})  => api.get('/admin/support/tickets', { params });
+export const getAdminSupportTicket   = (id)           => api.get(`/admin/support/tickets/${id}`);
+export const updateAdminSupportTicket = (id, patch)   => api.patch(`/admin/support/tickets/${id}`, patch);
+export const adminReplyToTicket      = (id, message)  => api.post(`/admin/support/tickets/${id}/reply`, { message });
 
 // ── SOS / Emergency ───────────────────────────────────────────────────────────
 export const getSosHistory = (params = {}) =>
