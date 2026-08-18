@@ -1449,28 +1449,28 @@ export default function DriverOnboardingPage() {
                                   const notOk = docMap.filter(doc => !['approved','auto_verified'].includes((doc.status||'').toLowerCase()));
                                   if (missingTypes.length === 0 && notOk.length === 0)
                                     return <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 600 }}>All docs ✓</span>;
+                                  const allChips = [
+                                    ...missingTypes.map(t => ({ key: 'miss-'+t, label: DOC_SHORT[t]||t, col: DOC_STATUS_COLOR.missing, title: 'Not uploaded' })),
+                                    ...notOk.map(doc => {
+                                      const s = (doc.status||'pending').toLowerCase();
+                                      return { key: String(doc.id), label: DOC_SHORT[doc.document_type||doc.type]||(doc.document_type||doc.type||'?'), col: DOC_STATUS_COLOR[s]||DOC_STATUS_COLOR.pending, title: `Status: ${s}` };
+                                    }),
+                                  ];
+                                  const MAX = 3;
+                                  const visible = allChips.slice(0, MAX);
+                                  const extra   = allChips.length - MAX;
                                   return (
-                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                      {/* not-yet-uploaded docs — gray */}
-                                      {missingTypes.map((t) => {
-                                        const col = DOC_STATUS_COLOR.missing;
-                                        return (
-                                          <span key={'miss-'+t} title="Not uploaded yet" style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: col.bg, color: col.color, border: `1px solid ${col.border}`, whiteSpace: 'nowrap' }}>
-                                            {DOC_SHORT[t] || t}
-                                          </span>
-                                        );
-                                      })}
-                                      {/* uploaded but pending/rejected docs — colored */}
-                                      {notOk.map((doc) => {
-                                        const s   = (doc.status || 'pending').toLowerCase();
-                                        const col = DOC_STATUS_COLOR[s] || DOC_STATUS_COLOR.pending;
-                                        const lbl = DOC_SHORT[doc.document_type || doc.type] || (doc.document_type || doc.type || '?');
-                                        return (
-                                          <span key={doc.id} title={`Status: ${s}`} style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: col.bg, color: col.color, border: `1px solid ${col.border}`, whiteSpace: 'nowrap' }}>
-                                            {lbl}
-                                          </span>
-                                        );
-                                      })}
+                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', alignItems: 'center' }}>
+                                      {visible.map(c => (
+                                        <span key={c.key} title={c.title} style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: c.col.bg, color: c.col.color, border: `1px solid ${c.col.border}`, whiteSpace: 'nowrap' }}>
+                                          {c.label}
+                                        </span>
+                                      ))}
+                                      {extra > 0 && (
+                                        <span title={allChips.slice(MAX).map(c=>c.label).join(', ')} style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.12)', whiteSpace: 'nowrap' }}>
+                                          +{extra}
+                                        </span>
+                                      )}
                                     </div>
                                   );
                                 })()}
