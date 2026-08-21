@@ -120,10 +120,16 @@ const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking
   const gMapRef           = useRef(null);
   const staticMarkersRef  = useRef([]);   // pickup/dropoff for all rides
   const driverMarkerRef   = useRef(null); // live driver
-  const trackingLinesRef  = useRef([]);   // live route polylines
+  const trackingLinesRef  = useRef([]);   // toPickup polyline
   const pickupMarkerRef   = useRef(null); // live pickup
   const dropoffMarkerRef  = useRef(null); // live dropoff
-  const animFrameRef   = useRef(null);
+  const animFrameRef      = useRef(null);
+  const remainingLineRef  = useRef(null); // blue remaining route
+  const traveledLineRef   = useRef(null); // gray traveled path
+  const fullRoutePathRef  = useRef(null); // decoded full polyline (cached)
+  const lastPolylineRef   = useRef(null); // last polyline string (change detect)
+  const driverHistoryRef  = useRef([]);   // driver position history
+  const lastPanPosRef     = useRef(null); // last auto-pan position
   const [mapReady, setMapReady]   = useState(false);
   const [mapError, setMapError]   = useState(false);
 
@@ -222,41 +228,51 @@ const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking
 
   // ── Live tracking overlay ──────────────────────────────────────────────────
   const clearTrackingOverlay = () => {
-    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
+    if (animFrameRef.current)     { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
     if (driverMarkerRef.current)  { driverMarkerRef.current.setMap(null);  driverMarkerRef.current  = null; }
     if (pickupMarkerRef.current)  { pickupMarkerRef.current.setMap(null);  pickupMarkerRef.current  = null; }
     if (dropoffMarkerRef.current) { dropoffMarkerRef.current.setMap(null); dropoffMarkerRef.current = null; }
+    if (remainingLineRef.current) { remainingLineRef.current.setMap(null); remainingLineRef.current = null; }
+    if (traveledLineRef.current)  { traveledLineRef.current.setMap(null);  traveledLineRef.current  = null; }
     trackingLinesRef.current.forEach((l) => l.setMap(null));
-    trackingLinesRef.current = [];
+    trackingLinesRef.current  = [];
+    fullRoutePathRef.current  = null;
+    lastPolylineRef.current   = null;
+    driverHistoryRef.current  = [];
+    lastPanPosRef.current     = null;
   };
 
   useEffect(() => {
     if (!mapReady || !gMapRef.current || !window.google?.maps) return;
 
-    if (!trackingData) {
-      clearTrackingOverlay();
-      return;
-    }
+    if (!trackingData) { clearTrackingOverlay(); return; }
 
-    const loc = trackingData.location;
+    const loc  = trackingData.location;
+    const geom = window.google.maps.geometry;
 
-    // Driver current position
+    // ── Driver marker + smooth movement ───────────────────────────────────
     if (loc?.current?.latitude && loc?.current?.longitude) {
       const pos = { lat: parseFloat(loc.current.latitude), lng: parseFloat(loc.current.longitude) };
 
       if (driverMarkerRef.current) {
         const old = driverMarkerRef.current.getPosition();
         animateMarker(driverMarkerRef.current, old.lat(), old.lng(), pos.lat, pos.lng, POLL_MS, animFrameRef);
+
+        // Auto-pan only when driver moves > 100m — prevents map jumping on every poll
+        if (geom && lastPanPosRef.current) {
+          const moved = geom.spherical.computeDistanceBetween(
+            new window.google.maps.LatLng(lastPanPosRef.current.lat, lastPanPosRef.current.lng),
+            new window.google.maps.LatLng(pos.lat, pos.lng)
+          );
+          if (moved > 100) { gMapRef.current.panTo(pos); lastPanPosRef.current = pos; }
+        }
       } else {
-        // Create driver marker (car emoji on gold circle)
-        const driverSVG = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
-            <circle cx="22" cy="22" r="20" fill="#D4AF37" stroke="white" stroke-width="2.5"/>
-            <text x="22" y="29" text-anchor="middle" font-size="20">🚗</text>
-          </svg>`;
+        const driverSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+          <circle cx="22" cy="22" r="20" fill="#4285F4" stroke="white" stroke-width="2.5"/>
+          <text x="22" y="29" text-anchor="middle" font-size="20">🚗</text>
+        </svg>`;
         driverMarkerRef.current = new window.google.maps.Marker({
-          position: pos,
-          map: gMapRef.current,
+          position: pos, map: gMapRef.current,
           title: `Driver: ${trackingData.driver?.name || ""}`,
           icon: {
             url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(driverSVG),
@@ -266,57 +282,94 @@ const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking
           zIndex: 20,
           animation: window.google.maps.Animation.DROP,
         });
+        // First appearance — pan + zoom in
+        gMapRef.current.panTo(pos);
+        gMapRef.current.setZoom(15);
+        lastPanPosRef.current = pos;
       }
-      gMapRef.current.panTo(pos);
+
+      // Store position history for traveled-path line
+      driverHistoryRef.current.push(pos);
+
+      // Traveled path — gray line showing where driver has been
+      if (driverHistoryRef.current.length > 1) {
+        if (traveledLineRef.current) {
+          traveledLineRef.current.setPath(driverHistoryRef.current);
+        } else {
+          traveledLineRef.current = new window.google.maps.Polyline({
+            path: driverHistoryRef.current, geodesic: true,
+            strokeColor: "#9CA3AF", strokeOpacity: 0.55, strokeWeight: 4,
+            map: gMapRef.current, zIndex: 3,
+          });
+        }
+      }
+
+      // ── Remaining route — blue, trims as driver moves ──────────────────
+      const polylineStr = trackingData.routes?.toDropoff?.polyline;
+      if (polylineStr && geom?.encoding) {
+        // Re-decode full route only when polyline string changes
+        if (polylineStr !== lastPolylineRef.current) {
+          lastPolylineRef.current = polylineStr;
+          try { fullRoutePathRef.current = geom.encoding.decodePath(polylineStr); }
+          catch (_) { fullRoutePathRef.current = null; }
+        }
+
+        const fullPath = fullRoutePathRef.current;
+        if (fullPath?.length) {
+          const driverLatLng = new window.google.maps.LatLng(pos.lat, pos.lng);
+
+          // Find closest polyline point to driver's current position
+          let minDist = Infinity, closestIdx = 0;
+          fullPath.forEach((pt, i) => {
+            const d = geom.spherical.computeDistanceBetween(pt, driverLatLng);
+            if (d < minDist) { minDist = d; closestIdx = i; }
+          });
+
+          const remainingPath = fullPath.slice(closestIdx);
+
+          if (remainingLineRef.current) {
+            remainingLineRef.current.setPath(remainingPath);
+          } else {
+            remainingLineRef.current = new window.google.maps.Polyline({
+              path: remainingPath, geodesic: true,
+              strokeColor: "#4285F4", strokeOpacity: 0.9, strokeWeight: 5,
+              map: gMapRef.current, zIndex: 5,
+            });
+          }
+        }
+      }
     }
 
-    // Pickup marker for tracked ride
+    // ── Pickup marker (create once) ────────────────────────────────────────
     if (loc?.pickup?.latitude && loc?.pickup?.longitude && !pickupMarkerRef.current) {
       pickupMarkerRef.current = new window.google.maps.Marker({
         position: { lat: parseFloat(loc.pickup.latitude), lng: parseFloat(loc.pickup.longitude) },
-        map: gMapRef.current,
-        title: `Pickup: ${loc.pickup.address || ""}`,
+        map: gMapRef.current, title: `Pickup: ${loc.pickup.address || ""}`,
         icon: { path: window.google.maps.SymbolPath.CIRCLE, fillColor:"#4ade80", fillOpacity:1, strokeColor:"#fff", strokeWeight:3, scale:11 },
         zIndex: 15,
       });
     }
 
-    // Dropoff marker for tracked ride
+    // ── Dropoff marker (create once) ───────────────────────────────────────
     if (loc?.dropoff?.latitude && loc?.dropoff?.longitude && !dropoffMarkerRef.current) {
       dropoffMarkerRef.current = new window.google.maps.Marker({
         position: { lat: parseFloat(loc.dropoff.latitude), lng: parseFloat(loc.dropoff.longitude) },
-        map: gMapRef.current,
-        title: `Drop: ${loc.dropoff.address || ""}`,
+        map: gMapRef.current, title: `Drop: ${loc.dropoff.address || ""}`,
         icon: { path: window.google.maps.SymbolPath.CIRCLE, fillColor:"#f87171", fillOpacity:1, strokeColor:"#fff", strokeWeight:3, scale:11 },
         zIndex: 15,
       });
     }
 
-    // Route polylines — clear old ones then redraw
-    trackingLinesRef.current.forEach((l) => l.setMap(null));
-    trackingLinesRef.current = [];
-
-    const geom = window.google.maps.geometry?.encoding;
-
-    // toDropoff — planned route pickup→dropoff (gold solid)
-    if (trackingData.routes?.toDropoff?.polyline && geom) {
+    // ── toPickup — blue dashed (driver going to pickup, pre-ride only) ─────
+    if (trackingData.routes?.toPickup?.polyline && geom?.encoding) {
+      trackingLinesRef.current.forEach((l) => l.setMap(null));
+      trackingLinesRef.current = [];
       try {
-        const path = geom.decodePath(trackingData.routes.toDropoff.polyline);
-        const pl = new window.google.maps.Polyline({
-          path, geodesic:true, strokeColor:"#D4AF37", strokeOpacity:0.85, strokeWeight:4, map: gMapRef.current,
-        });
-        trackingLinesRef.current.push(pl);
-      } catch (_) { /* invalid polyline — skip */ }
-    }
-
-    // toPickup — driver→pickup (blue dashed, only during driver_assigned/driver_arrived)
-    if (trackingData.routes?.toPickup?.polyline && geom) {
-      try {
-        const path = geom.decodePath(trackingData.routes.toPickup.polyline);
+        const path = geom.encoding.decodePath(trackingData.routes.toPickup.polyline);
         const pl = new window.google.maps.Polyline({
           path, geodesic:true, strokeColor:"#60a5fa", strokeOpacity:0.9, strokeWeight:3,
           icons: [{ icon: { path:"M 0,-1 0,1", strokeOpacity:1, scale:3 }, offset:"0", repeat:"12px" }],
-          map: gMapRef.current,
+          map: gMapRef.current, zIndex: 4,
         });
         trackingLinesRef.current.push(pl);
       } catch (_) { /* skip */ }
@@ -351,7 +404,7 @@ const MapPanel = ({ rides, selectedId, onRideClick, trackingData, onStopTracking
           <>
             <div style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(2,13,38,0.85)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:8, padding:"5px 10px" }}>
               <span style={{ fontSize:14 }}>🚗</span>
-              <span style={{ fontSize:11, color:"#D4AF37", fontFamily:"Outfit,sans-serif", fontWeight:600 }}>Driver (Live)</span>
+              <span style={{ fontSize:11, color:"#4285F4", fontFamily:"Outfit,sans-serif", fontWeight:600 }}>Driver (Live)</span>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(2,13,38,0.85)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"5px 10px" }}>
               <span style={{ width:10, height:10, borderRadius:"50%", background:"#4ade80", display:"inline-block", border:"1.5px solid #fff" }}/>
