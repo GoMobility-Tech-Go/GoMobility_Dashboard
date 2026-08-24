@@ -177,6 +177,19 @@ export const getDriverStats = (from, to) => {
   return api.get('/admin/drivers/stats', { params });
 };
 
+// ── NCR Driver Stats ──────────────────────────────────────────────────────────
+export const getNcrDriverStats = () => api.get('/admin/drivers/ncr-stats');
+
+// ── Driver Profile Update (admin) ─────────────────────────────────────────────
+export const updateDriverProfile = (driverId, data) => {
+  const form = new FormData();
+  if (data.full_name) form.append('full_name', data.full_name);
+  if (data.photo)     form.append('photo', data.photo);
+  return api.patch(`/admin/drivers/${driverId}/profile`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
 // ── API Logs (dev tool — restricted by phone) ─────────────────────────────────
 export const getApiLogs = (params = {}) =>
   api.get('/admin/logs', { params: { limit: 200, offset: 0, ...params } });

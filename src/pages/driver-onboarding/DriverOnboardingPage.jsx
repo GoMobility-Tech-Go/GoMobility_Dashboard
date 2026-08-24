@@ -5,12 +5,14 @@ import {
   X, FileCheck, FileX, AlertTriangle, Eye, EyeOff, Car, Star, MapPin, Phone,
   CheckCircle, Clock, XCircle, RefreshCw, ExternalLink, User, Wallet,
   CreditCard, Calendar, Filter as FilterIcon, UserPlus, Users, Download, Check,
+  Pencil, Upload,
 } from "lucide-react";
 import { Pagination } from "../../components/ui/index.jsx";
 import {
   getDrivers, verifyDriver, updateDriverStatus, getKycQueue,
   approveDocument, rejectDocument, getFraudAlerts, suspendDriver,
   getKycDocument, getDriverById, getDriverKycStatus, getDriverStats,
+  getCities, getNcrDriverStats, updateDriverProfile,
 } from "../../api/admin";
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
@@ -312,6 +314,80 @@ const ExtractedDataSection = ({ doc }) => {
   );
 };
 
+// ── Edit Driver Modal ─────────────────────────────────────────────────────────
+const EditDriverModal = ({ driverId, currentName, currentPhoto, onSaved, onCancel }) => {
+  const [name,    setName]    = useState(currentName || "");
+  const [photo,   setPhoto]   = useState(null);
+  const [preview, setPreview] = useState(currentPhoto || null);
+  const [saving,  setSaving]  = useState(false);
+  const fileRef = useRef(null);
+
+  const handleFile = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setPhoto(f);
+    setPreview(URL.createObjectURL(f));
+  };
+
+  const handleSave = async () => {
+    if (!name.trim() && !photo) return;
+    setSaving(true);
+    try {
+      await updateDriverProfile(driverId, { full_name: name.trim() || undefined, photo: photo || undefined });
+      onSaved(name.trim(), preview);
+    } catch (e) {
+      alert(e.response?.data?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:2100, background:"rgba(0,0,0,0.85)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onCancel}>
+      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.3)", borderRadius:20, padding:28, width:380, maxWidth:"90vw" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:22 }}>
+          <span style={{ fontFamily:"Cinzel,serif", fontSize:15, color:"#D4AF37", fontWeight:700 }}>Edit Driver Profile</span>
+          <button onClick={onCancel} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)" }}><X size={16}/></button>
+        </div>
+
+        {/* Photo */}
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", marginBottom:20 }}>
+          <div
+            onClick={() => fileRef.current?.click()}
+            style={{ width:88, height:88, borderRadius:"50%", background:"rgba(212,175,55,0.1)", border:"2px dashed rgba(212,175,55,0.4)", overflow:"hidden", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
+            {preview
+              ? <img src={preview} alt="preview" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+              : <Upload size={22} color="rgba(212,175,55,0.5)"/>}
+            <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0)", display:"flex", alignItems:"center", justifyContent:"center", transition:".2s", opacity:0 }}
+              onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,0,0,0.45)";e.currentTarget.style.opacity=1;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,0,0,0)";e.currentTarget.style.opacity=0;}}>
+              <Pencil size={16} color="#fff"/>
+            </div>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={handleFile}/>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:8 }}>Click to change photo</div>
+        </div>
+
+        {/* Name */}
+        <div style={{ marginBottom:20 }}>
+          <label style={{ display:"block", fontSize:11, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:6 }}>Full Name</label>
+          <input
+            value={name} onChange={e=>setName(e.target.value)}
+            style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }}
+          />
+        </div>
+
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={onCancel} style={{ flex:1, height:40, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:13, fontFamily:"Outfit,sans-serif" }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving || (!name.trim() && !photo)} style={{ flex:1, height:40, background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.35)", borderRadius:10, color:"#D4AF37", cursor:"pointer", fontSize:13, fontFamily:"Outfit,sans-serif", fontWeight:600, opacity:(saving||(!name.trim()&&!photo))?0.5:1 }}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Full-screen Driver Detail Panel ──────────────────────────────────────────
 const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) => {
   const [profile, setProfile]   = useState(null);
@@ -321,6 +397,7 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
   const [acting, setActing]     = useState({});
   const [rejectDocId, setRejectDocId] = useState(null);
   const [imgPrev, setImgPrev]   = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     setPLoad(true);
@@ -385,6 +462,20 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
 
   return (
     <>
+      {editOpen && (
+        <EditDriverModal
+          driverId={driverId}
+          currentName={p?.full_name || p?.name || ""}
+          currentPhoto={photoSrc}
+          onSaved={(newName, newPhoto) => {
+            setProfile(prev => prev ? { ...prev, full_name: newName || prev.full_name, profile_picture: newPhoto || prev.profile_picture } : prev);
+            setEditOpen(false);
+            showToast("Driver profile updated.");
+          }}
+          onCancel={() => setEditOpen(false)}
+        />
+      )}
+
       {rejectDocId && (
         <RejectModal
           onConfirm={(r,a) => handleRejectDoc(rejectDocId, r, a)}
@@ -449,7 +540,10 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
                   )}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:"Cinzel,serif", fontSize:18, fontWeight:700, color:"#fff" }}>{p.full_name || p.fullName || p.name || "—"}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ fontFamily:"Cinzel,serif", fontSize:18, fontWeight:700, color:"#fff" }}>{p.full_name || p.fullName || p.name || "—"}</div>
+                    <button onClick={() => setEditOpen(true)} title="Edit profile" style={{ background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:7, width:28, height:28, cursor:"pointer", color:"#D4AF37", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Pencil size={12}/></button>
+                  </div>
                   <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:5, flexWrap:"wrap" }}>
                     <span style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:"rgba(255,255,255,0.5)" }}><Phone size={11}/>{p.phone_number || p.phone || "—"}</span>
                     {p.email && <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>· {p.email}</span>}
@@ -606,26 +700,36 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
                       return (
                         <div key={docId} style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${(status==="approved"||status==="auto_verified")?"rgba(34,197,94,0.2)":status==="rejected"?"rgba(239,68,68,0.18)":status==="manual_review"?"rgba(245,158,11,0.2)":"rgba(212,175,55,0.12)"}`, borderRadius:14, overflow:"hidden" }}>
                           <div style={{ display:"flex", gap:16, padding:16 }}>
-                            {/* Document Thumbnail */}
-                            <div
-                              onClick={() => doc.file_url && setImgPrev(doc.file_url)}
-                              style={{ width:90, height:70, borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.12)", overflow:"hidden", flexShrink:0, cursor:doc.file_url?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
-                              {doc.file_url ? (
-                                <>
-                                  <img src={doc.file_url} alt="doc" style={{ width:"100%", height:"100%", objectFit:"cover" }}
-                                    onError={(e)=>{e.target.style.display="none";e.target.nextSibling.style.display="flex";}} />
-                                  <div style={{ display:"none", position:"absolute", inset:0, alignItems:"center", justifyContent:"center", fontSize:10, color:"rgba(255,255,255,0.35)", flexDirection:"column", gap:4 }}>
-                                    <ExternalLink size={14} color="rgba(212,175,55,0.5)"/>
-                                    <span>Open</span>
+                            {/* Document Thumbnails (front + back) */}
+                            <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
+                              {[
+                                { url: doc.file_url,      label: "Front" },
+                                { url: doc.back_file_url, label: "Back"  },
+                              ].filter(({ url, label }) => {
+                                if (!url) return false;
+                                const dt = (doc.document_type || doc.type || "").toUpperCase();
+                                if (label === "Back" && dt !== "AADHAAR" && dt !== "DRIVING_LICENCE") return false;
+                                return true;
+                              }).map(({ url, label }) => (
+                                <div key={label} style={{ position:"relative" }}>
+                                  <div
+                                    onClick={() => setImgPrev(url)}
+                                    style={{ width:90, height:66, borderRadius:9, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.12)", overflow:"hidden", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
+                                    <img src={url} alt={label} style={{ width:"100%", height:"100%", objectFit:"cover" }}
+                                      onError={(e)=>{e.target.style.display="none";e.target.parentElement.style.background="rgba(255,255,255,0.04)";}} />
+                                    <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0)", transition:".2s", display:"flex", alignItems:"center", justifyContent:"center", opacity:0 }}
+                                      onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,0,0,0.4)";e.currentTarget.style.opacity=1;}}
+                                      onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,0,0,0)";e.currentTarget.style.opacity=0;}}>
+                                      <Eye size={14} color="#fff"/>
+                                    </div>
                                   </div>
-                                  <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0)", transition:".2s", display:"flex", alignItems:"center", justifyContent:"center", opacity:0 }}
-                                    onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,0,0,0.4)";e.currentTarget.style.opacity=1;}}
-                                    onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,0,0,0)";e.currentTarget.style.opacity=0;}}>
-                                    <Eye size={16} color="#fff"/>
-                                  </div>
-                                </>
-                              ) : (
-                                <div style={{ textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:10 }}>No image</div>
+                                  <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textAlign:"center", marginTop:2, letterSpacing:"0.5px" }}>{label}</div>
+                                </div>
+                              ))}
+                              {!doc.file_url && (
+                                <div style={{ width:90, height:66, borderRadius:9, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(212,175,55,0.1)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                                  <div style={{ textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:10 }}>No image</div>
+                                </div>
                               )}
                             </div>
 
@@ -807,6 +911,7 @@ export default function DriverOnboardingPage() {
   // ── Additional quick filters ──────────────────────────────────────────
   const [vehicleTypeFilter, setVehicleTypeFilter]     = useState('all');
   const [cityFilter, setCityFilter]                   = useState('');
+  const [cityOptions, setCityOptions]                 = useState([]);
   const [driverAccountStatus, setDriverAccountStatus] = useState([]);
   const [showOnlyOnDuty, setShowOnlyOnDuty]           = useState(false);
   const [showOnlyTestDrivers, setShowOnlyTestDrivers] = useState(false);
@@ -832,6 +937,10 @@ export default function DriverOnboardingPage() {
   // ── Driver stats ──────────────────────────────────────────────────────
   const [stats, setStats]               = useState({ signups: 0, active: 0, inactive: 0, allTime: 0 });
   const [statsLoading, setStatsLoading] = useState(true);
+
+  // ── NCR stats ─────────────────────────────────────────────────────────────
+  const [ncrStats,   setNcrStats]   = useState(null);
+  const [ncrLoading, setNcrLoading] = useState(true);
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
@@ -895,7 +1004,7 @@ export default function DriverOnboardingPage() {
     if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
     if (onboardingStatus.length > 0) params.onboarding_status = onboardingStatus.join(',');
     if (vehicleTypeFilter && vehicleTypeFilter !== 'all') params.vehicle_type = vehicleTypeFilter;
-    if (cityFilter.trim()) params.city = cityFilter.trim();
+    if (cityFilter) params.city = cityFilter;
     if (driverAccountStatus.length > 0) params.account_status = driverAccountStatus.join(',');
     if (showOnlyOnDuty)      params.is_on_duty   = 'true';
     if (showOnlyTestDrivers) params.is_test_user = 'true';
@@ -925,7 +1034,7 @@ export default function DriverOnboardingPage() {
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
       if (onboardingStatus.length > 0) params.onboarding_status = onboardingStatus.join(',');
       if (vehicleTypeFilter && vehicleTypeFilter !== 'all') params.vehicle_type = vehicleTypeFilter;
-      if (cityFilter.trim()) params.city = cityFilter.trim();
+      if (cityFilter) params.city = cityFilter;
       if (driverAccountStatus.length > 0) params.account_status = driverAccountStatus.join(',');
       if (showOnlyOnDuty)      { params.is_on_duty_op = 'eq'; params.is_on_duty_val = 'true'; }
       if (showOnlyTestDrivers) { params.is_test_user_op = 'eq'; params.is_test_user_val = 'true'; }
@@ -1041,6 +1150,24 @@ export default function DriverOnboardingPage() {
   }, [severity]);
 
   useEffect(() => { loadDrivers(); }, [loadDrivers]);
+
+  useEffect(() => {
+    getCities()
+      .then(res => {
+        const list = res.data?.data?.cities || res.data?.data || res.data || [];
+        const active = list.filter(c => c.is_active);
+        setCityOptions(active.sort((a, b) => a.name.localeCompare(b.name)));
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setNcrLoading(true);
+    getNcrDriverStats()
+      .then(res => setNcrStats(res.data?.data || res.data || null))
+      .catch(() => {})
+      .finally(() => setNcrLoading(false));
+  }, []);
 
   // For each in_progress driver, lazily fetch their KYC docs to show pending items
   useEffect(() => {
@@ -1191,6 +1318,46 @@ export default function DriverOnboardingPage() {
             <DrvStatCard icon={Users}     label="Total All-Time"             value={stats.allTime}  color="#6366f1"   loading={statsLoading} />
           </div>
 
+          {/* NCR Driver Stats */}
+          <div style={{ background:'rgba(212,175,55,0.04)', border:'1px solid rgba(212,175,55,0.16)', borderRadius:14, padding:'14px 18px', marginBottom:20 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+              <MapPin size={13} color={GOLD}/>
+              <span style={{ fontFamily:'Cinzel,serif', fontSize:12, fontWeight:700, color:GOLD, letterSpacing:'0.5px' }}>NCR Drivers</span>
+              {!ncrLoading && ncrStats && (
+                <span style={{ fontSize:11, color:TEXT_MED }}>Delhi · Noida · Gurgaon · Ghaziabad · Faridabad</span>
+              )}
+            </div>
+            {ncrLoading ? (
+              <div style={{ height:48, background:'rgba(255,255,255,0.04)', borderRadius:10, animation:'gmPulse 1.5s ease-in-out infinite' }} />
+            ) : ncrStats ? (
+              <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'center' }}>
+                {[
+                  { label:'Total NCR', value: ncrStats.total,    color: GOLD },
+                  { label:'Active',    value: ncrStats.active,   color: '#22c55e' },
+                  { label:'Online',    value: ncrStats.online,   color: '#60a5fa' },
+                  { label:'Verified',  value: ncrStats.verified, color: '#a78bfa' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} style={{ display:'flex', flexDirection:'column', alignItems:'center', background:'rgba(255,255,255,0.03)', border:`1px solid ${color}22`, borderRadius:10, padding:'10px 18px', minWidth:80 }}>
+                    <div style={{ fontSize:22, fontWeight:800, color, fontVariantNumeric:'tabular-nums' }}>{(value ?? 0).toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', marginTop:2 }}>{label}</div>
+                  </div>
+                ))}
+                <div style={{ flex:1, minWidth:200, overflowX:'auto' }}>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {(ncrStats.byCity || []).map(row => (
+                      <div key={row.city} style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:8, padding:'6px 12px', fontSize:12, color:TEXT_MED, display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ color:TEXT_BRI, fontWeight:600 }}>{row.city}</span>
+                        <span style={{ color:GOLD }}>{row.total}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize:12, color:TEXT_DIM }}>Could not load NCR stats</div>
+            )}
+          </div>
+
           {/* Status filter + quick filter bar */}
           <div style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(212,175,55,0.1)', borderRadius:14, padding:'14px 18px', marginBottom:14 }}>
             {/* Row 1: Onboarding Status + Account Status + City */}
@@ -1205,9 +1372,26 @@ export default function DriverOnboardingPage() {
               </div>
               <div>
                 <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:5, fontWeight:700 }}>City</div>
-                <input type="text" value={cityFilter} placeholder="Search city…"
+                <select
+                  value={cityFilter}
                   onChange={e => { setCityFilter(e.target.value); setOffset(0); }}
-                  style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:9, color:TEXT_BRI, fontSize:12.5, padding:'7px 12px', fontFamily:'Outfit,sans-serif', outline:'none', width:160 }} />
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${cityFilter ? GOLD : 'rgba(255,255,255,0.12)'}`,
+                    borderRadius: 9, color: cityFilter ? TEXT_BRI : TEXT_MED,
+                    fontSize: 12.5, padding: '7px 30px 7px 12px',
+                    fontFamily: 'Outfit,sans-serif', outline: 'none',
+                    cursor: 'pointer', appearance: 'none',
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+                    minWidth: 160,
+                  }}
+                >
+                  <option value="" style={{ background: '#020d26' }}>All Cities</option>
+                  {cityOptions.map(c => (
+                    <option key={c.id} value={String(c.id)} style={{ background: '#020d26' }}>{c.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
             {/* Row 2: Vehicle Type chips */}
@@ -1268,7 +1452,7 @@ export default function DriverOnboardingPage() {
             }}>
               <RefreshCw size={13} />
             </button>
-            {(activeDriverFilters.length > 0 || sort.col || onboardingStatus.length > 0 || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus.length > 0 || showOnlyOnDuty || showOnlyTestDrivers) && (
+            {(activeDriverFilters.length > 0 || sort.col || onboardingStatus.length > 0 || vehicleTypeFilter !== 'all' || cityFilter || driverAccountStatus.length > 0 || showOnlyOnDuty || showOnlyTestDrivers) && (
               <button onClick={clearAllFilters} style={{
                 display:"flex", alignItems:"center", gap:6, height:32, padding:"0 14px",
                 background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)",
@@ -1281,7 +1465,7 @@ export default function DriverOnboardingPage() {
           </div>
 
           {/* Active filter chips */}
-          {(period !== 'all' || onboardingStatus.length > 0 || vehicleTypeFilter !== 'all' || cityFilter.trim() || driverAccountStatus.length > 0 || showOnlyOnDuty || showOnlyTestDrivers || activeDriverFilters.length > 0) && (
+          {(period !== 'all' || onboardingStatus.length > 0 || vehicleTypeFilter !== 'all' || cityFilter || driverAccountStatus.length > 0 || showOnlyOnDuty || showOnlyTestDrivers || activeDriverFilters.length > 0) && (
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14, alignItems:"center" }}>
               <FilterIcon size={13} color="#D4AF37" style={{ marginRight:2 }} />
               {period !== 'all' && (
@@ -1299,8 +1483,8 @@ export default function DriverOnboardingPage() {
               {vehicleTypeFilter !== 'all' && (
                 <DrvPeriodChip label={`Vehicle: ${vehicleTypeFilter.toUpperCase()}`} onRemove={() => { setVehicleTypeFilter('all'); setOffset(0); }} />
               )}
-              {cityFilter.trim() && (
-                <DrvPeriodChip label={`City: ${cityFilter}`} onRemove={() => { setCityFilter(''); setOffset(0); }} />
+              {cityFilter && (
+                <DrvPeriodChip label={`City: ${cityOptions.find(c => String(c.id) === cityFilter)?.name || cityFilter}`} onRemove={() => { setCityFilter(''); setOffset(0); }} />
               )}
               {driverAccountStatus.length > 0 && (
                 <DrvPeriodChip
