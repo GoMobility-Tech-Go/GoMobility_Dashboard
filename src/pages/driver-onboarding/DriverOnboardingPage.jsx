@@ -1315,13 +1315,15 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
             </button>
           </div>
 
-          {/* Stat cards */}
+          {/* Stat cards — hidden in ncrMode (global stats, not NCR-filtered) */}
+          {!ncrMode && (
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
             <DrvStatCard icon={UserPlus}  label={`Signups — ${periodLabel}`} value={stats.signups}  color={GOLD}      loading={statsLoading} />
             <DrvStatCard icon={UserCheck} label={`Active — ${periodLabel}`}  value={stats.active}   color="#22c55e"   loading={statsLoading} />
             <DrvStatCard icon={UserX}     label={`Inactive — ${periodLabel}`}value={stats.inactive} color="#ef4444"   loading={statsLoading} />
             <DrvStatCard icon={Users}     label="Total All-Time"             value={stats.allTime}  color="#6366f1"   loading={statsLoading} />
           </div>
+          )}
 
           {/* NCR Driver Stats */}
           <div style={{ background:'rgba(212,175,55,0.04)', border:'1px solid rgba(212,175,55,0.16)', borderRadius:14, padding:'14px 18px', marginBottom:20 }}>
