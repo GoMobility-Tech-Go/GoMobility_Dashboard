@@ -911,6 +911,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   // ── Additional quick filters ──────────────────────────────────────────
   const [vehicleTypeFilter, setVehicleTypeFilter]     = useState('all');
   const [cityFilter, setCityFilter]                   = useState(ncrMode ? 'NCR' : '');
+  const [ncrViewMode, setNcrViewMode]                 = useState('registered'); // 'registered' | 'last_seen'
   const [cityOptions, setCityOptions]                 = useState([]);
   const [driverAccountStatus, setDriverAccountStatus] = useState([]);
   const [showOnlyOnDuty, setShowOnlyOnDuty]           = useState(false);
@@ -1325,41 +1326,90 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
           </div>
           )}
 
-          {/* NCR Driver Stats */}
-          <div style={{ background:'rgba(212,175,55,0.04)', border:'1px solid rgba(212,175,55,0.16)', borderRadius:14, padding:'14px 18px', marginBottom:20 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-              <MapPin size={13} color={GOLD}/>
-              <span style={{ fontFamily:'Cinzel,serif', fontSize:12, fontWeight:700, color:GOLD, letterSpacing:'0.5px' }}>NCR Drivers</span>
-              {!ncrLoading && ncrStats && (
+          {/* NCR Driver Stats — redesigned */}
+          <div style={{ background:'linear-gradient(135deg,rgba(212,175,55,0.06) 0%,rgba(212,175,55,0.02) 100%)', border:'1px solid rgba(212,175,55,0.2)', borderRadius:18, padding:'18px 20px', marginBottom:20, position:'relative', overflow:'hidden' }}>
+            {/* Gold glow accent */}
+            <div style={{ position:'absolute', top:-40, right:-40, width:160, height:160, borderRadius:'50%', background:'radial-gradient(circle,rgba(212,175,55,0.08) 0%,transparent 70%)', pointerEvents:'none' }}/>
+
+            {/* Header row */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, flexWrap:'wrap', gap:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ width:28, height:28, borderRadius:8, background:'rgba(212,175,55,0.15)', border:'1px solid rgba(212,175,55,0.3)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <MapPin size={14} color={GOLD}/>
+                </div>
+                <span style={{ fontFamily:'Cinzel,serif', fontSize:13, fontWeight:700, color:GOLD, letterSpacing:'0.5px' }}>NCR Drivers</span>
                 <span style={{ fontSize:11, color:TEXT_MED }}>Delhi · Noida · Gurgaon · Ghaziabad · Faridabad</span>
+              </div>
+              {/* Toggle: Registered / Last Seen */}
+              {ncrMode && ncrStats?.lastSeenTotal > 0 && (
+                <div style={{ display:'flex', background:'rgba(0,0,0,0.3)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:10, padding:3, gap:3 }}>
+                  {[
+                    { key:'registered', label:'Registered', count: ncrStats.total },
+                    { key:'last_seen',  label:'Last Seen',  count: ncrStats.lastSeenTotal },
+                  ].map(({ key, label, count }) => {
+                    const active = ncrViewMode === key;
+                    return (
+                      <button key={key} onClick={() => {
+                        setNcrViewMode(key);
+                        setCityFilter(key === 'last_seen' ? 'NCR_LAST_SEEN' : 'NCR');
+                        setOffset(0);
+                      }} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'Outfit,sans-serif', fontSize:12, fontWeight:600, transition:'all .18s',
+                        background: active ? 'rgba(212,175,55,0.18)' : 'transparent',
+                        color: active ? GOLD : TEXT_MED,
+                        boxShadow: active ? '0 0 0 1px rgba(212,175,55,0.35)' : 'none',
+                      }}>
+                        {label} <span style={{ opacity:0.7, fontSize:11 }}>{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
+
             {ncrLoading ? (
-              <div style={{ height:48, background:'rgba(255,255,255,0.04)', borderRadius:10, animation:'gmPulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height:70, background:'rgba(255,255,255,0.04)', borderRadius:12, animation:'gmPulse 1.5s ease-in-out infinite' }} />
             ) : ncrStats ? (
-              <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'center' }}>
-                {[
-                  { label:'Total NCR', value: ncrStats.total,    color: GOLD },
-                  { label:'Active',    value: ncrStats.active,   color: '#22c55e' },
-                  { label:'Online',    value: ncrStats.online,   color: '#60a5fa' },
-                  { label:'Verified',  value: ncrStats.verified, color: '#a78bfa' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} style={{ display:'flex', flexDirection:'column', alignItems:'center', background:'rgba(255,255,255,0.03)', border:`1px solid ${color}22`, borderRadius:10, padding:'10px 18px', minWidth:80 }}>
-                    <div style={{ fontSize:22, fontWeight:800, color, fontVariantNumeric:'tabular-nums' }}>{(value ?? 0).toLocaleString('en-IN')}</div>
-                    <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', marginTop:2 }}>{label}</div>
-                  </div>
-                ))}
-                <div style={{ flex:1, minWidth:200, overflowX:'auto' }}>
-                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                    {(ncrStats.byCity || []).map(row => (
-                      <div key={row.city} style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:8, padding:'6px 12px', fontSize:12, color:TEXT_MED, display:'flex', alignItems:'center', gap:6 }}>
-                        <span style={{ color:TEXT_BRI, fontWeight:600 }}>{row.city}</span>
-                        <span style={{ color:GOLD }}>{row.total}</span>
-                      </div>
-                    ))}
-                  </div>
+              <>
+                {/* Stat cards row */}
+                <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:14 }}>
+                  {[
+                    { label:'Total NCR',   value: ncrStats.total,         color: GOLD,      bg:'rgba(212,175,55,0.1)',   border:'rgba(212,175,55,0.25)' },
+                    { label:'Active',      value: ncrStats.active,        color: '#22c55e', bg:'rgba(34,197,94,0.08)',   border:'rgba(34,197,94,0.2)' },
+                    { label:'Online Now',  value: ncrStats.online,        color: '#60a5fa', bg:'rgba(96,165,250,0.08)',  border:'rgba(96,165,250,0.2)' },
+                    { label:'Verified',    value: ncrStats.verified,      color: '#a78bfa', bg:'rgba(167,139,250,0.08)', border:'rgba(167,139,250,0.2)' },
+                    ...(ncrStats.lastSeenTotal > ncrStats.total ? [{ label:'Last Seen NCR', value: ncrStats.lastSeenTotal, color:'#fb923c', bg:'rgba(251,146,60,0.08)', border:'rgba(251,146,60,0.2)', isLastSeen:true }] : []),
+                  ].map(({ label, value, color, bg, border, isLastSeen }) => (
+                    <div key={label}
+                      onClick={isLastSeen && ncrMode ? () => { setNcrViewMode('last_seen'); setCityFilter('NCR_LAST_SEEN'); setOffset(0); } : undefined}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 20px', minWidth:90, flex:'1 1 auto', maxWidth:160, cursor: isLastSeen && ncrMode ? 'pointer' : 'default', transition:'transform .15s', position:'relative' }}
+                      onMouseEnter={e => { if(isLastSeen && ncrMode) e.currentTarget.style.transform='translateY(-2px)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; }}
+                    >
+                      <div style={{ fontSize:26, fontWeight:800, color, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{(value ?? 0).toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', marginTop:5, textAlign:'center' }}>{label}</div>
+                      {isLastSeen && ncrMode && (
+                        <div style={{ fontSize:9, color:color, marginTop:3, opacity:0.7 }}>Click to view →</div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </div>
+
+                {/* City breakdown pills */}
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {(ncrStats.byCity || []).map(row => (
+                    <div key={row.city} style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.09)', borderRadius:20, padding:'5px 14px', fontSize:12, color:TEXT_MED, display:'flex', alignItems:'center', gap:7 }}>
+                      <span style={{ color:TEXT_BRI, fontWeight:600 }}>{row.city}</span>
+                      <span style={{ background:'rgba(212,175,55,0.15)', color:GOLD, borderRadius:10, padding:'1px 7px', fontSize:11, fontWeight:700 }}>{row.total}</span>
+                    </div>
+                  ))}
+                  {ncrStats.lastSeenTotal > ncrStats.total && (
+                    <div style={{ background:'rgba(251,146,60,0.06)', border:'1px solid rgba(251,146,60,0.18)', borderRadius:20, padding:'5px 14px', fontSize:12, display:'flex', alignItems:'center', gap:7 }}>
+                      <span style={{ color:'rgba(251,146,60,0.8)', fontWeight:600 }}>+{ncrStats.lastSeenTotal - ncrStats.total} potential</span>
+                      <span style={{ color:'rgba(251,146,60,0.5)', fontSize:10 }}>last seen in NCR</span>
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
               <div style={{ fontSize:12, color:TEXT_DIM }}>Could not load NCR stats</div>
             )}
