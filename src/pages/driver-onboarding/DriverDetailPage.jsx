@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, User, Phone, Mail, Star, ShieldCheck, ShieldX,
@@ -10,6 +10,7 @@ import {
   getDriverById, getDriverKycStatus,
   verifyDriver, updateDriverStatus,
   approveDocument, rejectDocument, editKycDocument,
+  updateDriverProfile,
 } from "../../api/admin";
 
 // ── responsive hook ───────────────────────────────────────────────────────────
@@ -72,6 +73,62 @@ const RejectModal = ({ onConfirm, onCancel }) => {
           <button onClick={() => reason.trim() && onConfirm(reason.trim(), allowRetry)} disabled={!reason.trim()}
             style={{ flex: 1, height: 40, background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 10, color: "#f87171", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: reason.trim() ? 1 : 0.5 }}>
             Reject
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Edit Driver Profile Modal ─────────────────────────────────────────────────
+const EditProfileModal = ({ driverId, currentName, currentPhoto, onSaved, onCancel }) => {
+  const [name,    setName]    = useState(currentName || "");
+  const [photo,   setPhoto]   = useState(null);
+  const [preview, setPreview] = useState(currentPhoto || null);
+  const [saving,  setSaving]  = useState(false);
+
+  const handleFile = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setPhoto(f);
+    setPreview(URL.createObjectURL(f));
+  };
+
+  const handleSave = async () => {
+    if (!name.trim() && !photo) return;
+    setSaving(true);
+    try {
+      await updateDriverProfile(driverId, { full_name: name.trim() || undefined, photo: photo || undefined });
+      onSaved(name.trim(), preview);
+    } catch (e) {
+      alert(e.response?.data?.message || "Save failed");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:2100, background:"rgba(0,0,0,0.85)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onCancel}>
+      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.3)", borderRadius:20, padding:28, width:380, maxWidth:"90vw" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:22 }}>
+          <span style={{ fontFamily:"Cinzel,serif", fontSize:15, color:"#D4AF37", fontWeight:700 }}>Edit Driver Profile</span>
+          <button onClick={onCancel} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.5)" }}><X size={16}/></button>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", marginBottom:20 }}>
+          <label style={{ width:88, height:88, borderRadius:"50%", background:"rgba(212,175,55,0.1)", border:"2px dashed rgba(212,175,55,0.4)", overflow:"hidden", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
+            {preview ? <img src={preview} alt="preview" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <Upload size={22} color="rgba(212,175,55,0.5)"/>}
+            <input type="file" accept="image/*" style={{ display:"none" }} onChange={handleFile}/>
+          </label>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:8 }}>Click to change photo</div>
+        </div>
+        <div style={{ marginBottom:20 }}>
+          <label style={{ display:"block", fontSize:11, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:6 }}>Full Name</label>
+          <input value={name} onChange={e=>setName(e.target.value)}
+            style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }}/>
+        </div>
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={onCancel} style={{ flex:1, height:40, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:13, fontFamily:"Outfit,sans-serif" }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving || (!name.trim() && !photo)}
+            style={{ flex:1, height:40, background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.35)", borderRadius:10, color:"#D4AF37", cursor:"pointer", fontSize:13, fontFamily:"Outfit,sans-serif", fontWeight:600, opacity:(saving||(!name.trim()&&!photo))?0.5:1 }}>
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
@@ -356,6 +413,7 @@ export default function DriverDetailPage() {
   const [acting,     setActing]     = useState({});
   const [rejectDocId, setRejectDocId] = useState(null);
   const [editDoc,    setEditDoc]    = useState(null);
+  const [editOpen,   setEditOpen]   = useState(false);
   const [imgPrev,    setImgPrev]    = useState(null);
   const [toast,      setToast]      = useState(null);
 
@@ -486,6 +544,19 @@ export default function DriverDetailPage() {
           onCancel={() => setEditDoc(null)}
         />
       )}
+      {editOpen && (
+        <EditProfileModal
+          driverId={driverId}
+          currentName={p?.full_name || p?.fullName || p?.name || ""}
+          currentPhoto={p?.profile_photo_url || p?.profilePicture || p?.profile_picture || null}
+          onSaved={(newName, newPhoto) => {
+            setProfile(prev => prev ? { ...prev, full_name: newName || prev.full_name, profile_picture: newPhoto || prev.profile_picture } : prev);
+            setEditOpen(false);
+            showToast("Driver profile updated.");
+          }}
+          onCancel={() => setEditOpen(false)}
+        />
+      )}
       {imgPrev && <ImgPreview src={imgPrev} onClose={() => setImgPrev(null)} />}
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
@@ -563,8 +634,13 @@ export default function DriverDetailPage() {
 
                 {/* Name + contact + badges */}
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: "Cinzel,serif", fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 6 }}>
-                    {p.full_name || p.fullName || p.name || "—"}
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                    <div style={{ fontFamily: "Cinzel,serif", fontSize: 22, fontWeight: 700, color: "#fff" }}>
+                      {p.full_name || p.fullName || p.name || "—"}
+                    </div>
+                    <button onClick={() => setEditOpen(true)} title="Edit profile" style={{ background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:7, width:28, height:28, cursor:"pointer", color:"#D4AF37", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <Pencil size={12}/>
+                    </button>
                   </div>
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 14 }}>
@@ -757,15 +833,27 @@ export default function DriverDetailPage() {
                     return (
                       <div key={docId} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${borderColor}`, borderRadius: 16, overflow: "hidden" }}>
                         <div style={{ padding: "16px 20px", display: "flex", gap: 14, alignItems: "flex-start", flexDirection: isMobile ? "column" : "row" }}>
-                          {/* Doc thumbnail */}
-                          {doc.file_url && (
-                            <div
-                              onClick={() => setImgPrev(doc.file_url)}
-                              style={{ width: 70, height: 70, borderRadius: 10, overflow: "hidden", flexShrink: 0, cursor: "pointer", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.3)" }}>
-                              <img src={doc.file_url} alt="doc" style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                onError={e => { e.target.parentNode.style.display = "none"; }} />
-                            </div>
-                          )}
+                          {/* Doc thumbnails (front + back) */}
+                          <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
+                            {[
+                              { url: doc.file_url,      label: "Front" },
+                              { url: doc.back_file_url, label: "Back"  },
+                            ].filter(({ url, label }) => {
+                              if (!url) return false;
+                              const dt = (doc.document_type || "").toUpperCase();
+                              if (label === "Back" && dt !== "AADHAAR" && dt !== "DRIVING_LICENCE") return false;
+                              return true;
+                            }).map(({ url, label }) => (
+                              <div key={label}>
+                                <div onClick={() => setImgPrev(url)}
+                                  style={{ width:70, height:70, borderRadius:10, overflow:"hidden", flexShrink:0, cursor:"pointer", border:"1px solid rgba(255,255,255,0.1)", background:"rgba(0,0,0,0.3)" }}>
+                                  <img src={url} alt={label} style={{ width:"100%", height:"100%", objectFit:"cover" }}
+                                    onError={e => { e.target.parentNode.style.display = "none"; }} />
+                                </div>
+                                <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textAlign:"center", marginTop:2, letterSpacing:"0.5px" }}>{label}</div>
+                              </div>
+                            ))}
+                          </div>
 
                           {/* Doc info */}
                           <div style={{ flex: 1, minWidth: 0 }}>

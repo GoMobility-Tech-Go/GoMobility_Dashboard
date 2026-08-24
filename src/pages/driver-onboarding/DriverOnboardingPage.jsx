@@ -1372,26 +1372,7 @@ export default function DriverOnboardingPage() {
               </div>
               <div>
                 <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:5, fontWeight:700 }}>City</div>
-                <select
-                  value={cityFilter}
-                  onChange={e => { setCityFilter(e.target.value); setOffset(0); }}
-                  style={{
-                    background: 'rgba(255,255,255,0.05)',
-                    border: `1px solid ${cityFilter ? GOLD : 'rgba(255,255,255,0.12)'}`,
-                    borderRadius: 9, color: cityFilter ? TEXT_BRI : TEXT_MED,
-                    fontSize: 12.5, padding: '7px 30px 7px 12px',
-                    fontFamily: 'Outfit,sans-serif', outline: 'none',
-                    cursor: 'pointer', appearance: 'none',
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
-                    minWidth: 160,
-                  }}
-                >
-                  <option value="" style={{ background: '#020d26' }}>All Cities</option>
-                  {cityOptions.map(c => (
-                    <option key={c.id} value={String(c.id)} style={{ background: '#020d26' }}>{c.name}</option>
-                  ))}
-                </select>
+                <CityFilter value={cityFilter} options={cityOptions} onChange={v => { setCityFilter(v); setOffset(0); }} />
               </div>
             </div>
             {/* Row 2: Vehicle Type chips */}
@@ -1484,7 +1465,7 @@ export default function DriverOnboardingPage() {
                 <DrvPeriodChip label={`Vehicle: ${vehicleTypeFilter.toUpperCase()}`} onRemove={() => { setVehicleTypeFilter('all'); setOffset(0); }} />
               )}
               {cityFilter && (
-                <DrvPeriodChip label={`City: ${cityOptions.find(c => String(c.id) === cityFilter)?.name || cityFilter}`} onRemove={() => { setCityFilter(''); setOffset(0); }} />
+                <DrvPeriodChip label={`City: ${cityFilter}`} onRemove={() => { setCityFilter(''); setOffset(0); }} />
               )}
               {driverAccountStatus.length > 0 && (
                 <DrvPeriodChip
@@ -2057,5 +2038,54 @@ function DrvVisibilityToggle({ active, onToggle, label }) {
       {active ? <Eye size={12}/> : <EyeOff size={12}/>}
       Include {label}
     </button>
+  );
+}
+
+function CityFilter({ value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    window.addEventListener("mousedown", h);
+    return () => window.removeEventListener("mousedown", h);
+  }, [open]);
+  const btnLabel = value || "All Cities";
+  const btnColor = value ? GOLD : "rgba(255,255,255,0.6)";
+  const btnDot   = value ? GOLD : "rgba(255,255,255,0.3)";
+  return (
+    <div ref={ref} style={{ position:"relative", display:"inline-block" }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ display:"flex", alignItems:"center", gap:10, height:36, padding:"0 14px", minWidth:160, background:"rgba(255,255,255,0.04)", border:`1px solid ${value ? "rgba(212,175,55,0.45)" : "rgba(212,175,55,0.2)"}`, borderRadius:10, cursor:"pointer", fontFamily:"Outfit,sans-serif", color:"rgba(255,255,255,0.85)", fontSize:13, justifyContent:"space-between" }}>
+        <span style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ width:8, height:8, borderRadius:"50%", background:btnDot, flexShrink:0 }}/>
+          <span style={{ color:btnColor, fontWeight:600 }}>{btnLabel}</span>
+        </span>
+        <span style={{ color:"rgba(255,255,255,0.3)", fontSize:10, marginLeft:4 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, zIndex:1000, background:"#0d1b2e", border:"1px solid rgba(212,175,55,0.22)", borderRadius:12, padding:"6px 0 8px", minWidth:190, boxShadow:"0 12px 40px rgba(0,0,0,0.65)", maxHeight:260, overflowY:"auto" }}>
+          <button onClick={() => { onChange(""); setOpen(false); }}
+            style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"8px 14px 9px", background:!value ? "rgba(212,175,55,0.08)" : "transparent", border:"none", borderBottom:"1px solid rgba(255,255,255,0.06)", cursor:"pointer", fontFamily:"Outfit,sans-serif", fontSize:13, color:!value ? GOLD : "rgba(255,255,255,0.55)", fontWeight:!value ? 700 : 500, textAlign:"left", marginBottom:2 }}>
+            <div style={{ width:15, height:15, borderRadius:4, border:`1.5px solid ${!value ? GOLD : "rgba(255,255,255,0.2)"}`, background:!value ? GOLD : "transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              {!value && <Check size={10} color="#020d26" strokeWidth={3}/>}
+            </div>
+            All Cities
+          </button>
+          {options.map(c => {
+            const active = value === c.name;
+            return (
+              <button key={c.id} onClick={() => { onChange(active ? "" : c.name); setOpen(false); }}
+                style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"8px 14px", background:active ? "rgba(212,175,55,0.06)" : "transparent", border:"none", cursor:"pointer", fontFamily:"Outfit,sans-serif", fontSize:13, color:active ? GOLD : "rgba(255,255,255,0.72)", fontWeight:active ? 700 : 500, textAlign:"left" }}>
+                <div style={{ width:15, height:15, borderRadius:4, border:`1.5px solid ${active ? GOLD : "rgba(255,255,255,0.2)"}`, background:active ? GOLD : "transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  {active && <Check size={10} color="#020d26" strokeWidth={3}/>}
+                </div>
+                {c.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
