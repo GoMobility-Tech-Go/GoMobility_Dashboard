@@ -889,7 +889,7 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const TABS = ["Drivers", "KYC Queue", "Fraud Alerts"];
 
-export default function DriverOnboardingPage() {
+export default function DriverOnboardingPage({ ncrMode = false }) {
   const navigate = useNavigate();
   const [tab, setTab]           = useState("Drivers");
   const [drivers, setDrivers]   = useState([]);
@@ -910,7 +910,7 @@ export default function DriverOnboardingPage() {
 
   // ── Additional quick filters ──────────────────────────────────────────
   const [vehicleTypeFilter, setVehicleTypeFilter]     = useState('all');
-  const [cityFilter, setCityFilter]                   = useState('');
+  const [cityFilter, setCityFilter]                   = useState(ncrMode ? 'NCR' : '');
   const [cityOptions, setCityOptions]                 = useState([]);
   const [driverAccountStatus, setDriverAccountStatus] = useState([]);
   const [showOnlyOnDuty, setShowOnlyOnDuty]           = useState(false);
@@ -964,7 +964,7 @@ export default function DriverOnboardingPage() {
   const clearAllFilters = ()       => {
     setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" });
     setOnboardingStatus([]);
-    setVehicleTypeFilter('all'); setCityFilter(''); setDriverAccountStatus([]);
+    setVehicleTypeFilter('all'); if (!ncrMode) setCityFilter(''); setDriverAccountStatus([]);
     setShowOnlyOnDuty(false); setShowOnlyTestDrivers(false);
   };
 
@@ -1262,8 +1262,13 @@ export default function DriverOnboardingPage() {
 
       {/* Page Header */}
       <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Driver Management</h1>
-        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Total: {total} drivers · Manage onboarding, KYC verification and fraud alerts</p>
+        <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>
+          {ncrMode ? "Delhi NCR Drivers" : "Driver Management"}
+          {ncrMode && <span style={{ marginLeft:10, fontSize:13, fontWeight:600, color:"#D4AF37", fontFamily:"Outfit,sans-serif", background:"rgba(212,175,55,0.12)", border:"1px solid rgba(212,175,55,0.3)", borderRadius:8, padding:"2px 10px", verticalAlign:"middle" }}>NCR</span>}
+        </h1>
+        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>
+          {ncrMode ? `Delhi · Noida · Gurgaon · Ghaziabad · Faridabad · Total: ${total} drivers` : `Total: ${total} drivers · Manage onboarding, KYC verification and fraud alerts`}
+        </p>
       </div>
 
       {/* Tab Nav */}
@@ -1370,10 +1375,12 @@ export default function DriverOnboardingPage() {
                 <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:5, fontWeight:700 }}>Account</div>
                 <DriverAccountStatusFilter value={driverAccountStatus} onChange={(v) => { setDriverAccountStatus(v); setOffset(0); }} />
               </div>
+              {!ncrMode && (
               <div>
                 <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:5, fontWeight:700 }}>City</div>
                 <CityFilter value={cityFilter} options={cityOptions} onChange={v => { setCityFilter(v); setOffset(0); }} />
               </div>
+              )}
             </div>
             {/* Row 2: Vehicle Type chips */}
             <div>
@@ -1464,7 +1471,7 @@ export default function DriverOnboardingPage() {
               {vehicleTypeFilter !== 'all' && (
                 <DrvPeriodChip label={`Vehicle: ${vehicleTypeFilter.toUpperCase()}`} onRemove={() => { setVehicleTypeFilter('all'); setOffset(0); }} />
               )}
-              {cityFilter && (
+              {cityFilter && !ncrMode && (
                 <DrvPeriodChip label={`City: ${cityFilter}`} onRemove={() => { setCityFilter(''); setOffset(0); }} />
               )}
               {driverAccountStatus.length > 0 && (

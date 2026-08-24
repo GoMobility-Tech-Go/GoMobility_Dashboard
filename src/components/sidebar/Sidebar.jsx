@@ -4,7 +4,7 @@ import {
   UserPlus, SlidersHorizontal, ShieldCheck, ScrollText, ShieldAlert, LogOut,
   ChevronLeft, ChevronRight, Menu, X, Crown, Megaphone, AlertTriangle,
   Smartphone, Trophy, MessageCircle, Activity, Target, UserCog, Lock,
-  BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText, Banknote
+  BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText, Banknote, Building2
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +20,7 @@ const ADMIN_MENU = [
   { label:"Management", items:[
     { label:"Users",              to:"/users",                icon:Users       },
     { label:"Driver Onboarding",   to:"/driver-onboarding",    icon:UserPlus    },
+    { label:"Delhi NCR Drivers",   to:"/ncr-drivers",          icon:Building2   },
     { label:"Passenger Onboarding",to:"/passenger-onboarding",icon:Users       },
     { label:"Ride Monitoring",    to:"/ride-monitoring",      icon:MapPin      },
   ]},

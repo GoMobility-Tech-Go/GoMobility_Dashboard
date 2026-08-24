@@ -37,6 +37,7 @@ import InvoicePage from "../pages/invoices/InvoicePage";
 import DriverMetricsPage from "../pages/driver-metrics/DriverMetricsPage";
 import DriverMetricsDetailPage from "../pages/driver-metrics/DriverMetricsDetailPage";
 import SettlementsPage from "../pages/settlements/SettlementsPage";
+import NcrDriversPage from "../pages/ncr-drivers/NcrDriversPage";
 
 const routes = [
   { path:"/signup", element:<SignupPage/> },
@@ -50,6 +51,7 @@ const routes = [
         { path:"users", element:<UsersPage/> },
         { path:"driver-onboarding", element:<DriverOnboardingPage/> },
         { path:"driver-onboarding/:driverId", element:<DriverDetailPage/> },
+        { path:"ncr-drivers", element:<NcrDriversPage/> },
         { path:"passenger-onboarding", element:<PassengerOnboardingPage/> },
         { path:"ride-monitoring", element:<RideMonitoringPage/> },
         { path:"finance", element:<FinancePage/> },
