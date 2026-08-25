@@ -4,13 +4,14 @@ import {
   ArrowLeft, User, Phone, Mail, Star, ShieldCheck, ShieldX,
   UserCheck, UserX, CheckCircle, XCircle, Clock, Eye,
   Car, CreditCard, FileCheck, FileX, X, ExternalLink,
-  Calendar, Wallet, AlertTriangle, Pencil, Upload, MapPin
+  Calendar, Wallet, AlertTriangle, Pencil, Upload, MapPin,
+  Bell, Activity, Wifi, WifiOff, ChevronDown, ChevronUp
 } from "lucide-react";
 import {
   getDriverById, getDriverKycStatus,
   verifyDriver, updateDriverStatus,
   approveDocument, rejectDocument, editKycDocument,
-  updateDriverProfile,
+  updateDriverProfile, sendDriverNotification, getDriverActivity,
 } from "../../api/admin";
 
 // ── responsive hook ───────────────────────────────────────────────────────────
@@ -73,6 +74,61 @@ const RejectModal = ({ onConfirm, onCancel }) => {
           <button onClick={() => reason.trim() && onConfirm(reason.trim(), allowRetry)} disabled={!reason.trim()}
             style={{ flex: 1, height: 40, background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 10, color: "#f87171", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: reason.trim() ? 1 : 0.5 }}>
             Reject
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Send Notification Modal ───────────────────────────────────────────────────
+const NotifyModal = ({ driverId, driverName, onClose, onSent }) => {
+  const [title, setTitle] = useState("");
+  const [body,  setBody]  = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    if (!title.trim() || !body.trim()) return;
+    setSending(true);
+    try {
+      await sendDriverNotification(driverId, title.trim(), body.trim());
+      onSent();
+      onClose();
+    } catch (e) {
+      alert(e.response?.data?.message || "Failed to send notification");
+    } finally { setSending(false); }
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:2200, background:"rgba(0,0,0,0.85)", backdropFilter:"blur(6px)", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={onClose}>
+      <div style={{ background:"#020d26", border:"1px solid rgba(212,175,55,0.3)", borderRadius:20, padding:28, width:400, maxWidth:"92vw" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:32, height:32, borderRadius:10, background:"rgba(212,175,55,0.12)", border:"1px solid rgba(212,175,55,0.3)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <Bell size={15} color="#D4AF37"/>
+            </div>
+            <div>
+              <div style={{ fontFamily:"Cinzel,serif", fontSize:13, fontWeight:700, color:"#D4AF37" }}>Send Notification</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:1 }}>{driverName}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.4)" }}><X size={16}/></button>
+        </div>
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:"block", fontSize:10, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:6 }}>Title</label>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Upcoming Offer"
+            style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box" }}/>
+        </div>
+        <div style={{ marginBottom:22 }}>
+          <label style={{ display:"block", fontSize:10, color:"rgba(212,175,55,0.7)", letterSpacing:"1px", textTransform:"uppercase", marginBottom:6 }}>Message</label>
+          <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Notification ka message likho..." rows={4}
+            style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box", resize:"vertical" }}/>
+        </div>
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={onClose} style={{ flex:1, height:42, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, color:"rgba(255,255,255,0.5)", cursor:"pointer", fontSize:13, fontFamily:"Outfit,sans-serif" }}>Cancel</button>
+          <button onClick={handleSend} disabled={sending || !title.trim() || !body.trim()}
+            style={{ flex:2, height:42, background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.4)", borderRadius:10, color:"#D4AF37", cursor:"pointer", fontSize:13, fontFamily:"Outfit,sans-serif", fontWeight:700, opacity:(sending||!title.trim()||!body.trim())?0.5:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            <Bell size={14}/>{sending ? "Sending…" : "Send Notification"}
           </button>
         </div>
       </div>
@@ -413,9 +469,13 @@ export default function DriverDetailPage() {
   const [acting,     setActing]     = useState({});
   const [rejectDocId, setRejectDocId] = useState(null);
   const [editDoc,    setEditDoc]    = useState(null);
-  const [editOpen,   setEditOpen]   = useState(false);
-  const [imgPrev,    setImgPrev]    = useState(null);
-  const [toast,      setToast]      = useState(null);
+  const [editOpen,      setEditOpen]      = useState(false);
+  const [imgPrev,       setImgPrev]       = useState(null);
+  const [toast,         setToast]         = useState(null);
+  const [notifyOpen,    setNotifyOpen]    = useState(false);
+  const [activityOpen,  setActivityOpen]  = useState(false);
+  const [activity,      setActivity]      = useState([]);
+  const [actLoad,       setActLoad]       = useState(false);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -557,6 +617,14 @@ export default function DriverDetailPage() {
           onCancel={() => setEditOpen(false)}
         />
       )}
+      {notifyOpen && p && (
+        <NotifyModal
+          driverId={driverId}
+          driverName={p?.full_name || p?.fullName || p?.name || "Driver"}
+          onClose={() => setNotifyOpen(false)}
+          onSent={() => showToast("Notification sent successfully.")}
+        />
+      )}
       {imgPrev && <ImgPreview src={imgPrev} onClose={() => setImgPrev(null)} />}
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
@@ -640,6 +708,9 @@ export default function DriverDetailPage() {
                     </div>
                     <button onClick={() => setEditOpen(true)} title="Edit profile" style={{ background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:7, width:28, height:28, cursor:"pointer", color:"#D4AF37", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                       <Pencil size={12}/>
+                    </button>
+                    <button onClick={() => setNotifyOpen(true)} title="Send notification" style={{ background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:7, width:28, height:28, cursor:"pointer", color:"#D4AF37", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <Bell size={12}/>
                     </button>
                   </div>
 
@@ -965,6 +1036,75 @@ export default function DriverDetailPage() {
                   </div>
                 );
               })()}
+            </div>
+
+            {/* ── ACTIVITY LOG ── */}
+            <div style={{ background:"rgba(255,255,255,0.015)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, overflow:"hidden", marginTop:0 }}>
+              <button onClick={async () => {
+                if (!activityOpen && activity.length === 0) {
+                  setActLoad(true);
+                  try {
+                    const res = await getDriverActivity(driverId, 20);
+                    setActivity(res.data?.data || []);
+                  } catch { setActivity([]); }
+                  finally { setActLoad(false); }
+                }
+                setActivityOpen(o => !o);
+              }} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", background:"none", border:"none", cursor:"pointer", color:"#fff" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ width:26, height:26, borderRadius:8, background:"rgba(96,165,250,0.12)", border:"1px solid rgba(96,165,250,0.25)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <Activity size={13} color="#60a5fa"/>
+                  </div>
+                  <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:700, color:"#60a5fa", letterSpacing:"0.5px" }}>Activity Log</span>
+                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>Online / Offline history</span>
+                </div>
+                {activityOpen ? <ChevronUp size={14} color="rgba(255,255,255,0.4)"/> : <ChevronDown size={14} color="rgba(255,255,255,0.4)"/>}
+              </button>
+
+              {activityOpen && (
+                <div style={{ padding:"0 20px 18px" }}>
+                  {actLoad ? (
+                    <div style={{ height:60, background:"rgba(255,255,255,0.03)", borderRadius:10, animation:"gmPulse 1.5s ease-in-out infinite" }}/>
+                  ) : activity.length === 0 ? (
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)", textAlign:"center", padding:"16px 0" }}>No activity sessions found</div>
+                  ) : (
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {activity.map((s, i) => {
+                        const isOpen = !s.ended_at;
+                        const dur = s.duration_seconds;
+                        const durStr = dur ? `${Math.floor(dur/3600)}h ${Math.floor((dur%3600)/60)}m` : "—";
+                        const startD = new Date(s.started_at);
+                        const endD   = s.ended_at ? new Date(s.ended_at) : null;
+                        return (
+                          <div key={s.id || i} style={{ display:"flex", gap:12, alignItems:"flex-start", padding:"10px 14px", background:"rgba(255,255,255,0.02)", border:`1px solid ${isOpen ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.06)"}`, borderRadius:10 }}>
+                            <div style={{ width:28, height:28, borderRadius:8, background: isOpen ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.05)", border:`1px solid ${isOpen ? "rgba(34,197,94,0.3)" : "rgba(255,255,255,0.08)"}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
+                              {isOpen ? <Wifi size={13} color="#4ade80"/> : <WifiOff size={13} color="rgba(255,255,255,0.3)"/>}
+                            </div>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3, flexWrap:"wrap" }}>
+                                <span style={{ fontSize:12, fontWeight:600, color: isOpen ? "#4ade80" : "#fff" }}>
+                                  {isOpen ? "🟢 Online" : "Offline"}
+                                </span>
+                                <span style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>
+                                  {startD.toLocaleDateString("en-IN", { day:"2-digit", month:"short" })} {startD.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}
+                                  {endD && ` → ${endD.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}`}
+                                </span>
+                                {!isOpen && <span style={{ fontSize:10, color:"rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.05)", borderRadius:6, padding:"1px 7px" }}>{durStr}</span>}
+                              </div>
+                              <div style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
+                                {s.start_city && <span style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>📍 {s.start_city}</span>}
+                                {s.rides_completed > 0 && <span style={{ fontSize:11, color:"rgba(34,197,94,0.7)" }}>✓ {s.rides_completed} rides</span>}
+                                {s.earnings > 0 && <span style={{ fontSize:11, color:"rgba(212,175,55,0.7)" }}>₹{parseFloat(s.earnings).toLocaleString("en-IN")}</span>}
+                                {s.end_reason && s.end_reason !== "manual" && <span style={{ fontSize:10, color:"rgba(239,68,68,0.5)" }}>{s.end_reason}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
           </>

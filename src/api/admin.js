@@ -128,6 +128,14 @@ export const getDriverKycStatus = (userId) =>
 export const getPayouts = (params = {}) =>
   api.get('/admin/transactions', { params: { category: 'withdrawal', limit: 20, offset: 0, ...params } });
 
+// ── Driver Push Notification ──────────────────────────────────────────────────
+export const sendDriverNotification = (driverId, title, body) =>
+  api.post(`/admin/drivers/${driverId}/notify`, { title, body });
+
+// ── Driver Activity Sessions ──────────────────────────────────────────────────
+export const getDriverActivity = (driverId, limit = 20) =>
+  api.get(`/admin/drivers/${driverId}/activity`, { params: { limit } });
+
 // ── Subscription Plan Update ──────────────────────────────────────────────────
 export const updateSubscriptionPlan = (planId, data) =>
   api.patch(`/subscriptions/admin/plans/${planId}`, data);
