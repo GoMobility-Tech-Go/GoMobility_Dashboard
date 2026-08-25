@@ -5,14 +5,14 @@ import {
   X, FileCheck, FileX, AlertTriangle, Eye, EyeOff, Car, Star, MapPin, Phone,
   CheckCircle, Clock, XCircle, RefreshCw, ExternalLink, User, Wallet,
   CreditCard, Calendar, Filter as FilterIcon, UserPlus, Users, Download, Check,
-  Pencil, Upload,
+  Pencil, Upload, Bell, Send,
 } from "lucide-react";
 import { Pagination } from "../../components/ui/index.jsx";
 import {
   getDrivers, verifyDriver, updateDriverStatus, getKycQueue,
   approveDocument, rejectDocument, getFraudAlerts, suspendDriver,
   getKycDocument, getDriverById, getDriverKycStatus, getDriverStats,
-  getCities, getNcrDriverStats, updateDriverProfile,
+  getCities, getNcrDriverStats, updateDriverProfile, sendGroupNotification,
 } from "../../api/admin";
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
@@ -916,6 +916,11 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const [driverAccountStatus, setDriverAccountStatus] = useState([]);
   const [showOnlyOnDuty, setShowOnlyOnDuty]           = useState(false);
   const [showOnlyTestDrivers, setShowOnlyTestDrivers] = useState(false);
+  const [groupNotifyOpen, setGroupNotifyOpen]         = useState(false);
+  const [groupNotifyData, setGroupNotifyData]         = useState({ group:'ncr', title:'', body:'' });
+  const [groupNotifySending, setGroupNotifySending]   = useState(false);
+  const [groupNotifyResult, setGroupNotifyResult]     = useState(null);
+  const [groupNotifyErr, setGroupNotifyErr]           = useState('');
 
   // ── Period filter state ───────────────────────────────────────────────
   const [period, setPeriod]         = useState('all');
@@ -1262,15 +1267,87 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       )}
 
       {/* Page Header */}
-      <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>
-          {ncrMode ? "Delhi NCR Drivers" : "Driver Management"}
-          {ncrMode && <span style={{ marginLeft:10, fontSize:13, fontWeight:600, color:"#D4AF37", fontFamily:"Outfit,sans-serif", background:"rgba(212,175,55,0.12)", border:"1px solid rgba(212,175,55,0.3)", borderRadius:8, padding:"2px 10px", verticalAlign:"middle" }}>NCR</span>}
-        </h1>
-        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>
-          {ncrMode ? `Delhi · Noida · Gurgaon · Ghaziabad · Faridabad · Total: ${total} drivers` : `Total: ${total} drivers · Manage onboarding, KYC verification and fraud alerts`}
-        </p>
+      <div style={{ marginBottom:24, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
+        <div>
+          <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>
+            {ncrMode ? "Delhi NCR Drivers" : "Driver Management"}
+            {ncrMode && <span style={{ marginLeft:10, fontSize:13, fontWeight:600, color:"#D4AF37", fontFamily:"Outfit,sans-serif", background:"rgba(212,175,55,0.12)", border:"1px solid rgba(212,175,55,0.3)", borderRadius:8, padding:"2px 10px", verticalAlign:"middle" }}>NCR</span>}
+          </h1>
+          <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>
+            {ncrMode ? `Delhi · Noida · Gurgaon · Ghaziabad · Faridabad · Total: ${total} drivers` : `Total: ${total} drivers · Manage onboarding, KYC verification and fraud alerts`}
+          </p>
+        </div>
+        {ncrMode && (
+          <button
+            onClick={() => { setGroupNotifyOpen(true); setGroupNotifyResult(null); setGroupNotifyErr(''); setGroupNotifyData({ group:'ncr', title:'', body:'' }); }}
+            style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 18px', borderRadius:10, border:'1px solid rgba(212,175,55,0.5)', background:'rgba(212,175,55,0.1)', color:'#D4AF37', fontFamily:'Outfit,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', transition:'all .2s' }}
+          >
+            <Bell size={14} /> Group Notify
+          </button>
+        )}
       </div>
+
+      {/* Group Notify Modal */}
+      {groupNotifyOpen && (
+        <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)' }}>
+          <div style={{ background:'#1a1a2e', border:'1px solid rgba(212,175,55,0.25)', borderRadius:16, width:'100%', maxWidth:420, margin:'0 16px', overflow:'hidden', boxShadow:'0 24px 60px rgba(0,0,0,0.5)' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 20px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
+              <span style={{ fontFamily:'Cinzel,serif', fontSize:16, fontWeight:700, color:'#D4AF37', display:'flex', alignItems:'center', gap:8 }}>
+                <Bell size={16} /> Group Notification
+              </span>
+              <button onClick={() => setGroupNotifyOpen(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.4)', padding:4 }}><X size={18}/></button>
+            </div>
+            <div style={{ padding:'20px', display:'flex', flexDirection:'column', gap:14 }}>
+              <div>
+                <label style={{ fontSize:11, fontFamily:'Outfit,sans-serif', fontWeight:600, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:'0.05em', display:'block', marginBottom:8 }}>Recipients</label>
+                <div style={{ display:'flex', gap:8 }}>
+                  {[['ncr','NCR Drivers'],['online','Online'],['all','All Drivers']].map(([key,label]) => (
+                    <button key={key} onClick={() => setGroupNotifyData(d=>({...d,group:key}))}
+                      style={{ flex:1, padding:'8px 6px', borderRadius:8, border:`1px solid ${groupNotifyData.group===key?'#D4AF37':'rgba(255,255,255,0.1)'}`, background:groupNotifyData.group===key?'rgba(212,175,55,0.15)':'transparent', color:groupNotifyData.group===key?'#D4AF37':'rgba(255,255,255,0.5)', fontFamily:'Outfit,sans-serif', fontSize:12, fontWeight:600, cursor:'pointer', transition:'all .15s' }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontFamily:'Outfit,sans-serif', fontWeight:600, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:'0.05em', display:'block', marginBottom:6 }}>Title</label>
+                <input value={groupNotifyData.title} onChange={e=>setGroupNotifyData(d=>({...d,title:e.target.value}))} placeholder="Notification title"
+                  style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'10px 12px', color:'#fff', fontFamily:'Outfit,sans-serif', fontSize:13, outline:'none', boxSizing:'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontFamily:'Outfit,sans-serif', fontWeight:600, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:'0.05em', display:'block', marginBottom:6 }}>Message</label>
+                <textarea value={groupNotifyData.body} onChange={e=>setGroupNotifyData(d=>({...d,body:e.target.value}))} placeholder="Message body" rows={3}
+                  style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, padding:'10px 12px', color:'#fff', fontFamily:'Outfit,sans-serif', fontSize:13, outline:'none', resize:'none', boxSizing:'border-box' }} />
+              </div>
+              {groupNotifyErr && <p style={{ fontSize:13, color:'#f87171', margin:0 }}>{groupNotifyErr}</p>}
+              {groupNotifyResult && (
+                <div style={{ background:'rgba(16,185,129,0.1)', border:'1px solid rgba(16,185,129,0.3)', borderRadius:8, padding:'10px 12px', fontSize:13, color:'#6ee7b7' }}>
+                  ✓ Sent to <strong>{groupNotifyResult.sent}</strong> drivers
+                  {groupNotifyResult.failed > 0 && <span style={{ color:'#fbbf24' }}> ({groupNotifyResult.failed} failed)</span>}
+                </div>
+              )}
+            </div>
+            <div style={{ display:'flex', gap:10, padding:'0 20px 20px' }}>
+              <button onClick={() => setGroupNotifyOpen(false)} style={{ flex:1, padding:'10px', borderRadius:8, border:'1px solid rgba(255,255,255,0.1)', background:'transparent', color:'rgba(255,255,255,0.5)', fontFamily:'Outfit,sans-serif', fontSize:13, cursor:'pointer' }}>Cancel</button>
+              <button
+                disabled={groupNotifySending}
+                onClick={async () => {
+                  if (!groupNotifyData.title.trim() || !groupNotifyData.body.trim()) { setGroupNotifyErr('Title aur message dono required hain'); return; }
+                  setGroupNotifySending(true); setGroupNotifyErr(''); setGroupNotifyResult(null);
+                  try {
+                    const res = await sendGroupNotification(groupNotifyData.group, groupNotifyData.title.trim(), groupNotifyData.body.trim());
+                    setGroupNotifyResult(res.data?.data || res.data);
+                  } catch(e) { setGroupNotifyErr(e.response?.data?.message || 'Error sending notification'); }
+                  finally { setGroupNotifySending(false); }
+                }}
+                style={{ flex:1, padding:'10px', borderRadius:8, border:'none', background:groupNotifySending?'rgba(212,175,55,0.5)':'#D4AF37', color:'#000', fontFamily:'Outfit,sans-serif', fontSize:13, fontWeight:700, cursor:groupNotifySending?'not-allowed':'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:7, transition:'all .15s' }}>
+                {groupNotifySending ? <RefreshCw size={13} className="animate-spin"/> : <Send size={13}/>}
+                {groupNotifySending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab Nav */}
       <div style={{ display:"flex", gap:8, marginBottom:22, flexWrap:"wrap" }}>

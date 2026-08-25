@@ -132,6 +132,14 @@ export const getPayouts = (params = {}) =>
 export const sendDriverNotification = (driverId, title, body) =>
   api.post(`/admin/drivers/${driverId}/notify`, { title, body });
 
+// ── Group Push Notification ───────────────────────────────────────────────────
+export const sendGroupNotification = (group, title, body) =>
+  api.post(`/admin/drivers/group-notify`, { group, title, body });
+
+// ── Live Map ──────────────────────────────────────────────────────────────────
+export const getLiveMapDrivers = () =>
+  api.get(`/admin/drivers/live-map`);
+
 // ── Driver Activity Sessions ──────────────────────────────────────────────────
 export const getDriverActivity = (driverId, limit = 20) =>
   api.get(`/admin/drivers/${driverId}/activity`, { params: { limit } });
