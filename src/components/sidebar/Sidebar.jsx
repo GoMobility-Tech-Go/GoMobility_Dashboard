@@ -20,8 +20,9 @@ const ADMIN_MENU = [
   { label:"Management", items:[
     { label:"Users",              to:"/users",                icon:Users       },
     { label:"Driver Onboarding",   to:"/driver-onboarding",    icon:UserPlus    },
-    { label:"Delhi NCR Drivers",   to:"/ncr-drivers",          icon:Building2   },
-    { label:"Passenger Onboarding",to:"/passenger-onboarding",icon:Users       },
+    { label:"Delhi NCR Drivers",    to:"/ncr-drivers",           icon:Building2   },
+    { label:"Delhi NCR Passengers", to:"/ncr-passengers",        icon:MapPin      },
+    { label:"Passenger Onboarding", to:"/passenger-onboarding",  icon:Users       },
     { label:"Ride Monitoring",    to:"/ride-monitoring",      icon:MapPin      },
     { label:"Live Map",           to:"/live-map",             icon:Radio       },
   ]},

@@ -38,6 +38,7 @@ import DriverMetricsPage from "../pages/driver-metrics/DriverMetricsPage";
 import DriverMetricsDetailPage from "../pages/driver-metrics/DriverMetricsDetailPage";
 import SettlementsPage from "../pages/settlements/SettlementsPage";
 import NcrDriversPage from "../pages/ncr-drivers/NcrDriversPage";
+import NcrPassengersPage from "../pages/ncr-passengers/NcrPassengersPage";
 import LiveMapPage from "../pages/live-map/LiveMapPage";
 
 const routes = [
@@ -52,8 +53,9 @@ const routes = [
         { path:"users", element:<UsersPage/> },
         { path:"driver-onboarding", element:<DriverOnboardingPage/> },
         { path:"driver-onboarding/:driverId", element:<DriverDetailPage/> },
-        { path:"ncr-drivers", element:<NcrDriversPage/> },
-        { path:"live-map",    element:<LiveMapPage/> },
+        { path:"ncr-drivers",     element:<NcrDriversPage/> },
+        { path:"ncr-passengers",  element:<NcrPassengersPage/> },
+        { path:"live-map",        element:<LiveMapPage/> },
         { path:"passenger-onboarding", element:<PassengerOnboardingPage/> },
         { path:"ride-monitoring", element:<RideMonitoringPage/> },
         { path:"finance", element:<FinancePage/> },
