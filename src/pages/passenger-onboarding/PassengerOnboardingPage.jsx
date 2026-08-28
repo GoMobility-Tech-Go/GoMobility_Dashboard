@@ -283,7 +283,7 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
     try {
       if (ncrMode) {
         const res = await getNcrPassengerStats();
-        const d = res.data?.data ?? {};
+        const d = res.data?.data ?? res.data ?? {};
         setStats({
           signups:  d.total  ?? 0,
           active:   d.active ?? 0,
