@@ -5,7 +5,7 @@ import {
   Shield, RefreshCw, Calendar, Activity, Eye, EyeOff,
   Filter as FilterIcon, MapPin, Download,
 } from 'lucide-react';
-import { getUsers, getUserById, updateUserStatus, getPassengerStats } from '../../api/admin';
+import { getUsers, getUserById, updateUserStatus, getPassengerStats, getNcrPassengerStats } from '../../api/admin';
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
 } from '../../components/filters/index.jsx';
@@ -251,7 +251,7 @@ const pagBtn = (disabled) => ({
 // ─── Main component ───────────────────────────────────────────────────────────
 const LIMIT = 10;
 
-export default function PassengerOnboardingPage() {
+export default function PassengerOnboardingPage({ ncrMode = false }) {
 
   // ── Period state (controls BOTH cards AND table) ──────────────────────
   const [period, setPeriod]       = useState('all');
@@ -281,23 +281,34 @@ export default function PassengerOnboardingPage() {
     setStatsLoading(true);
     setStatsError(null);
     try {
-      const res = await getPassengerStats(
-        periodDates.from || undefined,
-        periodDates.to   || undefined,
-      );
-      const d = res.data?.data ?? {};
-      setStats({
-        signups:  d.signups_in_period  ?? 0,
-        active:   d.active_in_period   ?? 0,
-        inactive: d.inactive_in_period ?? 0,
-        allTime:  d.total_all_time     ?? 0,
-      });
+      if (ncrMode) {
+        const res = await getNcrPassengerStats();
+        const d = res.data?.data ?? {};
+        setStats({
+          signups:  d.total  ?? 0,
+          active:   d.active ?? 0,
+          inactive: (d.total ?? 0) - (d.active ?? 0),
+          allTime:  d.total  ?? 0,
+        });
+      } else {
+        const res = await getPassengerStats(
+          periodDates.from || undefined,
+          periodDates.to   || undefined,
+        );
+        const d = res.data?.data ?? {};
+        setStats({
+          signups:  d.signups_in_period  ?? 0,
+          active:   d.active_in_period   ?? 0,
+          inactive: d.inactive_in_period ?? 0,
+          allTime:  d.total_all_time     ?? 0,
+        });
+      }
     } catch (e) {
       console.error('[PassengerStats]', e);
       setStatsError(e?.response?.status === 404 ? 'Stats endpoint not found (404) — backend may need restart' : `Failed to load stats: ${e?.response?.status || 'Network error'}`);
     }
     setStatsLoading(false);
-  }, [periodDates]);
+  }, [ncrMode, periodDates]);
 
   useEffect(() => { loadStats(); }, [loadStats]);
 
@@ -340,6 +351,8 @@ export default function PassengerOnboardingPage() {
       // Period dates applied to table via joined range (only if user hasn't set their own joined filter)
       if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
+      // NCR mode — filter to passengers who have a completed ride in an NCR city
+      if (ncrMode) params.ncr_passenger = 'true';
       // Extra filters
       if (cityFilter.trim())              params.city           = cityFilter.trim();
       if (isSubscribed !== '')            params.is_subscribed  = isSubscribed;
@@ -364,6 +377,7 @@ export default function PassengerOnboardingPage() {
       if (includeUnverified) params.include_unverified = 'true';
       if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
+      if (ncrMode) params.ncr_passenger = 'true';
       if (cityFilter.trim())              params.city           = cityFilter.trim();
       if (isSubscribed !== '')            params.is_subscribed  = isSubscribed;
       if (ridesMin !== '')                params.rides_min      = ridesMin;
@@ -392,7 +406,7 @@ export default function PassengerOnboardingPage() {
         "Registered On":    xlsDate(u.created_at),
       }));
 
-      exportToExcel(data, `go-mobility-passengers-${today}`, "Passengers");
+      exportToExcel(data, `go-mobility-${ncrMode ? 'ncr-' : ''}passengers-${today}`, ncrMode ? 'NCR Passengers' : 'Passengers');
     } catch (e) { console.error('[Export] Failed:', e); }
     finally { setExporting(false); }
   };
@@ -446,8 +460,14 @@ export default function PassengerOnboardingPage() {
           <Users size={20} color={GOLD} />
         </div>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontFamily: FONT_SER, fontWeight: 700, color: TEXT_BRI, letterSpacing: '0.5px' }}>Passenger Onboarding</h1>
-          <p style={{ margin: 0, fontSize: 12.5, color: TEXT_DIM, marginTop: 2 }}>Monitor passenger signups, activity, and engagement</p>
+          <h1 style={{ margin: 0, fontSize: 22, fontFamily: FONT_SER, fontWeight: 700, color: TEXT_BRI, letterSpacing: '0.5px' }}>
+            {ncrMode ? 'Delhi NCR Passengers' : 'Passenger Onboarding'}
+          </h1>
+          <p style={{ margin: 0, fontSize: 12.5, color: TEXT_DIM, marginTop: 2 }}>
+            {ncrMode
+              ? 'Passengers with rides in Delhi · Noida · Gurgaon · Ghaziabad · Faridabad · Greater Noida'
+              : 'Monitor passenger signups, activity, and engagement'}
+          </p>
         </div>
       </div>
 
@@ -587,40 +607,22 @@ export default function PassengerOnboardingPage() {
         </div>
       )}
 
-      {/* ── 4 Stat cards — ALL respond to period filter ─────────────────── */}
+      {/* ── Stat cards ─────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
-        <StatCard
-          icon={UserPlus}
-          label={`Signups — ${periodLabel}`}
-          value={stats.signups}
-          color={GOLD}
-          loading={statsLoading}
-          sub="Total joined in selected period"
-        />
-        <StatCard
-          icon={UserCheck}
-          label={`Active — ${periodLabel}`}
-          value={stats.active}
-          color="#22c55e"
-          loading={statsLoading}
-          sub="Joined in period & active"
-        />
-        <StatCard
-          icon={UserX}
-          label={`Inactive — ${periodLabel}`}
-          value={stats.inactive}
-          color="#ef4444"
-          loading={statsLoading}
-          sub="Joined in period & inactive"
-        />
-        <StatCard
-          icon={Users}
-          label="Total All-Time"
-          value={stats.allTime}
-          color="#6366f1"
-          loading={statsLoading}
-          sub="All passengers ever"
-        />
+        {ncrMode ? (
+          <>
+            <StatCard icon={Users}     label="Total NCR Passengers" value={stats.signups}  color={GOLD}      loading={statsLoading} sub="Unique passengers with NCR rides" />
+            <StatCard icon={UserCheck} label="Active"               value={stats.active}   color="#22c55e"   loading={statsLoading} sub="Active NCR passengers" />
+            <StatCard icon={UserX}     label="Inactive"             value={stats.inactive} color="#ef4444"   loading={statsLoading} sub="Inactive NCR passengers" />
+          </>
+        ) : (
+          <>
+            <StatCard icon={UserPlus}  label={`Signups — ${periodLabel}`}   value={stats.signups}  color={GOLD}      loading={statsLoading} sub="Total joined in selected period" />
+            <StatCard icon={UserCheck} label={`Active — ${periodLabel}`}    value={stats.active}   color="#22c55e"   loading={statsLoading} sub="Joined in period & active" />
+            <StatCard icon={UserX}     label={`Inactive — ${periodLabel}`}  value={stats.inactive} color="#ef4444"   loading={statsLoading} sub="Joined in period & inactive" />
+            <StatCard icon={Users}     label="Total All-Time"               value={stats.allTime}  color="#6366f1"   loading={statsLoading} sub="All passengers ever" />
+          </>
+        )}
       </div>
 
       {/* ── Passenger table ─────────────────────────────────────────────── */}
