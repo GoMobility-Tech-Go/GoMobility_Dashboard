@@ -611,7 +611,7 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
         {ncrMode ? (
           <>
-            <StatCard icon={Users}     label="Total NCR Passengers" value={stats.signups}  color={GOLD}      loading={statsLoading} sub="Unique passengers with NCR rides" />
+            <StatCard icon={Users}     label="Total NCR Passengers" value={stats.signups}  color={GOLD}      loading={statsLoading} sub="Registered in Delhi, Noida, Gurgaon & more" />
             <StatCard icon={UserCheck} label="Active"               value={stats.active}   color="#22c55e"   loading={statsLoading} sub="Active NCR passengers" />
             <StatCard icon={UserX}     label="Inactive"             value={stats.inactive} color="#ef4444"   loading={statsLoading} sub="Inactive NCR passengers" />
           </>

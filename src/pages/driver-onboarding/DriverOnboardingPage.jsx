@@ -1274,7 +1274,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
             {ncrMode && <span style={{ marginLeft:10, fontSize:13, fontWeight:600, color:"#D4AF37", fontFamily:"Outfit,sans-serif", background:"rgba(212,175,55,0.12)", border:"1px solid rgba(212,175,55,0.3)", borderRadius:8, padding:"2px 10px", verticalAlign:"middle" }}>NCR</span>}
           </h1>
           <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>
-            {ncrMode ? `Delhi · Noida · Gurgaon · Ghaziabad · Faridabad · Total: ${total} drivers` : `Total: ${total} drivers · Manage onboarding, KYC verification and fraud alerts`}
+            {ncrMode ? `Delhi · New Delhi · Noida · Greater Noida · Gurgaon · Gurugram · Ghaziabad · Faridabad · Total: ${total} drivers` : `Total: ${total} drivers · Manage onboarding, KYC verification and fraud alerts`}
           </p>
         </div>
         {ncrMode && (
@@ -1415,7 +1415,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                   <MapPin size={14} color={GOLD}/>
                 </div>
                 <span style={{ fontFamily:'Cinzel,serif', fontSize:13, fontWeight:700, color:GOLD, letterSpacing:'0.5px' }}>NCR Drivers</span>
-                <span style={{ fontSize:11, color:TEXT_MED }}>Delhi · Noida · Gurgaon · Ghaziabad · Faridabad</span>
+                <span style={{ fontSize:11, color:TEXT_MED }}>Delhi · New Delhi · Noida · Greater Noida · Gurgaon · Gurugram · Ghaziabad · Faridabad</span>
               </div>
               {/* Toggle: Registered / Last Seen */}
               {ncrMode && ncrStats?.lastSeenTotal > 0 && (
