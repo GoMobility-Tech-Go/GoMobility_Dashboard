@@ -5,7 +5,7 @@ import {
   Shield, RefreshCw, Calendar, Activity, Eye, EyeOff,
   Filter as FilterIcon, MapPin, Download,
 } from 'lucide-react';
-import { getUsers, getUserById, updateUserStatus, getPassengerStats, getNcrPassengerStats } from '../../api/admin';
+import { getUsers, getUserById, updateUserStatus, getPassengerStats, getNcrPassengerStats, getPassengerKycDetail } from '../../api/admin';
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
 } from '../../components/filters/index.jsx';
@@ -120,9 +120,61 @@ function StatusBadge({ active }) {
 }
 
 // ─── Passenger detail panel ───────────────────────────────────────────────────
-function PassengerDetailPanel({ passenger, detail, loading, onClose, onToggleStatus }) {
+// ─── KYC status helpers ───────────────────────────────────────────────────────
+const KYC_COLORS = { verified: '#4ade80', in_progress: '#facc15', not_started: '#94a3b8', rejected: '#f87171', suspended: '#f97316' };
+const KYC_LABELS = { verified: 'Verified', in_progress: 'In Progress', not_started: 'Not Started', rejected: 'Rejected', suspended: 'Suspended' };
+
+function KycBadge({ status }) {
+  const color = KYC_COLORS[status] || '#94a3b8';
+  const label = KYC_LABELS[status] || status || 'Unknown';
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600, background:`${color}18`, color, border:`1px solid ${color}30` }}>
+      <span style={{ width:5, height:5, borderRadius:'50%', background:color }} />{label}
+    </span>
+  );
+}
+
+function KycDocCard({ doc }) {
+  if (!doc) return <div style={{ fontSize:12, color:'rgba(255,255,255,0.3)', padding:'8px 0' }}>Not submitted</div>;
+  const ed = doc.extracted_data || {};
+  const isAadhaar = doc.document_type === 'AADHAAR';
+  const isFailed  = doc.status === 'failed';
+  const statusColor = doc.status === 'verified' ? '#4ade80' : doc.status === 'failed' ? '#f87171' : '#facc15';
+  return (
+    <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, border:'1px solid rgba(255,255,255,0.07)', padding:'12px 14px', marginBottom:8 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <span style={{ fontSize:11.5, fontWeight:700, color:'rgba(255,255,255,0.7)' }}>{isAadhaar ? 'Aadhaar Card' : 'Selfie'}</span>
+        <span style={{ fontSize:11, fontWeight:600, color:statusColor, background:`${statusColor}18`, border:`1px solid ${statusColor}30`, borderRadius:12, padding:'2px 8px' }}>{doc.status}</span>
+      </div>
+      {isAadhaar && ed.name     && <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>Name: <span style={{ color:'rgba(255,255,255,0.88)', fontWeight:500 }}>{ed.name}</span></div>}
+      {isAadhaar && ed.masked   && <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>Aadhaar: <span style={{ color:'rgba(255,255,255,0.88)', fontWeight:500, letterSpacing:'1px' }}>{ed.masked}</span></div>}
+      {isAadhaar && ed.dob      && <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>DOB: <span style={{ color:'rgba(255,255,255,0.88)', fontWeight:500 }}>{ed.dob}</span></div>}
+      {isAadhaar && ed.gender   && <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>Gender: <span style={{ color:'rgba(255,255,255,0.88)', fontWeight:500 }}>{ed.gender}</span></div>}
+      {isAadhaar && ed.address?.state && <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>State: <span style={{ color:'rgba(255,255,255,0.88)', fontWeight:500 }}>{ed.address.state}</span></div>}
+      {!isAadhaar && ed.face_match_score != null && (
+        <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>
+          Face Match: <span style={{ color: ed.matched ? '#4ade80' : '#f87171', fontWeight:700 }}>{ed.face_match_score}%</span>
+          <span style={{ color:'rgba(255,255,255,0.35)', marginLeft:6 }}>threshold {ed.threshold}%</span>
+        </div>
+      )}
+      {doc.attempt_count > 1 && <div style={{ fontSize:10.5, color:'rgba(255,255,255,0.35)', marginTop:4 }}>Attempts: {doc.attempt_count}</div>}
+      {isFailed && doc.rejection_reason && <div style={{ fontSize:10.5, color:'#f87171', marginTop:4, borderTop:'1px solid rgba(248,113,113,0.15)', paddingTop:6 }}>❌ {doc.rejection_reason}</div>}
+      {doc.flags?.length > 0 && (
+        <div style={{ marginTop:6, display:'flex', flexWrap:'wrap', gap:4 }}>
+          {doc.flags.map(f => <span key={f} style={{ fontSize:10, padding:'2px 7px', borderRadius:10, background:'rgba(251,191,36,0.12)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.2)' }}>{f.replace(/_/g,' ')}</span>)}
+        </div>
+      )}
+      {doc.confidence_score != null && <div style={{ fontSize:10, color:'rgba(255,255,255,0.25)', marginTop:6 }}>OCR Confidence: {doc.confidence_score}%</div>}
+    </div>
+  );
+}
+
+function PassengerDetailPanel({ passenger, detail, kycDetail, loading, onClose, onToggleStatus }) {
   if (!passenger) return null;
   const user = detail || passenger;
+  const aadhaarDoc = kycDetail?.documents?.find(d => d.document_type === 'AADHAAR') ?? null;
+  const selfieDoc  = kycDetail?.documents?.find(d => d.document_type === 'SELFIE')  ?? null;
+  const kycStatus  = kycDetail?.passenger?.status || null;
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(1,9,23,0.80)', backdropFilter: 'blur(6px)' }} />
@@ -175,6 +227,18 @@ function PassengerDetailPanel({ passenger, detail, loading, onClose, onToggleSta
                   )}
                 </DpSection>
               )}
+              {/* KYC Section */}
+              <DpSection title={
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  KYC Verification
+                  {kycStatus && <KycBadge status={kycStatus} />}
+                  {!kycStatus && !kycDetail && <span style={{ fontSize:10, color:'rgba(255,255,255,0.3)' }}>No KYC record</span>}
+                </div>
+              }>
+                <KycDocCard doc={aadhaarDoc} />
+                <KycDocCard doc={selfieDoc} />
+              </DpSection>
+
               <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(212,175,55,0.1)' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: 'uppercase', letterSpacing: '1.4px', marginBottom: 10 }}>Quick Actions</div>
                 <button onClick={() => onToggleStatus(user.id, !user.is_active)} style={{
@@ -199,7 +263,7 @@ function PassengerDetailPanel({ passenger, detail, loading, onClose, onToggleSta
 function DpSection({ title, children }) {
   return (
     <div style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: 'uppercase', letterSpacing: '1.4px', marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: 'uppercase', letterSpacing: '1.4px', marginBottom: 8, display:'flex', alignItems:'center', gap:8 }}>{title}</div>
       {children}
     </div>
   );
@@ -425,12 +489,17 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
   const [selected,     setSelected]     = useState(null);
   const [detail,       setDetail]       = useState(null);
   const [detailLoading,setDetailLoading]= useState(false);
+  const [kycDetail,    setKycDetail]    = useState(null);
 
   const openDetail = async (p) => {
-    setSelected(p); setDetail(null); setDetailLoading(true);
+    setSelected(p); setDetail(null); setKycDetail(null); setDetailLoading(true);
     try {
-      const res = await getUserById(p.id);
-      setDetail(res.data?.data ?? null);
+      const [userRes, kycRes] = await Promise.allSettled([
+        getUserById(p.id),
+        getPassengerKycDetail(p.id),
+      ]);
+      if (userRes.status === 'fulfilled') setDetail(userRes.value.data?.data ?? null);
+      if (kycRes.status  === 'fulfilled') setKycDetail(kycRes.value.data?.data ?? null);
     } catch {}
     setDetailLoading(false);
   };
@@ -852,6 +921,7 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
       <PassengerDetailPanel
         passenger={selected}
         detail={detail}
+        kycDetail={kycDetail}
         loading={detailLoading}
         onClose={() => setSelected(null)}
         onToggleStatus={handleToggleStatus}

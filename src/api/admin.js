@@ -199,6 +199,9 @@ export const getNcrDriverStats = () => api.get('/admin/drivers/ncr-stats');
 // ── NCR Passenger Stats ───────────────────────────────────────────────────────
 export const getNcrPassengerStats = () => api.get('/admin/passengers/ncr-stats');
 
+// ── Passenger KYC Detail (admin) ──────────────────────────────────────────────
+export const getPassengerKycDetail = (userId) => api.get(`/kyc/passenger/admin/${userId}`);
+
 // ── Driver Profile Update (admin) ─────────────────────────────────────────────
 export const updateDriverProfile = (driverId, data) => {
   const form = new FormData();
