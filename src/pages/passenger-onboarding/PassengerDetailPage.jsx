@@ -33,6 +33,16 @@ const fmtDateOnly = (d) =>
 const fmtNum = (n) =>
   n != null ? new Intl.NumberFormat("en-IN").format(n) : "—";
 
+const fmtDob = (d) => {
+  if (!d) return null;
+  // handles YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY
+  const iso = /^\d{4}-\d{2}-\d{2}/.test(d)
+    ? d
+    : d.replace(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/, "$3-$2-$1");
+  const dt = new Date(iso);
+  return isNaN(dt) ? d : dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+};
+
 // ── Toast ─────────────────────────────────────────────────────────────────────
 const Toast = ({ msg, type, onClose }) => (
   <div style={{
@@ -155,14 +165,21 @@ function AadhaarCard({ doc, onImgClick }) {
   })();
 
   const fields = [
-    ["Name",       ed.name],
-    ["Aadhaar",    ed.masked],
-    ["DOB",        ed.dob],
-    ["Gender",     ed.gender],
-    ["Father",     ed.father || ed.father_name],
-    ["State",      ed.address?.state || ed.state],
-    ["District",   ed.address?.district || ed.district],
-    ["Address",    ed.address?.full || ed.address_line],
+    ["Name",         ed.name],
+    ["Aadhaar",      ed.masked],
+    ["DOB",          fmtDob(ed.dob)],
+    ["Gender",       ed.gender],
+    ["Father / CO",  ed.father || ed.father_name || ed.care_of],
+    ["House / Door", ed.address?.house || ed.house],
+    ["Street",       ed.address?.street || ed.street],
+    ["Village",      ed.address?.village || ed.village],
+    ["Landmark",     ed.address?.landmark || ed.landmark],
+    ["Sub-District", ed.address?.sub_district || ed.sub_district],
+    ["Post Office",  ed.address?.post_office || ed.post_office],
+    ["District",     ed.address?.district || ed.district],
+    ["State",        ed.address?.state || ed.state],
+    ["PIN Code",     ed.address?.pin_code || ed.pin_code || ed.pincode],
+    ["Full Address", ed.address?.full || ed.address_line],
   ].filter(([, v]) => v);
 
   return (
@@ -259,7 +276,7 @@ function SelfieCard({ doc, onImgClick }) {
 
   const score     = ed.face_match_score ?? ed.similarity ?? null;
   const threshold = ed.threshold ?? 60;
-  const matched   = ed.matched ?? (score != null ? score >= threshold : null);
+  const matched   = score != null && score > 0 ? score >= threshold : (ed.matched ?? null);
 
   return (
     <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, overflow: "hidden" }}>
