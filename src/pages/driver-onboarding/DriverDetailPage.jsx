@@ -35,6 +35,18 @@ const fmtDate = (d) =>
 const fmtNum = (n) =>
   n != null ? new Intl.NumberFormat("en-IN").format(n) : "—";
 
+const fmtDateOnly = (d) => {
+  if (!d) return null;
+  try { return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); }
+  catch { return String(d); }
+};
+const isDateExpired    = (d) => d ? new Date(d) < new Date() : false;
+const isDateExpiringSoon = (d) => {
+  if (!d) return false;
+  const ms = new Date(d) - new Date();
+  return ms > 0 && ms < 30 * 24 * 60 * 60 * 1000;
+};
+
 // ── Toast ─────────────────────────────────────────────────────────────────────
 const Toast = ({ msg, type, onClose }) => (
   <div style={{
@@ -453,6 +465,32 @@ const SectionHead = ({ icon, title, badge }) => (
   </div>
 );
 
+// ── Vehicle sub-section divider ───────────────────────────────────────────────
+const VehicleSubHead = ({ title }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 12px" }}>
+    <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "1.2px", whiteSpace: "nowrap" }}>{title}</span>
+    <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+  </div>
+);
+
+// ── Vehicle field card ────────────────────────────────────────────────────────
+const VehicleFieldCard = ({ label, value, alert }) => {
+  const isError = alert === "error";
+  const isWarn  = alert === "warn";
+  return (
+    <div style={{
+      padding: "12px 16px",
+      background: isError ? "rgba(239,68,68,0.06)" : isWarn ? "rgba(245,158,11,0.05)" : "rgba(255,255,255,0.025)",
+      border: `1px solid ${isError ? "rgba(239,68,68,0.2)" : isWarn ? "rgba(245,158,11,0.2)" : "rgba(255,255,255,0.06)"}`,
+      borderRadius: 10,
+    }}>
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 14, color: isError ? "#f87171" : isWarn ? "#fbbf24" : "#fff", fontWeight: 600 }}>{value}</div>
+    </div>
+  );
+};
+
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 export default function DriverDetailPage() {
   const { driverId } = useParams();
@@ -538,13 +576,13 @@ export default function DriverDetailPage() {
   const isVerified = !!(p?.is_verified || p?.isVerified || p?.verified_at || p?.verifiedAt);
 
   const vehicleInfo = (() => {
-    // Profile (driver_vehicle table) se pehle check karo — most reliable source
+    // Profile fields (backend now returns driver_vehicle joined fields)
     const profileNumber = p?.vehicle_number || p?.vehicleNumber || p?.rc_number || p?.rcNumber;
     const profileType   = p?.vehicle_type   || p?.vehicleType;
-    const profileModel  = p?.vehicle_model  || p?.vehicleModel;
+    const profileModel  = p?.vehicle_model  || p?.vehicle_model_from_rc || p?.vehicleModel;
     const profileColor  = p?.vehicle_color  || p?.vehicleColor;
 
-    // RC KYC doc extracted_data
+    // RC KYC doc extracted_data (fallback / supplemental source)
     const rcDoc = docs.find(d => d.document_type === "VEHICLE_RC");
     let ext = {};
     if (rcDoc) {
@@ -557,18 +595,40 @@ export default function DriverDetailPage() {
     const isExpired   = regValidity ? new Date(regValidity) < new Date() : null;
 
     return {
-      number:           profileNumber || kycNumber || null,
-      type:             profileType   || ext.vehicle_type  || ext.vehicle_class || ext.body_type || null,
-      model:            profileModel  || ext.vehicle_model || ext.model || null,
-      color:            profileColor  || ext.vehicle_color || ext.color || null,
-      plateColor:       ext.plate_color || null,
-      isCommercial:     ext.is_commercial_vehicle ?? null,
-      ownerName:        ext.owner || ext.owner_name || null,
+      // ── Basic identity ──────────────────────────────────────────────────
+      number:        profileNumber || kycNumber || null,
+      type:          profileType   || ext.vehicle_type  || ext.vehicle_class || null,
+      model:         profileModel  || ext.vehicle_model || ext.model || null,
+      color:         profileColor  || ext.vehicle_color || ext.color || null,
+      plateColor:    ext.plate_color || null,
+      ownerName:     p?.vehicle_owner_name || ext.owner || ext.owner_name || null,
       regValidity,
       isExpired,
-      vahanVerified:    ext.vahan_verified ?? null,
-      categories:       rcDoc?.vehicle_categories || null,
-      rcStatus:         rcDoc?.status || null,
+      categories:    rcDoc?.vehicle_categories || null,
+      rcStatus:      rcDoc?.status || null,
+      // ── VAHAN classification ────────────────────────────────────────────
+      vehicleClass:  p?.vehicle_class  || ext.vehicle_class  || null,
+      bodyType:      p?.body_type      || ext.body_type      || null,
+      fuelType:      p?.fuel_type      || ext.fuel_type      || null,
+      seatCapacity:  p?.seat_capacity  || ext.seat_capacity  || null,
+      manufacturer:  p?.manufacturer   || ext.manufacturer   || null,
+      mfgYear:       p?.manufacturing_month_year || ext.manufacturing_month_year || null,
+      // ── RC status / compliance ──────────────────────────────────────────
+      rcStatusVahan: p?.vehicle_rc_status || ext.rc_status   || null,
+      isCommercial:  p?.is_commercial  ?? ext.is_commercial_vehicle ?? null,
+      blacklisted:   p?.blacklist_status || ext.blacklist_status || null,
+      vahanVerified: p?.vahan_verified  ?? ext.vahan_verified ?? null,
+      // ── Insurance ───────────────────────────────────────────────────────
+      insuranceProvider:  p?.insurance_provider  || null,
+      insuranceValidUntil: p?.insurance_valid_until || null,
+      policyNumber:       p?.policy_number        || null,
+      // ── Permits / certificates ──────────────────────────────────────────
+      puccValidUntil:     p?.pucc_valid_until     || null,
+      fitnessValidUntil:  p?.fitness_valid_until  || null,
+      nationalPermitValidUntil: p?.national_permit_valid_until || null,
+      nationalPermitNumber: p?.national_permit_number || null,
+      // ── Loan ────────────────────────────────────────────────────────────
+      financer:      p?.financer || null,
     };
   })();
 
@@ -801,24 +861,45 @@ export default function DriverDetailPage() {
             {/* ── VEHICLE INFO ── */}
             <div style={cardStyle}>
               <SectionHead icon={<Car size={15} />} title="Vehicle Details" />
-              {vehicleInfo.number || vehicleInfo.model ? (
+              {vehicleInfo.number || vehicleInfo.model || vehicleInfo.fuelType ? (
                 <>
-                  {/* Plate + commercial badges */}
+                  {/* ── Badges row ── */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-                    {vehicleInfo.plateColor && (
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", gap: 5,
-                        padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
-                        background: vehicleInfo.plateColor.toUpperCase() === "YELLOW" ? "rgba(234,179,8,0.15)" : "rgba(148,163,184,0.12)",
-                        color:      vehicleInfo.plateColor.toUpperCase() === "YELLOW" ? "#facc15" : "#94a3b8",
-                        border:     `1px solid ${vehicleInfo.plateColor.toUpperCase() === "YELLOW" ? "rgba(234,179,8,0.4)" : "rgba(148,163,184,0.25)"}`,
-                      }}>
-                        {vehicleInfo.plateColor.toUpperCase() === "YELLOW" ? "🟡" : "⬜"} {vehicleInfo.plateColor.toUpperCase()} PLATE
-                      </span>
-                    )}
+                    {vehicleInfo.plateColor && (() => {
+                      const pc = vehicleInfo.plateColor.toUpperCase();
+                      return (
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                          background: pc === "YELLOW" ? "rgba(234,179,8,0.15)" : "rgba(148,163,184,0.12)",
+                          color:      pc === "YELLOW" ? "#facc15" : "#94a3b8",
+                          border:     `1px solid ${pc === "YELLOW" ? "rgba(234,179,8,0.4)" : "rgba(148,163,184,0.25)"}`,
+                        }}>
+                          {pc === "YELLOW" ? "🟡" : "⬜"} {pc} PLATE
+                        </span>
+                      );
+                    })()}
                     {vehicleInfo.isCommercial === true && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "rgba(251,146,60,0.12)", color: "#fb923c", border: "1px solid rgba(251,146,60,0.3)" }}>
                         Commercial Vehicle
+                      </span>
+                    )}
+                    {vehicleInfo.rcStatusVahan && (() => {
+                      const st = vehicleInfo.rcStatusVahan.toUpperCase();
+                      const cfg = st === "ACTIVE"
+                        ? { bg: "rgba(34,197,94,0.1)",   color: "#4ade80", border: "rgba(34,197,94,0.25)",   icon: <CheckCircle size={11} /> }
+                        : st === "BLACKLISTED"
+                        ? { bg: "rgba(239,68,68,0.15)",  color: "#f87171", border: "rgba(239,68,68,0.4)",    icon: <AlertTriangle size={11} /> }
+                        : { bg: "rgba(245,158,11,0.12)", color: "#fbbf24", border: "rgba(245,158,11,0.35)",  icon: <AlertTriangle size={11} /> };
+                      return (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                          {cfg.icon} RC {st}
+                        </span>
+                      );
+                    })()}
+                    {vehicleInfo.blacklisted && vehicleInfo.rcStatusVahan?.toUpperCase() !== "BLACKLISTED" && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: "rgba(239,68,68,0.15)", color: "#f87171", border: "1px solid rgba(239,68,68,0.4)" }}>
+                        <AlertTriangle size={11} /> Blacklisted
                       </span>
                     )}
                     {vehicleInfo.vahanVerified === false && (
@@ -831,40 +912,99 @@ export default function DriverDetailPage() {
                         <CheckCircle size={11} /> VAHAN Verified
                       </span>
                     )}
-                    {vehicleInfo.rcStatus && (
-                      <DocStatusBadge status={vehicleInfo.rcStatus} />
+                    {vehicleInfo.rcStatus && <DocStatusBadge status={vehicleInfo.rcStatus} />}
+                  </div>
+
+                  {/* ── Compliance alert banners ── */}
+                  {[
+                    vehicleInfo.rcStatusVahan?.toUpperCase() === "BLACKLISTED" && {
+                      msg: "Vehicle is BLACKLISTED — Cannot serve rides", sev: "error",
+                    },
+                    vehicleInfo.rcStatusVahan?.toUpperCase() === "SUSPENDED" && {
+                      msg: "Vehicle RC is SUSPENDED — Rides may be disabled", sev: "warn",
+                    },
+                    vehicleInfo.isExpired && {
+                      msg: `Registration EXPIRED — Valid till ${vehicleInfo.regValidity}`, sev: "error",
+                    },
+                    isDateExpired(vehicleInfo.insuranceValidUntil) && {
+                      msg: `Insurance EXPIRED — Valid till ${fmtDateOnly(vehicleInfo.insuranceValidUntil)}`, sev: "error",
+                    },
+                    isDateExpiringSoon(vehicleInfo.insuranceValidUntil) && {
+                      msg: `Insurance expiring soon — Valid till ${fmtDateOnly(vehicleInfo.insuranceValidUntil)}`, sev: "warn",
+                    },
+                    isDateExpired(vehicleInfo.puccValidUntil) && {
+                      msg: `Pollution Certificate (PUCC) EXPIRED — Valid till ${fmtDateOnly(vehicleInfo.puccValidUntil)}`, sev: "warn",
+                    },
+                    isDateExpired(vehicleInfo.fitnessValidUntil) && {
+                      msg: `Fitness Certificate EXPIRED — Valid till ${fmtDateOnly(vehicleInfo.fitnessValidUntil)}`, sev: "warn",
+                    },
+                  ].filter(Boolean).map((alert, i) => (
+                    <div key={i} style={{
+                      marginBottom: 10, padding: "10px 14px",
+                      background: alert.sev === "error" ? "rgba(239,68,68,0.08)" : "rgba(245,158,11,0.07)",
+                      border: `1px solid ${alert.sev === "error" ? "rgba(239,68,68,0.25)" : "rgba(245,158,11,0.25)"}`,
+                      borderRadius: 10, display: "flex", alignItems: "center", gap: 8,
+                    }}>
+                      <AlertTriangle size={14} color={alert.sev === "error" ? "#f87171" : "#fbbf24"} />
+                      <span style={{ fontSize: 13, color: alert.sev === "error" ? "#f87171" : "#fbbf24", fontWeight: 600 }}>{alert.msg}</span>
+                    </div>
+                  ))}
+
+                  {/* ── Basic vehicle info grid ── */}
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+                    {[
+                      ["Vehicle Type",  Array.isArray(vehicleInfo.type) ? vehicleInfo.type.join(", ") : vehicleInfo.type, null],
+                      ["Reg Number",   vehicleInfo.number,   null],
+                      ["Model",        vehicleInfo.model,    null],
+                      ["Color",        vehicleInfo.color,    null],
+                      ["RC Owner",     vehicleInfo.ownerName, null],
+                      ["RC Valid Till", vehicleInfo.regValidity,
+                        vehicleInfo.isExpired ? "error" : isDateExpiringSoon(vehicleInfo.regValidity) ? "warn" : null],
+                      ["Fuel Type",    vehicleInfo.fuelType, null],
+                      ["Body Type",    vehicleInfo.bodyType, null],
+                      ["Seat Capacity", vehicleInfo.seatCapacity ? `${vehicleInfo.seatCapacity} seats` : null, null],
+                      ["Mfg Year",     vehicleInfo.mfgYear,  null],
+                      ["Vehicle Class", vehicleInfo.vehicleClass, null],
+                      ["Manufacturer", vehicleInfo.manufacturer, null],
+                      ["Categories",   vehicleInfo.categories ? vehicleInfo.categories.join(", ") : null, null],
+                    ].map(([label, val, alert]) => val
+                      ? <VehicleFieldCard key={label} label={label} value={val} alert={alert} />
+                      : null
                     )}
                   </div>
 
-                  {/* Expired registration warning */}
-                  {vehicleInfo.isExpired && (
-                    <div style={{ marginBottom: 14, padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 10, display: "flex", alignItems: "center", gap: 8 }}>
-                      <AlertTriangle size={14} color="#f87171" />
-                      <span style={{ fontSize: 13, color: "#f87171", fontWeight: 600 }}>Registration EXPIRED — Valid till {vehicleInfo.regValidity}</span>
-                    </div>
+                  {/* ── Insurance & Permits ── */}
+                  {(vehicleInfo.insuranceProvider || vehicleInfo.insuranceValidUntil || vehicleInfo.policyNumber ||
+                    vehicleInfo.puccValidUntil || vehicleInfo.fitnessValidUntil || vehicleInfo.nationalPermitValidUntil) && (
+                    <>
+                      <VehicleSubHead title="Insurance & Permits" />
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+                        {[
+                          ["Insurance Provider", vehicleInfo.insuranceProvider, null],
+                          ["Policy Number",      vehicleInfo.policyNumber,      null],
+                          ["Insurance Valid Till", fmtDateOnly(vehicleInfo.insuranceValidUntil),
+                            isDateExpired(vehicleInfo.insuranceValidUntil) ? "error" : isDateExpiringSoon(vehicleInfo.insuranceValidUntil) ? "warn" : null],
+                          ["PUCC Valid Till", fmtDateOnly(vehicleInfo.puccValidUntil),
+                            isDateExpired(vehicleInfo.puccValidUntil) ? "error" : isDateExpiringSoon(vehicleInfo.puccValidUntil) ? "warn" : null],
+                          ["Fitness Valid Till", fmtDateOnly(vehicleInfo.fitnessValidUntil),
+                            isDateExpired(vehicleInfo.fitnessValidUntil) ? "error" : isDateExpiringSoon(vehicleInfo.fitnessValidUntil) ? "warn" : null],
+                          ["National Permit Till", fmtDateOnly(vehicleInfo.nationalPermitValidUntil),
+                            isDateExpired(vehicleInfo.nationalPermitValidUntil) ? "error" : isDateExpiringSoon(vehicleInfo.nationalPermitValidUntil) ? "warn" : null],
+                        ].map(([label, val, alert]) => val
+                          ? <VehicleFieldCard key={label} label={label} value={val} alert={alert} />
+                          : null
+                        )}
+                      </div>
+                    </>
                   )}
 
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-                    {[
-                      ["Vehicle Type",    Array.isArray(vehicleInfo.type) ? vehicleInfo.type.join(", ") : vehicleInfo.type],
-                      ["Reg Number",      vehicleInfo.number],
-                      ["Model",           vehicleInfo.model],
-                      ["Color",           vehicleInfo.color],
-                      ["RC Owner",        vehicleInfo.ownerName],
-                      ["Valid Till",      vehicleInfo.regValidity],
-                      ["Categories",      vehicleInfo.categories ? vehicleInfo.categories.join(", ") : null],
-                    ].map(([label, val]) => val ? (
-                      <div key={label} style={{
-                        padding: "12px 16px",
-                        background: label === "Valid Till" && vehicleInfo.isExpired ? "rgba(239,68,68,0.06)" : "rgba(255,255,255,0.025)",
-                        border: `1px solid ${label === "Valid Till" && vehicleInfo.isExpired ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.06)"}`,
-                        borderRadius: 10,
-                      }}>
-                        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 4 }}>{label}</div>
-                        <div style={{ fontSize: 14, color: label === "Valid Till" && vehicleInfo.isExpired ? "#f87171" : "#fff", fontWeight: 600 }}>{val}</div>
-                      </div>
-                    ) : null)}
-                  </div>
+                  {/* ── Loan / Hypothecation ── */}
+                  {vehicleInfo.financer && (
+                    <>
+                      <VehicleSubHead title="Loan / Hypothecation" />
+                      <VehicleFieldCard label="Financer" value={vehicleInfo.financer} alert={null} />
+                    </>
+                  )}
                 </>
               ) : (
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", padding: "12px 0" }}>
