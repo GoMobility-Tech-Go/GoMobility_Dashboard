@@ -9,6 +9,7 @@ import PricingEnginePage from "../pages/pricing-engine/PricingEnginePage";
 import DriverOnboardingPage from "../pages/driver-onboarding/DriverOnboardingPage";
 import DriverDetailPage from "../pages/driver-onboarding/DriverDetailPage";
 import PassengerOnboardingPage from "../pages/passenger-onboarding/PassengerOnboardingPage";
+import PassengerDetailPage from "../pages/passenger-onboarding/PassengerDetailPage";
 import RideMonitoringPage from "../pages/ride-monitoring/RideMonitoringPage";
 import ComplaintsSupportPage from "../pages/complaints-support/ComplaintsSupportPage";
 import DriverIncentivesPage from "../pages/driver-incentives/DriverIncentivesPage";
@@ -57,6 +58,7 @@ const routes = [
         { path:"ncr-passengers",  element:<NcrPassengersPage/> },
         { path:"live-map",        element:<LiveMapPage/> },
         { path:"passenger-onboarding", element:<PassengerOnboardingPage/> },
+        { path:"passenger-onboarding/:passengerId", element:<PassengerDetailPage/> },
         { path:"ride-monitoring", element:<RideMonitoringPage/> },
         { path:"finance", element:<FinancePage/> },
         { path:"invoices", element:<InvoicePage/> },

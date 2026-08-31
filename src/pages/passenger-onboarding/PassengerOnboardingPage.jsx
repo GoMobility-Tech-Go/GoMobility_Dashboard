@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users, UserCheck, UserX, UserPlus, X,
   ChevronLeft, ChevronRight, Phone, Mail, Clock,
@@ -316,6 +317,7 @@ const pagBtn = (disabled) => ({
 const LIMIT = 10;
 
 export default function PassengerOnboardingPage({ ncrMode = false }) {
+  const navigate = useNavigate();
 
   // ── Period state (controls BOTH cards AND table) ──────────────────────
   const [period, setPeriod]       = useState('all');
@@ -870,7 +872,7 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
                         {/* Actions */}
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => openDetail(p)} style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${GOLD20}`, background: GOLD10, color: GOLD, cursor: 'pointer', fontSize: 11.5, fontFamily: FONT_UI, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <button onClick={() => navigate(`/passenger-onboarding/${p.id}`)} style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${GOLD20}`, background: GOLD10, color: GOLD, cursor: 'pointer', fontSize: 11.5, fontFamily: FONT_UI, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
                               <Eye size={11} /> View
                             </button>
                             <button
