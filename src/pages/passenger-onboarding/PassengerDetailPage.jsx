@@ -164,22 +164,21 @@ function AadhaarCard({ doc, onImgClick }) {
     catch { return {}; }
   })();
 
+  const ocrBack = ed.cashfree_ocr_back || ed.cashfree_ocr_front || {};
+  const docFields = ocrBack.document_fields || {};
+  const fraudChecks = ocrBack.fraud_checks || {};
+  const fraudFlags = Object.entries(fraudChecks).filter(([, v]) => v === true).map(([k]) => k.replace(/_/g, " ").replace("is ", "").toUpperCase());
+
   const fields = [
-    ["Name",         ed.name],
-    ["Aadhaar",      ed.masked],
-    ["DOB",          fmtDob(ed.dob)],
-    ["Gender",       ed.gender],
-    ["Father / CO",  ed.father || ed.father_name || ed.care_of],
-    ["House / Door", ed.address?.house || ed.house],
-    ["Street",       ed.address?.street || ed.street],
-    ["Village",      ed.address?.village || ed.village],
-    ["Landmark",     ed.address?.landmark || ed.landmark],
-    ["Sub-District", ed.address?.sub_district || ed.sub_district],
-    ["Post Office",  ed.address?.post_office || ed.post_office],
-    ["District",     ed.address?.district || ed.district],
-    ["State",        ed.address?.state || ed.state],
-    ["PIN Code",     ed.address?.pin_code || ed.pin_code || ed.pincode],
-    ["Full Address", ed.address?.full || ed.address_line],
+    ["Name",        ed.name       || docFields.name],
+    ["Aadhaar",     ed.masked],
+    ["DOB",         fmtDob(ed.dob || docFields.dob)],
+    ["Gender",      ed.gender     || docFields.gender],
+    ["Father / CO", ed.father     || ed.father_name || ed.care_of || docFields.father || docFields.care_of],
+    ["Address",     ed.address?.line || ed.address?.full || docFields.address || ed.address_line],
+    ["District",    ed.address?.district || ed.district || docFields.district],
+    ["State",       ed.address?.state   || ed.state    || docFields.state],
+    ["PIN Code",    ed.address?.pinCode || ed.address?.pin_code || ed.pincode || docFields.pinCode],
   ].filter(([, v]) => v);
 
   return (
@@ -231,6 +230,21 @@ function AadhaarCard({ doc, onImgClick }) {
         </div>
       )}
 
+      {/* Fraud warnings from OCR */}
+      {fraudFlags.length > 0 && (
+        <div style={{ margin: "0 18px 14px", padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 9, display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <XCircle size={14} color="#f87171" style={{ marginTop: 1, flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700, marginBottom: 4 }}>OCR Fraud Alerts</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {fraudFlags.map(f => (
+                <span key={f} style={{ fontSize: 10, padding: "2px 8px", background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 20, color: "#fca5a5", fontWeight: 600 }}>{f}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Flags */}
       {doc.flags?.length > 0 && (
         <div style={{ padding: "0 18px 14px", display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -276,7 +290,7 @@ function SelfieCard({ doc, onImgClick }) {
 
   const score     = ed.face_match_score ?? ed.similarity ?? null;
   const threshold = ed.threshold ?? 60;
-  const matched   = score != null && score > 0 ? score >= threshold : (ed.matched ?? null);
+  const matched   = score != null ? score >= threshold : (ed.matched ?? null);
 
   return (
     <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, overflow: "hidden" }}>
