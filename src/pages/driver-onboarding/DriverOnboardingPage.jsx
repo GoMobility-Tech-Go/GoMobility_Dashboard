@@ -1450,19 +1450,21 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                 {/* Stat cards row */}
                 <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:14 }}>
                   {[
-                    { label:'Total NCR',   value: ncrStats.total,         color: GOLD,      bg:'rgba(212,175,55,0.1)',   border:'rgba(212,175,55,0.25)' },
-                    { label:'Active',      value: ncrStats.active,        color: '#22c55e', bg:'rgba(34,197,94,0.08)',   border:'rgba(34,197,94,0.2)' },
-                    { label:'Online Now',  value: ncrStats.online,        color: '#60a5fa', bg:'rgba(96,165,250,0.08)',  border:'rgba(96,165,250,0.2)' },
-                    { label:'Verified',    value: ncrStats.verified,      color: '#a78bfa', bg:'rgba(167,139,250,0.08)', border:'rgba(167,139,250,0.2)' },
-                    ...(ncrStats.lastSeenTotal > ncrStats.total ? [{ label:'Last Seen NCR', value: ncrStats.lastSeenTotal, color:'#fb923c', bg:'rgba(251,146,60,0.08)', border:'rgba(251,146,60,0.2)', isLastSeen:true }] : []),
-                  ].map(({ label, value, color, bg, border, isLastSeen }) => (
+                    { label:'Total NCR',  value: ncrStats.total,         color: GOLD,      bg:'rgba(212,175,55,0.1)',   border:'rgba(212,175,55,0.25)' },
+                    { label:'Active',     value: ncrStats.active,        color: '#22c55e', bg:'rgba(34,197,94,0.08)',   border:'rgba(34,197,94,0.2)' },
+                    { label:'Online Now', value: ncrStats.online,        color: '#60a5fa', bg:'rgba(96,165,250,0.08)',  border:'rgba(96,165,250,0.2)' },
+                    { label:'Verified',   value: ncrStats.verified,      color: '#a78bfa', bg:'rgba(167,139,250,0.08)', border:'rgba(167,139,250,0.2)' },
+                    ...(ncrStats.potentialCount > 0 ? [{ label:'Potential', value: ncrStats.potentialCount, prefix:'+', color:'#fb923c', bg:'rgba(251,146,60,0.08)', border:'rgba(251,146,60,0.2)', isLastSeen:true, tooltip:'Last login NCR tha, ab bahar hain — wapas bulao' }] : []),
+                    ...(ncrStats.driftingCount > 0  ? [{ label:'Drifting',  value: ncrStats.driftingCount,  prefix:'−', color:'#f87171', bg:'rgba(248,113,113,0.08)', border:'rgba(248,113,113,0.2)', tooltip:'NCR registered hain par last login NCR se nahi — move ho gaye' }] : []),
+                  ].map(({ label, value, color, bg, border, isLastSeen, prefix, tooltip }) => (
                     <div key={label}
                       onClick={isLastSeen && ncrMode ? () => { setNcrViewMode('last_seen'); setCityFilter('NCR_LAST_SEEN'); setOffset(0); } : undefined}
+                      title={tooltip}
                       style={{ display:'flex', flexDirection:'column', alignItems:'center', background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 20px', minWidth:90, flex:'1 1 auto', maxWidth:160, cursor: isLastSeen && ncrMode ? 'pointer' : 'default', transition:'transform .15s', position:'relative' }}
                       onMouseEnter={e => { if(isLastSeen && ncrMode) e.currentTarget.style.transform='translateY(-2px)'; }}
                       onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; }}
                     >
-                      <div style={{ fontSize:26, fontWeight:800, color, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{(value ?? 0).toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize:26, fontWeight:800, color, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{prefix || ''}{(value ?? 0).toLocaleString('en-IN')}</div>
                       <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', marginTop:5, textAlign:'center' }}>{label}</div>
                       {isLastSeen && ncrMode && (
                         <div style={{ fontSize:9, color:color, marginTop:3, opacity:0.7 }}>Click to view →</div>
@@ -1479,10 +1481,16 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                       <span style={{ background:'rgba(212,175,55,0.15)', color:GOLD, borderRadius:10, padding:'1px 7px', fontSize:11, fontWeight:700 }}>{row.total}</span>
                     </div>
                   ))}
-                  {ncrStats.lastSeenTotal > ncrStats.total && (
+                  {ncrStats.potentialCount > 0 && (
                     <div style={{ background:'rgba(251,146,60,0.06)', border:'1px solid rgba(251,146,60,0.18)', borderRadius:20, padding:'5px 14px', fontSize:12, display:'flex', alignItems:'center', gap:7 }}>
-                      <span style={{ color:'rgba(251,146,60,0.8)', fontWeight:600 }}>+{ncrStats.lastSeenTotal - ncrStats.total} potential</span>
+                      <span style={{ color:'rgba(251,146,60,0.8)', fontWeight:600 }}>+{ncrStats.potentialCount} potential</span>
                       <span style={{ color:'rgba(251,146,60,0.5)', fontSize:10 }}>last seen in NCR</span>
+                    </div>
+                  )}
+                  {ncrStats.driftingCount > 0 && (
+                    <div style={{ background:'rgba(248,113,113,0.06)', border:'1px solid rgba(248,113,113,0.18)', borderRadius:20, padding:'5px 14px', fontSize:12, display:'flex', alignItems:'center', gap:7 }}>
+                      <span style={{ color:'rgba(248,113,113,0.8)', fontWeight:600 }}>−{ncrStats.driftingCount} drifting</span>
+                      <span style={{ color:'rgba(248,113,113,0.5)', fontSize:10 }}>registered NCR, moved out</span>
                     </div>
                   )}
                 </div>
