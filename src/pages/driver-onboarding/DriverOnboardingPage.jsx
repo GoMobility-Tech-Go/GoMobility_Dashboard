@@ -1082,29 +1082,71 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       }
 
       const today = new Date().toISOString().slice(0, 10);
+      const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" }) : "";
       const rows  = all.map((dr) => {
         const uid = dr.user_id || dr.userId;
         const isInProg = (dr.onboarding_status || '') === 'in_progress';
+        const vt = Array.isArray(dr.vehicle_type) ? dr.vehicle_type.join(" / ") : (dr.vehicle_type || "");
+        const deviceInfo = (() => { try { return typeof dr.device_info === "string" ? JSON.parse(dr.device_info) : (dr.device_info || {}); } catch { return {}; } })();
         return {
-          "GO ID":              dr.go_id || "",
-          "Full Name":          dr.full_name || "",
-          "Phone":              dr.phone_number || "",
-          "Email":              dr.email || "",
-          "Vehicle Type":       (() => { const vt = Array.isArray(dr.vehicle_type) ? dr.vehicle_type.join(" / ") : (dr.vehicle_type || ""); return vt ? vt.charAt(0).toUpperCase() + vt.slice(1) : ""; })(),
-          "Vehicle Number":     dr.vehicle_number || "",
-          "Vehicle Model":      dr.vehicle_model_from_rc || "",
-          "Vehicle Color":      dr.vehicle_color || "",
-          "Last Login City":    dr.last_login_city_name || "",
-          "KYC Status":         dr.onboarding_status || dr.kyc_status || "",
-          "Pending Docs":       isInProg ? (kycMap[uid] || "") : "",
-          "Driver Verified":    dr.is_verified ? "Yes" : "No",
-          "Account Active":     dr.is_active ? "Yes" : "No",
-          "Currently Online":   dr.is_online ? "Yes" : "No",
-          "Avg Rating":         dr.avg_rating != null ? Number(Number(dr.avg_rating).toFixed(2)) : "",
-          "Total Rides":        dr.total_rides != null ? Number(dr.total_rides) : "",
-          "Total Earnings":     dr.total_earnings != null ? Number(dr.total_earnings) : "",
-          "Last Login":         xlsDate(dr.last_login),
-          "Joined On":          xlsDate(dr.created_at),
+          // ── Identity ───────────────────────────────────────────────
+          "GO ID":                    dr.go_id || "",
+          "Full Name":                dr.full_name || "",
+          "Phone":                    dr.phone_number || "",
+          "Email":                    dr.email || "",
+          "Test Account":             dr.is_test_user ? "Yes" : "No",
+
+          // ── Status ─────────────────────────────────────────────────
+          "Account Active":           dr.is_active  ? "Yes" : "No",
+          "Driver Verified":          dr.is_verified ? "Yes" : "No",
+          "Verified On":              fmtDate(dr.verified_at),
+          "Currently Online":         dr.is_available ? "Yes" : "No",
+          "KYC Status":               dr.onboarding_status || "",
+          "Pending Docs":             isInProg ? (kycMap[uid] || "") : "",
+          "Subscription":             dr.subscription_status || "",
+
+          // ── Location ───────────────────────────────────────────────
+          "Signup City":              dr.signup_city_name || "",
+          "Current City":             dr.current_city_name || "",
+          "Last Login City":          dr.last_login_city_name || "",
+
+          // ── Performance ────────────────────────────────────────────
+          "Total Rides":              dr.total_rides != null ? Number(dr.total_rides) : "",
+          "Avg Rating":               dr.avg_rating != null ? Number(Number(dr.avg_rating).toFixed(2)) : "",
+          "Total Earnings (₹)":       dr.total_earnings != null ? Number(dr.total_earnings) : "",
+          "Wallet Balance (₹)":       dr.wallet_balance != null ? Number(dr.wallet_balance) : "",
+
+          // ── Vehicle Basic ──────────────────────────────────────────
+          "Vehicle Type":             vt ? vt.charAt(0).toUpperCase() + vt.slice(1) : "",
+          "Vehicle Number":           dr.vehicle_number || "",
+          "Vehicle Model":            dr.vehicle_model_from_rc || "",
+          "Vehicle Color":            dr.vehicle_color || "",
+          "Fuel Type":                dr.fuel_type || "",
+          "Body Type":                dr.body_type || "",
+          "Seat Capacity":            dr.seat_capacity != null ? Number(dr.seat_capacity) : "",
+          "Manufacturer":             dr.manufacturer || "",
+          "Mfg Year":                 dr.manufacturing_month_year || "",
+
+          // ── Vehicle Compliance ─────────────────────────────────────
+          "RC Status (VAHAN)":        dr.vehicle_rc_status || "",
+          "Blacklist Status":         dr.blacklist_status || "",
+          "VAHAN Verified":           dr.vahan_verified ? "Yes" : "No",
+          "Insurance Provider":       dr.insurance_provider || "",
+          "Insurance Valid Till":     fmtDate(dr.insurance_valid_until),
+          "Policy Number":            dr.policy_number || "",
+          "PUCC Valid Till":          fmtDate(dr.pucc_valid_until),
+          "Fitness Valid Till":       fmtDate(dr.fitness_valid_until),
+          "National Permit Valid":    fmtDate(dr.national_permit_valid_until),
+          "Financer":                 dr.financer || "",
+
+          // ── Device ─────────────────────────────────────────────────
+          "Device OS":                deviceInfo.os || deviceInfo.platform || "",
+          "Device Model":             deviceInfo.model || deviceInfo.device || "",
+          "App Version":              deviceInfo.appVersion || deviceInfo.app_version || deviceInfo.version || "",
+
+          // ── Dates ──────────────────────────────────────────────────
+          "Joined On":                xlsDate(dr.created_at),
+          "Last Login":               xlsDate(dr.last_login),
         };
       });
 
