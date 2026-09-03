@@ -13,18 +13,23 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-const VEHICLE_COLORS = { auto: '#f59e0b', cab: '#3b82f6', premium: '#8b5cf6', bike: '#10b981' };
+// DB stores vehicle_type as 'car' (cab/sedan), 'premium', 'auto', 'bike'
+const VEHICLE_COLORS = { car: '#3b82f6', premium: '#8b5cf6', auto: '#f59e0b', bike: '#10b981' };
+const VEHICLE_LABELS = { car: 'Cab', premium: 'Premium', auto: 'Auto', bike: 'Bike' };
+
+const CAR_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-5h14v5z"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/></svg>`;
+
+const BIKE_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M9 17l3-7h4l2.5 7"/><path d="M12 10l-1.5-3"/><path d="M16 10l2-2.5 3.5 1"/></svg>`;
+
+const AUTO_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="8" width="13" height="7" rx="1"/><path d="M3 11h13"/><path d="M16 9h4l1 6h-5V9z"/><circle cx="8" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>`;
 
 const vehicleIcon = (type) => {
-  const color = VEHICLE_COLORS[type?.toLowerCase()] || '#6b7280';
+  const t = (type?.toLowerCase() === 'cab') ? 'car' : (type?.toLowerCase() || '');
+  const color = VEHICLE_COLORS[t] || '#6b7280';
+  const svg = t === 'bike' ? BIKE_SVG : t === 'auto' ? AUTO_SVG : CAR_SVG;
   return L.divIcon({
     className: '',
-    html: `<div style="background:${color};width:28px;height:28px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-        <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-5h14v5z"/>
-        <circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/>
-      </svg>
-    </div>`,
+    html: `<div style="background:${color};width:28px;height:28px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">${svg}</div>`,
     iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -16],
   });
 };
@@ -167,7 +172,7 @@ export default function LiveMapPage() {
         {Object.entries(VEHICLE_COLORS).map(([type, color]) => (
           <span key={type} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
             <span className="w-3 h-3 rounded-full" style={{ background: color }}/>
-            {type.charAt(0).toUpperCase()+type.slice(1)}
+            {VEHICLE_LABELS[type] || type.charAt(0).toUpperCase()+type.slice(1)}
           </span>
         ))}
         <span className="ml-auto text-xs text-gray-400">Auto-refreshes every 30s</span>
