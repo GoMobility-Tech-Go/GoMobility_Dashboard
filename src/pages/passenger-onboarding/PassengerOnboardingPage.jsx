@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, UserCheck, UserX, UserPlus, X,
@@ -376,7 +376,16 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
     setStatsLoading(false);
   }, [ncrMode, periodDates]);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
+  const statsIntervalRef = useRef(null);
+  useEffect(() => {
+    loadStats();
+    if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+    statsIntervalRef.current = setInterval(() => {
+      if (document.hidden) return;
+      loadStats();
+    }, 60_000);
+    return () => clearInterval(statsIntervalRef.current);
+  }, [loadStats]);
 
   // ── Table state ───────────────────────────────────────────────────────
   const [rows,         setRows]         = useState([]);

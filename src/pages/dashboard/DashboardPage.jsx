@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users, Car, MapPin, IndianRupee, TrendingUp, UserCheck, AlertCircle, Activity,
@@ -588,10 +588,8 @@ export default function DashboardPage() {
   }, [days, isSA]);
 
   // Load SA-only extra data
-  useEffect(() => {
+  const loadAlertData = useCallback(() => {
     if (!isSA) return;
-
-    // Fraud alerts
     setLoadingAlerts(true);
     getFraudAlerts({ limit: 5 })
       .then((res) => {
@@ -601,7 +599,6 @@ export default function DashboardPage() {
       .catch(() => setFraudAlerts([]))
       .finally(() => setLoadingAlerts(false));
 
-    // SOS alerts
     getSosHistory({ limit: 20 })
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -609,7 +606,6 @@ export default function DashboardPage() {
       })
       .catch(() => setSosAlerts([]));
 
-    // Ride breakdown — parallel calls using pagination total
     Promise.allSettled([
       getRides({ status: "completed", limit: 1 }),
       getRides({ status: "cancelled", limit: 1 }),
@@ -621,8 +617,18 @@ export default function DashboardPage() {
       };
       setRideBreakdown({ completed: getTotal(comp), cancelled: getTotal(canc), loading: false });
     });
-
   }, [isSA]);
+
+  const alertIntervalRef = useRef(null);
+  useEffect(() => {
+    loadAlertData();
+    if (alertIntervalRef.current) clearInterval(alertIntervalRef.current);
+    alertIntervalRef.current = setInterval(() => {
+      if (document.hidden) return;
+      loadAlertData();
+    }, 60_000);
+    return () => clearInterval(alertIntervalRef.current);
+  }, [loadAlertData]);
 
   return (
     <div style={{ fontFamily:"Outfit,sans-serif" }}>
@@ -661,7 +667,7 @@ export default function DashboardPage() {
               style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.85)", fontSize:12, padding:"5px 10px", outline:"none", colorScheme:"dark", fontFamily:"Outfit,sans-serif" }} />
           </div>
         )}
-        <button onClick={loadDashboardStats} title="Refresh stats" style={{ marginLeft:"auto", width:30, height:30, borderRadius:8, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.4)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>↻</button>
+        <button onClick={() => { loadDashboardStats(); loadAlertData(); }} title="Refresh all stats" style={{ marginLeft:"auto", width:30, height:30, borderRadius:8, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"rgba(255,255,255,0.4)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>↻</button>
       </div>
 
       {isSA

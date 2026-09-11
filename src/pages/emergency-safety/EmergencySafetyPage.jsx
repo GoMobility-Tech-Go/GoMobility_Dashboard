@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast, ToastProvider, PageWrapper, Card, TableCard, MiniStatRow, GlobalStyles, FormGroup, AlertBox, Modal } from "../../components/ui/index.jsx";
 import { getSosHistory, cancelSos } from "../../api/admin";
+
+const SOS_REFRESH_MS = 15_000;
 
 function normalizeSos(s) {
   return {
@@ -62,13 +64,16 @@ function SOSCard({ sos, onCancel, cancelling, onContact }) {
 
 function Content() {
   const toast = useToast();
-  const [sosList, setSosList]     = useState([]);
-  const [sosHistory, setSosHistory] = useState([]);
-  const [cancelling, setCancelling] = useState({});
-  const [tab, setTab]             = useState("sos");
+  const [sosList, setSosList]         = useState([]);
+  const [sosHistory, setSosHistory]   = useState([]);
+  const [cancelling, setCancelling]   = useState({});
+  const [tab, setTab]                 = useState("sos");
   const [reportModal, setReportModal] = useState(false);
+  const [refreshing, setRefreshing]   = useState(false);
+  const intervalRef                   = useRef(null);
 
-  useEffect(() => {
+  const loadSos = useCallback((showSpinner = false) => {
+    if (showSpinner) setRefreshing(true);
     getSosHistory()
       .then(res => {
         const raw = res?.data?.alerts || res?.alerts || res?.data || [];
@@ -76,8 +81,18 @@ function Content() {
         setSosList(all.filter(s => s.status === 'Active' || s.status === 'active'));
         setSosHistory(all.filter(s => s.status !== 'Active' && s.status !== 'active'));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (showSpinner) setRefreshing(false); });
   }, []);
+
+  useEffect(() => {
+    loadSos();
+    intervalRef.current = setInterval(() => {
+      if (document.hidden) return;
+      loadSos();
+    }, SOS_REFRESH_MS);
+    return () => clearInterval(intervalRef.current);
+  }, [loadSos]);
 
   const cancelSosAlert = async (sos) => {
     setCancelling(c => ({ ...c, [sos.id]: true }));
@@ -107,7 +122,13 @@ function Content() {
       title="Emergency & Safety Controls"
       subtitle="Live SOS dashboard, GPS tracking and emergency contact management"
       actions={
-        <button className="btn-outline btn-sm" onClick={() => setReportModal(true)}>📋 Generate Incident Report</button>
+        <div style={{ display:"flex", gap:8 }}>
+          <button className="btn-outline btn-sm" onClick={() => loadSos(true)} disabled={refreshing}
+            style={{ opacity: refreshing ? 0.6 : 1 }}>
+            {refreshing ? "⏳ Refreshing…" : "↻ Refresh"}
+          </button>
+          <button className="btn-outline btn-sm" onClick={() => setReportModal(true)}>📋 Generate Incident Report</button>
+        </div>
       }>
       <GlobalStyles/>
       <style>{`

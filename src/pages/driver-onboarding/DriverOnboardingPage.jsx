@@ -963,7 +963,16 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
     setStatsLoading(false);
   }, [periodDates]);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
+  const statsIntervalRef = useRef(null);
+  useEffect(() => {
+    loadStats();
+    if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
+    statsIntervalRef.current = setInterval(() => {
+      if (document.hidden) return;
+      loadStats();
+    }, 60_000);
+    return () => clearInterval(statsIntervalRef.current);
+  }, [loadStats]);
 
   const setFilter    = (key, next) => { setFilters(p => ({ ...p, [key]: next })); setOffset(0); };
   const clearFilter  = (key)       => { setFilters(p => { const n = { ...p }; delete n[key]; return n; }); setOffset(0); };

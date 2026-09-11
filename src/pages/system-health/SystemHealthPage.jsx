@@ -58,9 +58,9 @@ export default function SystemHealthPage() {
   const [loading, setLoading]     = useState({server:true, redis:false, queues:false});
   const [errors, setErrors]       = useState({});
   const [lastChecked, setLast]    = useState(null);
-  const [countdown, setCountdown] = useState(REFRESH_INTERVAL / 1000);
-  const timerRef = useRef(null);
-  const countRef = useRef(null);
+  const [, setTick]               = useState(0); // 1s tick for countdown display
+  const timerRef    = useRef(null);
+  const tickRef     = useRef(null);
   const logTimerRef = useRef(null);
 
   // ── Server health ──
@@ -72,7 +72,6 @@ export default function SystemHealthPage() {
       const data = await res.json();
       setHealth(data);
       setLast(new Date());
-      setCountdown(REFRESH_INTERVAL / 1000);
     } catch {
       setErrors(p => ({...p, server:"Could not reach health endpoint."}));
       setHealth(null);
@@ -131,13 +130,22 @@ export default function SystemHealthPage() {
 
   useEffect(() => {
     fetchHealth();
-    timerRef.current = setInterval(fetchHealth, REFRESH_INTERVAL);
-    countRef.current = setInterval(() => setCountdown((c) => Math.max(0, c - 1)), 1000);
+    timerRef.current = setInterval(() => {
+      if (document.hidden) return;
+      fetchHealth();
+    }, REFRESH_INTERVAL);
+    // 1s tick to keep countdown display accurate — no hidden guard needed (it's just math)
+    tickRef.current = setInterval(() => setTick(x => x + 1), 1000);
     return () => {
       clearInterval(timerRef.current);
-      clearInterval(countRef.current);
+      clearInterval(tickRef.current);
     };
   }, []);
+
+  // Computed countdown — always accurate regardless of tab visibility
+  const countdown = lastChecked
+    ? Math.max(0, Math.ceil((REFRESH_INTERVAL - (Date.now() - lastChecked.getTime())) / 1000))
+    : REFRESH_INTERVAL / 1000;
 
   // Refresh log when on API tab
   useEffect(() => {

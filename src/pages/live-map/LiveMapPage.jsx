@@ -124,7 +124,10 @@ export default function LiveMapPage() {
 
   useEffect(() => {
     fetchDrivers();
-    intervalRef.current = setInterval(fetchDrivers, 30_000);
+    intervalRef.current = setInterval(() => {
+      if (document.hidden) return;
+      fetchDrivers();
+    }, 30_000);
     return () => clearInterval(intervalRef.current);
   }, []);
 

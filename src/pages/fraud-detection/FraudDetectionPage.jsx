@@ -1,6 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
-import { AlertTriangle, ShieldCheck, ShieldX, CircleDot, X, TrendingUp } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { AlertTriangle, ShieldCheck, ShieldX, CircleDot, X, TrendingUp, RefreshCw } from "lucide-react";
+
 import { getFraudAlerts, suspendDriver } from "../../api/admin";
+
+const FRAUD_REFRESH_MS = 30_000;
 
 const Toast = ({ msg, type, onClose }) => (
   <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background:type==="error"?"#7f1d1d":"#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", maxWidth:400 }}>
@@ -40,21 +43,38 @@ export default function FraudDetectionPage() {
   const [severity, setSeverity] = useState("HIGH");
   const [acting, setActing]     = useState({});
   const [toast, setToast]       = useState(null);
+  const intervalRef             = useRef(null);
+  const fetchingRef             = useRef(false); // overlap guard
 
   const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
 
-  const load = useCallback(() => {
-    setLoading(true);
-    getFraudAlerts({ severity })
-      .then((res) => {
-        const d = res.data?.data || res.data || {};
-        setAlerts(d.alerts || d.items || (Array.isArray(d) ? d : []));
-      })
-      .catch(() => showToast("Failed to load fraud alerts.", "error"))
-      .finally(() => setLoading(false));
+  // silent=true  → background auto-refresh: no skeleton, no toast on error, skips if already fetching
+  // silent=false → manual / initial load: shows skeleton, shows toast on error
+  const fetchAlerts = useCallback(async (silent = false) => {
+    if (silent && fetchingRef.current) return;
+    fetchingRef.current = true;
+    if (!silent) setLoading(true);
+    try {
+      const res = await getFraudAlerts({ severity });
+      const d = res.data?.data || res.data || {};
+      setAlerts(d.alerts || d.items || (Array.isArray(d) ? d : []));
+    } catch {
+      if (!silent) showToast("Failed to load fraud alerts.", "error");
+    } finally {
+      fetchingRef.current = false;
+      if (!silent) setLoading(false);
+    }
   }, [severity]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    fetchAlerts(false); // initial load with skeleton
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      if (document.hidden) return;
+      fetchAlerts(true); // background: silent, no skeleton, no toast
+    }, FRAUD_REFRESH_MS);
+    return () => clearInterval(intervalRef.current);
+  }, [fetchAlerts]);
 
   const handleSuspend = async (userId, name) => {
     const reason = window.prompt(`Reason for suspending ${name || "this driver"}:`);
@@ -91,10 +111,17 @@ export default function FraudDetectionPage() {
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={()=>setToast(null)} />}
 
       {/* Header */}
-      <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Fraud Detection</h1>
-        <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Monitor suspicious activity and risk alerts</p>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24, gap:12, flexWrap:"wrap" }}>
+        <div>
+          <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>Fraud Detection</h1>
+          <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>Monitor suspicious activity and risk alerts · auto-refreshes every 30s</p>
+        </div>
+        <button onClick={() => fetchAlerts(false)} disabled={loading}
+          style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", borderRadius:10, border:"1px solid rgba(212,175,55,0.25)", background:"rgba(212,175,55,0.06)", color:"rgba(212,175,55,0.8)", fontSize:12, fontWeight:600, cursor:loading?"not-allowed":"pointer", opacity:loading?0.6:1, fontFamily:"Outfit,sans-serif" }}>
+          <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }}/> Refresh
+        </button>
       </div>
+      <style>{`.fraud-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* Summary Cards */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:14, marginBottom:24 }}>

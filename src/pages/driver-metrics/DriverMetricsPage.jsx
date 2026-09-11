@@ -329,10 +329,11 @@ function LiveMapSection() {
   const [summary,   setSummary]   = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [sLoading,  setSLoading]  = useState(true);
-  const [countdown, setCountdown] = useState(15);
+  const [, setTick]               = useState(0); // 1s tick for countdown display
   const [toast,     setToast]     = useState(null);
-  const iRef = useRef(null);
-  const cRef = useRef(null);
+  const iRef          = useRef(null);
+  const tickRef       = useRef(null);
+  const lastFetchedRef = useRef(Date.now());
 
   const showToast = (m, t="error") => { setToast({m,t}); setTimeout(()=>setToast(null), 3500); };
 
@@ -346,15 +347,22 @@ function LiveMapSection() {
       setSummary(sd);
     } catch(e) {
       showToast(e?.response?.data?.message || "Failed to load live map");
-    } finally { setLoading(false); setSLoading(false); setCountdown(15); }
+    } finally { setLoading(false); setSLoading(false); lastFetchedRef.current = Date.now(); }
   }, []);
 
   useEffect(() => {
     fetchAll();
-    iRef.current = setInterval(fetchAll, 15000);
-    cRef.current = setInterval(() => setCountdown(c => c > 0 ? c - 1 : 15), 1000);
-    return () => { clearInterval(iRef.current); clearInterval(cRef.current); };
+    iRef.current = setInterval(() => {
+      if (document.hidden) return;
+      fetchAll();
+    }, 15000);
+    // 1s tick for countdown display — no hidden guard (it's just math)
+    tickRef.current = setInterval(() => setTick(x => x + 1), 1000);
+    return () => { clearInterval(iRef.current); clearInterval(tickRef.current); };
   }, [fetchAll]);
+
+  // Computed countdown — always accurate regardless of tab visibility
+  const countdown = Math.max(0, Math.ceil((15000 - (Date.now() - lastFetchedRef.current)) / 1000));
 
   const getMarkerColor = (d) => {
     if (d.connection?.isOnlineButAppDisconnected) return "#F59E0B";

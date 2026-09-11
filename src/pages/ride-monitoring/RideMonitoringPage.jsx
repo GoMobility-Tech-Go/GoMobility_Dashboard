@@ -686,12 +686,20 @@ export default function RideMonitoringPage() {
       return;
     }
 
+    const TERMINAL = new Set(["completed","cancelled","failed","rejected"]);
+
     const fetchTracking = async () => {
+      if (document.hidden) return;
       try {
         const res = await axios.get(`${TRACKING_BASE}/${ride.tracking_token}`);
         const d = res.data?.data || res.data;
         setTrackingData(d);
         setTrackingErr(null);
+        // Auto-stop when ride reaches a terminal status
+        if (d?.status && TERMINAL.has(d.status)) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
       } catch {
         setTrackingErr("Tracking unavailable for this ride.");
       }
