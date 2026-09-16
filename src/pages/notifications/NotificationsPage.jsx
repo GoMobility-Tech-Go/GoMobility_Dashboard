@@ -37,8 +37,10 @@ const AUDIENCES = [
   { value:"all_drivers",           label:"All Drivers",                  icon:"🚗", group:"Drivers",    desc:"Every registered driver" },
   { value:"active_drivers",        label:"Online Drivers (now)",         icon:"🟢", group:"Drivers",    desc:"Currently online" },
   { value:"driver_offline_10d",    label:"Inactive Drivers (10d+)",      icon:"🔴", group:"Drivers",    desc:"Offline for 10+ days" },
-  { value:"driver_no_docs",        label:"Drivers — No Docs",            icon:"📄", group:"Drivers",    desc:"0 documents uploaded" },
-  { value:"driver_partial_kyc",    label:"Drivers — Partial KYC",        icon:"⏳", group:"Drivers",    desc:"KYC started but incomplete" },
+  { value:"driver_no_docs",              label:"Drivers — No Docs",              icon:"📄", group:"Drivers",    desc:"0 documents uploaded" },
+  { value:"driver_partial_kyc",          label:"Drivers — Partial KYC",          icon:"⏳", group:"Drivers",    desc:"KYC started but incomplete" },
+  { value:"outdated_app_ncr_drivers",    label:"NCR — Outdated App (v<1.3.3)",   icon:"📲", group:"Drivers",    desc:"NCR verified drivers on old app (~238)" },
+  { value:"outdated_app_all_drivers",    label:"All India — Outdated App",        icon:"📲", group:"Drivers",    desc:"All verified drivers on old app (~289)" },
 ];
 
 const QUICK_TEMPLATES = [
@@ -48,6 +50,7 @@ const QUICK_TEMPLATES = [
   { title:"Pehli ride baaki hai 👀", body:"Account ready hai! Pehli ride pe ₹30 off — code FIRST30",           audience:"new_user_no_ride" },
   { title:"Documents bharo! 📄",    body:"Sirf 5 min mein complete karo aur rides lena shuru karo!",           audience:"driver_no_docs" },
   { title:"Almost verified! 🏁",    body:"Thoda aur baaki hai. Baaki documents upload karo — almost done!",    audience:"driver_partial_kyc" },
+  { title:"App Update Karo! 📲",    body:"GO Driver v1.3.3 aa gaya hai. Play Store se update karo — GPS aur ride dispatch behtar hoga.",  audience:"outdated_app_ncr_drivers" },
 ];
 
 const inputStyle = {
