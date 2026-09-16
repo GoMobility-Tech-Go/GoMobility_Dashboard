@@ -26,19 +26,23 @@ function Content() {
     try {
       const audienceMap = {
         "broadcast-drivers": "drivers",
-        "broadcast-users":   "users",
-        "broadcast-gold":    "gold_drivers",
+        "broadcast-users":   "passengers",
+        "broadcast-gold":    "active_drivers",
+        "outdated-app-ncr":  "outdated_app_ncr_drivers",
+        "outdated-app-all":  "outdated_app_all_drivers",
       };
       await triggerEngagement({
-        type:    audienceMap[composeType] || "users",
-        message: composeMsg,
-        title:   composeSubject.trim() || "Admin Broadcast",
+        target_audience: audienceMap[composeType] || "drivers",
+        body:            composeMsg,
+        title:           composeSubject.trim() || "Admin Broadcast",
       });
       const targetLabel = {
         "broadcast-drivers": "All Drivers",
         "broadcast-users":   "All Users",
         "broadcast-gold":    "Gold Tier Drivers",
-      }[composeType] || "All Users";
+        "outdated-app-ncr":  "NCR Outdated App Drivers",
+        "outdated-app-all":  "All Outdated App Drivers",
+      }[composeType] || "All Drivers";
 
       setHistory(prev => [{
         id:        prev.length + 1,
@@ -103,9 +107,15 @@ function Content() {
 
           <FormGroup label="Target Audience">
             <select className="gm-input" value={composeType} onChange={e=>setComposeType(e.target.value)}>
-              <option value="broadcast-drivers">All Drivers</option>
-              <option value="broadcast-users">All Users</option>
-              <option value="broadcast-gold">Gold Tier Drivers</option>
+              <optgroup label="── Drivers ──">
+                <option value="broadcast-drivers">All Drivers</option>
+                <option value="broadcast-gold">Gold Tier Drivers</option>
+                <option value="outdated-app-ncr">NCR — Outdated App Drivers (v &lt; 1.3.3)</option>
+                <option value="outdated-app-all">All India — Outdated App Drivers (v &lt; 1.3.3)</option>
+              </optgroup>
+              <optgroup label="── Users ──">
+                <option value="broadcast-users">All Users</option>
+              </optgroup>
             </select>
           </FormGroup>
 
@@ -133,7 +143,13 @@ function Content() {
           </FormGroup>
 
           <div style={{ padding:"12px 16px", background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.15)", borderRadius:10, fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:18, lineHeight:1.6 }}>
-            This sends a real FCM push notification to all <strong style={{ color:"#60A5FA" }}>{composeType === "broadcast-drivers" ? "drivers" : composeType === "broadcast-gold" ? "Gold tier drivers" : "users"}</strong> via <code style={{ color:"#D4AF37" }}>POST /notifications/admin/trigger-engagement</code>. Cannot be undone.
+            {({
+              "broadcast-drivers":  <>All verified + active <strong style={{ color:"#60A5FA" }}>drivers</strong> with FCM token.</>,
+              "broadcast-users":    <>All active <strong style={{ color:"#60A5FA" }}>passengers</strong> with FCM token.</>,
+              "broadcast-gold":     <>All <strong style={{ color:"#D4AF37" }}>Gold tier</strong> drivers.</>,
+              "outdated-app-ncr":   <>NCR verified drivers on app version <strong style={{ color:"#F87171" }}>older than v1.3.3</strong> — ~238 drivers.</>,
+              "outdated-app-all":   <>All India verified drivers on app version <strong style={{ color:"#F87171" }}>older than v1.3.3</strong> — ~289 drivers.</>,
+            }[composeType] || "Selected audience.")} Sends via FCM push. Cannot be undone.
           </div>
 
           <button
