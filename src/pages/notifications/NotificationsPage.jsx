@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Bell, Send, X, Clock, ToggleLeft, ToggleRight, Play, Edit2, Check, History, Zap, Calendar, Users, AlertCircle } from "lucide-react";
+import { Bell, Send, X, Clock, ToggleLeft, ToggleRight, Play, Edit2, Check, History, Zap, Calendar, Users, AlertCircle, PartyPopper } from "lucide-react";
 import {
   triggerEngagement,
   getNotificationSchedule,
@@ -80,6 +80,377 @@ const fmtRelative = (iso) => {
 };
 
 const SCHEDULE_LABEL = { daily:"Daily · 9 AM", weekly:"Weekly · Mon 9 AM" };
+
+// ── Festival Data ─────────────────────────────────────────────────────────────
+const FESTIVALS = [
+  {
+    id: "navratri_2026", name: "Navratri", emoji: "🪔", date: "2026-10-02",
+    driverTitle:    "Navratri Mubarak! 🪔",
+    driverBody:     "Navratri ki shubhkamnayein! Pandal hopping ke liye rides ki demand zyada hai — duty pe raho aur zyada kamao. GO Mobility ki taraf se haardik badhai!",
+    passengerTitle: "Navratri Mubarak! 🪔",
+    passengerBody:  "Navratri ki shubhkamnayein! Aaj pandal darshan pe jaao — GO Mobility ke saath safe aur comfortable ride lo. Jai Mata Di! 🙏",
+  },
+  {
+    id: "dussehra_2026", name: "Dussehra", emoji: "🏹", date: "2026-10-12",
+    driverTitle:    "Dussehra Mubarak! 🏹",
+    driverBody:     "Dussehra ki haardik shubhkamnayein! Burai par achhai ki jeet mubarak ho. Aaj rush hoga — duty pe raho aur extra kamao. GO Mobility Family.",
+    passengerTitle: "Dussehra Mubarak! 🏹",
+    passengerBody:  "Dussehra ki shubhkamnayein! Ravan Dahan dekhne jaao — GO Mobility pe safe ride book karo. Burai par achhai ki jeet ho! 🙏",
+  },
+  {
+    id: "dhanteras_2026", name: "Dhanteras", emoji: "🪙", date: "2026-10-20",
+    driverTitle:    "Dhanteras Mubarak! 🪙",
+    driverBody:     "Dhanteras ki shubhkamnayein! Aaj shopping rush rahega — zyada rides milenge. GO pe duty ON rakho aur khub kamao. Dhan aur samriddhi aaye!",
+    passengerTitle: "Dhanteras Mubarak! 🪙",
+    passengerBody:  "Dhanteras Mubarak! 🪙 Shopping ke liye jaao — GO Mobility pe book karo. Dhan aur samriddhi ki kamna ke saath. Shubh Dhanteras!",
+  },
+  {
+    id: "diwali_2026", name: "Diwali", emoji: "✨", date: "2026-10-21",
+    driverTitle:    "Diwali Mubarak! ✨🪔",
+    driverBody:     "Diwali ki haardik shubhkamnayein! Aaj Diwali Bonus milega — rush hours mein ride accept karo aur extra kamao. Roshan karo apna ghar. GO Mobility Family. 🎆",
+    passengerTitle: "Diwali Mubarak! ✨🪔",
+    passengerBody:  "Diwali ki dher saari shubhkamnayein! 🪔 Celebration ke liye ghar jaao ya milne jaao — GO Mobility ke saath safe ride lo. Roshan rahe aapki zindagi!",
+  },
+  {
+    id: "bhai_dooj_2026", name: "Bhai Dooj", emoji: "🎊", date: "2026-10-24",
+    driverTitle:    "Bhai Dooj Mubarak! 🎊",
+    driverBody:     "Bhai Dooj ki shubhkamnayein! Parivar se milne ke liye logon ko rides milenge — duty ON rakho. GO Mobility ki taraf se badhai!",
+    passengerTitle: "Bhai Dooj Mubarak! 🎊",
+    passengerBody:  "Bhai Dooj ki shubhkamnayein! 🎊 Bhai ya behen se milne jaao — GO Mobility pe safe aur quick ride book karo. Parivar ke saath yeh din khaas banao!",
+  },
+  {
+    id: "chhath_2026", name: "Chhath Puja", emoji: "🌅", date: "2026-10-28",
+    driverTitle:    "Chhath Puja Mubarak! 🌅",
+    driverBody:     "Chhath Puja ki shubhkamnayein! Ghats pe jaane waale logon ke liye rides ki demand hogi — duty ON rakho. GO Mobility Family ki taraf se haardik badhai!",
+    passengerTitle: "Chhath Puja Mubarak! 🌅",
+    passengerBody:  "Chhath Puja ki haardik shubhkamnayein! 🌅 Ghat pe puja ke liye safe aur reliable ride GO Mobility pe book karo. Chhathi Maiya ki kripa bani rahe!",
+  },
+  {
+    id: "gurpurab_2026", name: "Gurpurab", emoji: "🙏", date: "2026-11-05",
+    driverTitle:    "Gurpurab Mubarak! 🙏",
+    driverBody:     "Gurpurab ki haardik shubhkamnayein! Aaj Gurdwara jaane waale logon ke liye rides ki demand hogi. Duty ON rakho. Waheguru ki kirpa ho! GO Mobility.",
+    passengerTitle: "Gurpurab Mubarak! 🙏",
+    passengerBody:  "Gurpurab Mubarak! 🙏 Gurdwara darshan ke liye GO Mobility pe safe ride book karo. Waheguru Ji Ka Khalsa, Waheguru Ji Ki Fateh!",
+  },
+  {
+    id: "christmas_2026", name: "Christmas", emoji: "🎄", date: "2026-12-25",
+    driverTitle:    "Merry Christmas! 🎄",
+    driverBody:     "Merry Christmas! 🎄 Aaj celebrations ke liye trips zyada hongi — duty ON rakho aur festive season mein extra kamao. GO Mobility Family ki taraf se Merry Christmas!",
+    passengerTitle: "Merry Christmas! 🎄",
+    passengerBody:  "Merry Christmas! 🎄🎁 Christmas celebration ke liye church ya party mein jaao — GO Mobility pe safe ride book karo. Wish you a very Merry Christmas!",
+  },
+  {
+    id: "new_year_2027", name: "New Year 2027", emoji: "🎆", date: "2027-01-01",
+    driverTitle:    "Happy New Year 2027! 🎆",
+    driverBody:     "Naya Saal Mubarak! 🎆 New Year parties aur celebrations ke liye late night rides bahut hongi — duty ON rakho aur extra kamao. GO Mobility Family ki taraf se haardik badhai!",
+    passengerTitle: "Happy New Year 2027! 🎆",
+    passengerBody:  "Happy New Year 2027! 🎆🥂 Naye saal ka jashn manao — GO Mobility ke saath safe ride lo. Iss naye saal mein aapko dhero khushiyan milein! Stay safe!",
+  },
+  {
+    id: "makar_2027", name: "Makar Sankranti", emoji: "🪁", date: "2027-01-14",
+    driverTitle:    "Makar Sankranti Mubarak! 🪁",
+    driverBody:     "Makar Sankranti ki shubhkamnayein! 🪁 Aaj patang mahotsav ke liye logon ki rides ki demand hogi — duty ON rakho. Tilgul ghya, god god bola! GO Mobility.",
+    passengerTitle: "Makar Sankranti Mubarak! 🪁",
+    passengerBody:  "Makar Sankranti ki shubhkamnayein! 🪁 Patang udaane ke liye jaao ya parivar se milne jaao — GO Mobility pe safe ride book karo. Makare Sankrant!",
+  },
+  {
+    id: "republic_2027", name: "Republic Day", emoji: "🇮🇳", date: "2027-01-26",
+    driverTitle:    "Happy Republic Day! 🇮🇳",
+    driverBody:     "Gantantra Diwas ki shubhkamnayein! 🇮🇳 Parade aur events ke liye logon ki rides ki demand hogi — duty ON rakho. Jai Hind! GO Mobility.",
+    passengerTitle: "Happy Republic Day! 🇮🇳",
+    passengerBody:  "Happy Republic Day! 🇮🇳 Parade dekhne jaao ya parks mein ek saath celebrate karo — GO Mobility ke saath safe ride lo. Jai Hind! Jai Bharat!",
+  },
+  {
+    id: "holi_2027", name: "Holi", emoji: "🌈", date: "2027-03-14",
+    driverTitle:    "Happy Holi! 🌈",
+    driverBody:     "Holi ki shubhkamnayein! 🌈 Rang aur khushiyon ka tyohar mubarak ho. Aaj rides ki demand hogi — saaf kapde pehno aur duty ON rakho. Bura na mano Holi hai!",
+    passengerTitle: "Happy Holi! 🌈",
+    passengerBody:  "Happy Holi! 🌈🎨 Rang aur khushiyon ka tyohar mubarak ho! Celebration ke baad safely ghar jaao — GO Mobility pe ride book karo. Bura na mano Holi hai!",
+  },
+  {
+    id: "eid_2027", name: "Eid ul-Fitr", emoji: "🌙", date: "2027-03-20",
+    driverTitle:    "Eid Mubarak! 🌙",
+    driverBody:     "Eid ul-Fitr Mubarak! 🌙 Namaz aur milne-julne ke liye rides ki demand hogi — duty ON rakho aur Eid pe extra kamao. GO Mobility ki taraf se Eid Mubarak!",
+    passengerTitle: "Eid Mubarak! 🌙",
+    passengerBody:  "Eid ul-Fitr Mubarak! 🌙⭐ Namaaz padne aur rishtedaroon se milne jaao — GO Mobility pe safe aur comfortable ride book karo. Eid Mubarak to you & your family!",
+  },
+  {
+    id: "baisakhi_2027", name: "Baisakhi", emoji: "🌾", date: "2027-04-13",
+    driverTitle:    "Happy Baisakhi! 🌾",
+    driverBody:     "Baisakhi ki shubhkamnayein! 🌾 Melas aur celebrations ke liye rides ki demand hogi — duty ON rakho. Waheguru Ji ki kirpa ho. GO Mobility Family.",
+    passengerTitle: "Happy Baisakhi! 🌾",
+    passengerBody:  "Happy Baisakhi! 🌾 Baisakhi mela aur celebrations enjoy karo — GO Mobility pe safe ride book karo. Waheguru Ji Ka Khalsa, Waheguru Ji Ki Fateh!",
+  },
+  {
+    id: "independence_2027", name: "Independence Day", emoji: "🇮🇳", date: "2027-08-15",
+    driverTitle:    "Happy Independence Day! 🇮🇳",
+    driverBody:     "Swatantrata Diwas ki shubhkamnayein! 🇮🇳 Aaj events aur celebrations ke liye rides ki demand hogi — duty ON rakho. Jai Hind! GO Mobility.",
+    passengerTitle: "Happy Independence Day! 🇮🇳",
+    passengerBody:  "Happy Independence Day! 🇮🇳 Aazadi ka jashn manao — GO Mobility ke saath safe ride lo. Jai Hind! Jai Bharat! Bharat Mata ki Jai!",
+  },
+];
+
+const getDaysUntil = (dateStr) => {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const fest  = new Date(dateStr); fest.setHours(0,0,0,0);
+  return Math.ceil((fest - today) / 86400000);
+};
+
+// ── Festival Tab ──────────────────────────────────────────────────────────────
+function FestivalTab({ showToast }) {
+  const today    = new Date(); today.setHours(0,0,0,0);
+  const upcoming = FESTIVALS.filter(f => getDaysUntil(f.date) >= 0).sort((a,b) => new Date(a.date)-new Date(b.date));
+  const past     = FESTIVALS.filter(f => getDaysUntil(f.date) < 0).sort((a,b) => new Date(b.date)-new Date(a.date)).slice(0,3);
+
+  // Editing state per festival
+  const [editing, setEditing]   = useState(null); // { id, type: 'driver'|'passenger'|'all', title, body, audience }
+  const [sending, setSending]   = useState({});
+  // Dedup: track which festival+type was sent today
+  const [sentLog, setSentLog]   = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("festival_sent_log") || "{}"); } catch { return {}; }
+  });
+
+  const markSent = (festId, type) => {
+    const updated = { ...sentLog, [`${festId}_${type}`]: new Date().toISOString() };
+    setSentLog(updated);
+    try { sessionStorage.setItem("festival_sent_log", JSON.stringify(updated)); } catch {}
+  };
+
+  const isSent = (festId, type) => !!sentLog[`${festId}_${type}`];
+
+  const openEdit = (fest, type) => {
+    let title, body, audience;
+    if (type === "driver")    { title = fest.driverTitle;    body = fest.driverBody;    audience = "all_drivers"; }
+    if (type === "passenger") { title = fest.passengerTitle; body = fest.passengerBody; audience = "passengers"; }
+    if (type === "all")       { title = fest.driverTitle;    body = fest.driverBody;    audience = "all_users"; }
+    setEditing({ id: fest.id, type, title, body, audience });
+  };
+
+  const cancelEdit = () => setEditing(null);
+
+  const sendFestival = async (festId, type, title, body, audience) => {
+    if (!title.trim() || !body.trim()) { showToast("Title aur message dono required hain.", "error"); return; }
+    const key = `${festId}_${type}`;
+    setSending(p => ({ ...p, [key]: true }));
+    try {
+      const res = await triggerEngagement({ title, body, target_audience: audience });
+      const d   = res.data?.data;
+      const tot = (d?.passengers?.sent || 0) + (d?.drivers?.sent || 0);
+      markSent(festId, type);
+      setEditing(null);
+      showToast(`✅ Festival notification sent! ${tot} devices notified.`);
+    } catch (err) {
+      showToast(err.response?.data?.message || "Send karne mein error aaya.", "error");
+    } finally {
+      setSending(p => ({ ...p, [key]: false }));
+    }
+  };
+
+  const inp = {
+    width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.2)",
+    borderRadius:9, padding:"9px 12px", color:"#fff", fontSize:12,
+    outline:"none", fontFamily:"Outfit,sans-serif", boxSizing:"border-box",
+  };
+
+  const FestCard = ({ f }) => {
+    const days  = getDaysUntil(f.date);
+    const isToday = days === 0;
+    const isTomorrow = days === 1;
+    const festDate = new Date(f.date).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" });
+
+    const urgency = days === 0 ? { bg:"rgba(52,211,153,0.08)", border:"rgba(52,211,153,0.3)", badge:"🟢 Today!", badgeColor:"#34D399" }
+                  : days === 1 ? { bg:"rgba(245,158,11,0.06)", border:"rgba(245,158,11,0.25)", badge:"🟡 Tomorrow", badgeColor:"#f59e0b" }
+                  : days <= 7  ? { bg:"rgba(212,175,55,0.05)", border:"rgba(212,175,55,0.2)",  badge:`${days}d away`, badgeColor:"#D4AF37" }
+                  :              { bg:"rgba(255,255,255,0.02)", border:"rgba(255,255,255,0.07)", badge:`${days}d`,     badgeColor:"rgba(255,255,255,0.3)" };
+
+    const isEditingThis = editing?.id === f.id;
+
+    return (
+      <div style={{ background: urgency.bg, border:`1px solid ${urgency.border}`, borderRadius:16, padding:18, marginBottom:12, transition:"all .15s" }}>
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ fontSize:24 }}>{f.emoji}</span>
+            <div>
+              <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.9)", fontFamily:"Cinzel,serif" }}>{f.name}</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:1 }}>{festDate}</div>
+            </div>
+          </div>
+          <span style={{ fontSize:11, fontWeight:600, padding:"4px 10px", borderRadius:20,
+            background:"rgba(0,0,0,0.25)", color: urgency.badgeColor,
+            border:`1px solid ${urgency.border}` }}>{urgency.badge}</span>
+        </div>
+
+        {/* Send buttons */}
+        {!isEditingThis ? (
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            {[
+              { type:"driver",    label:"Drivers ko",    icon:"🚗", sent: isSent(f.id,"driver") },
+              { type:"passenger", label:"Passengers ko", icon:"🧑", sent: isSent(f.id,"passenger") },
+              { type:"all",       label:"Sabko",         icon:"👥", sent: isSent(f.id,"all") },
+            ].map(({ type, label, icon, sent }) => (
+              <button key={type} onClick={() => !sent && openEdit(f, type)} disabled={sent}
+                title={sent ? "Aaj already bhej diya" : `${label} bhejo`}
+                style={{
+                  display:"flex", alignItems:"center", gap:6,
+                  padding:"7px 13px", borderRadius:9, fontSize:11, fontWeight:600,
+                  cursor: sent ? "not-allowed" : "pointer",
+                  background: sent ? "rgba(52,211,153,0.08)" : "rgba(212,175,55,0.1)",
+                  border: `1px solid ${sent ? "rgba(52,211,153,0.25)" : "rgba(212,175,55,0.25)"}`,
+                  color: sent ? "#34D399" : "#D4AF37",
+                  opacity: sent ? 0.75 : 1,
+                }}>
+                {sent ? <Check size={11}/> : <Send size={11}/>}
+                {icon} {sent ? "Bhej diya" : label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          /* Inline edit panel */
+          <div style={{ background:"rgba(0,0,0,0.2)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:12, padding:14, marginTop:4 }}>
+            <div style={{ fontSize:11, color:"rgba(212,175,55,0.7)", fontFamily:"Cinzel,serif", textTransform:"uppercase", letterSpacing:"1px", marginBottom:10 }}>
+              {editing.type==="driver" ? "🚗 Drivers ko" : editing.type==="passenger" ? "🧑 Passengers ko" : "👥 Sabko"} — message edit karo
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              <input value={editing.title} onChange={e=>setEditing(p=>({...p,title:e.target.value}))}
+                placeholder="Notification Title" style={inp}
+                onFocus={e=>e.target.style.borderColor="#D4AF37"} onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.2)"}/>
+              <textarea value={editing.body} onChange={e=>setEditing(p=>({...p,body:e.target.value}))}
+                rows={3} placeholder="Message body…"
+                style={{ ...inp, resize:"vertical", padding:"9px 12px" }}
+                onFocus={e=>e.target.style.borderColor="#D4AF37"} onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.2)"}/>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <span style={{ fontSize:10, color: editing.body.length>140 ? "#f59e0b" : "rgba(255,255,255,0.3)" }}>{editing.body.length}/160 chars</span>
+                <div style={{ display:"flex", gap:8 }}>
+                  <button onClick={cancelEdit}
+                    style={{ padding:"7px 14px", borderRadius:8, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"rgba(255,255,255,0.5)", fontSize:12, cursor:"pointer" }}>
+                    Cancel
+                  </button>
+                  <button onClick={() => sendFestival(editing.id, editing.type, editing.title, editing.body, editing.audience)}
+                    disabled={!!sending[`${editing.id}_${editing.type}`]}
+                    style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 16px", borderRadius:8, background:"linear-gradient(135deg,#f0d060,#D4AF37,#b8922a)", border:"none", color:"#0a1840", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"Cinzel,serif", opacity: sending[`${editing.id}_${editing.type}`] ? 0.6 : 1 }}>
+                    <Send size={11}/>
+                    {sending[`${editing.id}_${editing.type}`] ? "Sending…" : "Send Karo"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.6fr) minmax(0,1fr)", gap:20, alignItems:"start" }}>
+      {/* Left — Upcoming */}
+      <div>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+          <span style={{ fontSize:18 }}>🎊</span>
+          <span style={{ fontFamily:"Cinzel,serif", fontSize:14, fontWeight:700, color:"#fff" }}>Upcoming Festivals</span>
+          <span style={{ fontSize:11, padding:"2px 8px", borderRadius:20, background:"rgba(212,175,55,0.1)", color:"#D4AF37", border:"1px solid rgba(212,175,55,0.2)" }}>{upcoming.length} festivals</span>
+        </div>
+
+        {upcoming.length === 0 ? (
+          <div style={{ padding:"40px 20px", textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>
+            Is saal ke festivals khatam ho gaye. Naye saal ka wait karo! 🎆
+          </div>
+        ) : (
+          upcoming.map(f => <FestCard key={f.id} f={f}/>)
+        )}
+
+        {past.length > 0 && (
+          <div style={{ marginTop:8 }}>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.2)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:10 }}>
+              Haal hi mein gaye
+            </div>
+            {past.map(f => (
+              <div key={f.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:"rgba(255,255,255,0.01)", border:"1px solid rgba(255,255,255,0.04)", borderRadius:10, marginBottom:6, opacity:0.5 }}>
+                <span style={{ fontSize:18 }}>{f.emoji}</span>
+                <div>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", fontWeight:600 }}>{f.name}</div>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.2)" }}>{new Date(f.date).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</div>
+                </div>
+                <span style={{ marginLeft:"auto", fontSize:10, color:"rgba(255,255,255,0.2)" }}>Guzar gaya</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Right — Tips + Summary */}
+      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        {/* Festival calendar mini */}
+        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
+          <div style={{ padding:"13px 16px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", gap:8 }}>
+            <Calendar size={13} color="#D4AF37"/>
+            <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:600, color:"#fff" }}>Festival Calendar</span>
+          </div>
+          <div style={{ padding:"10px 12px", display:"flex", flexDirection:"column", gap:4 }}>
+            {FESTIVALS.slice(0,8).map(f => {
+              const days = getDaysUntil(f.date);
+              const isPast = days < 0;
+              return (
+                <div key={f.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"6px 8px", borderRadius:7, background: days===0 ? "rgba(52,211,153,0.08)" : "transparent" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:7, opacity: isPast ? 0.35 : 1 }}>
+                    <span style={{ fontSize:13 }}>{f.emoji}</span>
+                    <span style={{ fontSize:11, color: days===0 ? "#34D399" : "rgba(255,255,255,0.6)", fontWeight: days===0 ? 700 : 400 }}>{f.name}</span>
+                  </div>
+                  <span style={{ fontSize:10, color: days===0 ? "#34D399" : isPast ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.35)", fontFamily:"monospace" }}>
+                    {isPast ? "✓" : days===0 ? "Today" : `${days}d`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* How it works */}
+        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(96,165,250,0.12)", borderRadius:16, padding:"14px 16px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:12 }}>
+            <AlertCircle size={13} color="rgba(96,165,250,0.7)"/>
+            <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:600, color:"rgba(255,255,255,0.7)" }}>Kaise use karein</span>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {[
+              ["Festival card pe click karo", "\"Drivers ko\", \"Passengers ko\" ya \"Sabko\" mein se choose karo."],
+              ["Message check karo", "Pre-written message aayega — edit karo ya as-is bhejo."],
+              ["Send Karo", "FCM push sab selected devices pe jayega immediately."],
+              ["Dedup protection", "Ek festival, ek type — session mein sirf ek baar bhej sakte ho (accidental double-send nahi hoga)."],
+            ].map(([tip, detail]) => (
+              <div key={tip} style={{ padding:"8px 10px", background:"rgba(96,165,250,0.04)", border:"1px solid rgba(96,165,250,0.08)", borderRadius:8 }}>
+                <div style={{ fontSize:11, fontWeight:600, color:"rgba(255,255,255,0.65)", marginBottom:2 }}>💡 {tip}</div>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", lineHeight:1.4 }}>{detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sent this session */}
+        {Object.keys(sentLog).length > 0 && (
+          <div style={{ background:"rgba(52,211,153,0.04)", border:"1px solid rgba(52,211,153,0.15)", borderRadius:16, padding:"14px 16px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:10 }}>
+              <Check size={13} color="#34D399"/>
+              <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:600, color:"#34D399" }}>Is session mein bheje</span>
+            </div>
+            {Object.entries(sentLog).map(([key, iso]) => {
+              const [festId, type] = key.split(/_(?=[^_]+$)/);
+              const fest = FESTIVALS.find(f=>f.id===festId);
+              if (!fest) return null;
+              return (
+                <div key={key} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                  <span style={{ fontSize:14 }}>{fest.emoji}</span>
+                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.6)", flex:1 }}>{fest.name} — {type==="driver"?"Drivers":type==="passenger"?"Passengers":"Sabko"}</span>
+                  <span style={{ fontSize:10, color:"rgba(52,211,153,0.7)" }}>✓ {new Date(iso).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ── Phone Mockup Preview ──────────────────────────────────────────────────────
 const PhonePreview = ({ title, body }) => (
@@ -693,6 +1064,7 @@ export default function NotificationsPage() {
 
   const TABS = [
     { label:"Send Now",  icon:<Send size={13}/> },
+    { label:"Festival",  icon:<span style={{fontSize:13}}>🎊</span> },
     { label:"Automated", icon:<Zap  size={13}/> },
     { label:"History",   icon:<History size={13}/> },
   ];
@@ -711,11 +1083,12 @@ export default function NotificationsPage() {
       </div>
 
       {/* Stats row */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:22 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:22 }}>
         {[
           { label:"Audience Types",  value:AUDIENCES.length,       icon:"🎯", color:"#D4AF37", bg:"rgba(212,175,55,0.08)" },
           { label:"Auto Campaigns",  value:"10",                   icon:"⚡", color:"#60a5fa", bg:"rgba(96,165,250,0.08)" },
           { label:"Quick Templates", value:QUICK_TEMPLATES.length, icon:"📝", color:"#4ade80", bg:"rgba(52,211,153,0.08)" },
+          { label:"Festivals",       value:FESTIVALS.length,       icon:"🎊", color:"#f472b6", bg:"rgba(244,114,182,0.08)" },
         ].map(({ label, value, icon, color, bg }) => (
           <div key={label} style={{ background:bg, border:`1px solid ${color}22`, borderRadius:13, padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
             <span style={{ fontSize:22 }}>{icon}</span>
@@ -744,9 +1117,10 @@ export default function NotificationsPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 0 && <SendNowTab  showToast={showToast}/>}
-      {activeTab === 1 && <AutomatedTab showToast={showToast}/>}
-      {activeTab === 2 && <HistoryTab  showToast={showToast}/>}
+      {activeTab === 0 && <SendNowTab    showToast={showToast}/>}
+      {activeTab === 1 && <FestivalTab   showToast={showToast}/>}
+      {activeTab === 2 && <AutomatedTab  showToast={showToast}/>}
+      {activeTab === 3 && <HistoryTab    showToast={showToast}/>}
     </div>
   );
 }
