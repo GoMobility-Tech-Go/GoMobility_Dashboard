@@ -4,7 +4,8 @@ import {
   UserPlus, SlidersHorizontal, ShieldCheck, ScrollText, ShieldAlert, LogOut,
   ChevronLeft, ChevronRight, Menu, X, Crown, Megaphone, AlertTriangle,
   Smartphone, Trophy, MessageCircle, Activity, Target, UserCog, Lock,
-  BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText, Banknote, Building2, Radio
+  BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText, Banknote, Building2, Radio,
+  GitBranch, Mail, BellRing, UserSearch
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -45,6 +46,17 @@ const ADMIN_MENU = [
     { label:"Operational Metrics",to:"/operational-metrics",  icon:BarChart3   },
     { label:"Driver Metrics",    to:"/driver-metrics",       icon:Activity    },
     { label:"Push Notifications", to:"/notifications",        icon:Bell        },
+  ]},
+  // GoMobility CRM (alag backend — gomobility-crm). Journeys + campaigns, PRD 28.
+  { label:"CRM", items:[
+    { label:"CRM Overview",       to:"/crm",                  icon:Target, end:true },
+    { label:"Journeys",           to:"/crm/journeys",         icon:GitBranch   },
+    { label:"CRM Campaigns",      to:"/crm/campaigns",        icon:Megaphone   },
+    { label:"Approvals",          to:"/crm/approvals",        icon:CheckCheck  },
+    { label:"Contacts",           to:"/crm/contacts",         icon:UserSearch  },
+    { label:"Messages",           to:"/crm/messages",         icon:Mail        },
+    { label:"Ops Alerts",         to:"/crm/alerts",           icon:BellRing    },
+    { label:"CRM Settings",       to:"/crm/settings",         icon:SlidersHorizontal },
   ]},
   { label:"System", items:[
     { label:"Settings",           to:"/settings",             icon:Settings    },
@@ -206,6 +218,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
                   <SidebarItem
                     key={item.to + item.label}
                     to={item.to}
+                    end={item.end}
                     icon={item.icon}
                     label={item.label}
                     collapsed={desktopCollapsed}

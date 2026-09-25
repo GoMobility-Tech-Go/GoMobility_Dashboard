@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { NavLink } from "react-router-dom";
 import { createPortal } from "react-dom";
 
-const SidebarItem = ({ to, icon: Icon, label, onClick, collapsed }) => {
+const SidebarItem = ({ to, icon: Icon, label, onClick, collapsed, end }) => {
   if (!Icon) return null;
 
   const [tipPos, setTipPos] = useState(null);
@@ -19,6 +19,7 @@ const SidebarItem = ({ to, icon: Icon, label, onClick, collapsed }) => {
     <>
       <NavLink
         to={to}
+        end={end}
         onClick={onClick}
         onMouseEnter={showTip}
         onMouseLeave={hideTip}

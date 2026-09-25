@@ -41,6 +41,19 @@ import SettlementsPage from "../pages/settlements/SettlementsPage";
 import NcrDriversPage from "../pages/ncr-drivers/NcrDriversPage";
 import NcrPassengersPage from "../pages/ncr-passengers/NcrPassengersPage";
 import LiveMapPage from "../pages/live-map/LiveMapPage";
+// GoMobility CRM (alag backend) — screens yahin admin dashboard mein
+import { CrmLayout } from "../pages/crm/crmShared";
+import CrmOverviewPage from "../pages/crm/CrmOverviewPage";
+import CrmJourneysPage from "../pages/crm/CrmJourneysPage";
+import CrmJourneyDetailPage from "../pages/crm/CrmJourneyDetailPage";
+import CrmCampaignsPage from "../pages/crm/CrmCampaignsPage";
+import CrmCampaignFormPage from "../pages/crm/CrmCampaignFormPage";
+import CrmCampaignDetailPage from "../pages/crm/CrmCampaignDetailPage";
+import CrmApprovalsPage from "../pages/crm/CrmApprovalsPage";
+import CrmContactsPage from "../pages/crm/CrmContactsPage";
+import CrmMessagesPage from "../pages/crm/CrmMessagesPage";
+import CrmAlertsPage from "../pages/crm/CrmAlertsPage";
+import CrmSettingsPage from "../pages/crm/CrmSettingsPage";
 
 const routes = [
   { path:"/signup", element:<SignupPage/> },
@@ -77,6 +90,23 @@ const routes = [
         { path:"notifications", element:<NotificationsPage/> },
         { path:"settings", element:<SettingsPage/> },
         { path:"logs", element:<LogsPage/> },
+        // ── CRM — access CRM backend deta hai (role: super_admin → admin, admin → approver, ops_team → marketer)
+        {
+          path:"crm", element:<CrmLayout/>, children:[
+            { index:true,                element:<CrmOverviewPage/> },
+            { path:"journeys",           element:<CrmJourneysPage/> },
+            { path:"journeys/:key",      element:<CrmJourneyDetailPage/> },
+            { path:"campaigns",          element:<CrmCampaignsPage/> },
+            { path:"campaigns/new",      element:<CrmCampaignFormPage/> },
+            { path:"campaigns/:id",      element:<CrmCampaignDetailPage/> },
+            { path:"campaigns/:id/edit", element:<CrmCampaignFormPage/> },
+            { path:"approvals",          element:<CrmApprovalsPage/> },
+            { path:"contacts",           element:<CrmContactsPage/> },
+            { path:"messages",           element:<CrmMessagesPage/> },
+            { path:"alerts",             element:<CrmAlertsPage/> },
+            { path:"settings",           element:<CrmSettingsPage/> },
+          ]
+        },
         // ── Super Admin only routes ───────────────────────────────
         {
           element:<RoleRoute allowedRoles={["Super Admin"]}/>,
