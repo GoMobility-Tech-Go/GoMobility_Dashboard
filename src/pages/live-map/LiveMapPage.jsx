@@ -294,8 +294,9 @@ export default function LiveMapPage() {
             }))
           : []
       );
-      setDemandRides(demRes.data?.data || demRes.data?.rides || []);
-      setHistoryRides(histRes.data?.data || histRes.data?.rides || []);
+      // /admin/rides returns { data: { rides:[...], pagination:{...} } }
+      setDemandRides(demRes.data?.data?.rides  || []);
+      setHistoryRides(histRes.data?.data?.rides || []);
       setLastRefresh(new Date());
     } catch (e) {
       console.error('Live map fetch error:', e);

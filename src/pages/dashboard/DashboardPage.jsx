@@ -816,11 +816,13 @@ export default function DashboardPage() {
     if (!isSA) return;
     try {
       const res     = await getLiveMapDrivers();
-      const drivers = res.data?.data || [];
+      // /admin/driver-metrics/live-map returns { data: { drivers:[...], count, generatedAt } }
+      const drivers = res.data?.data?.drivers || [];
       let onRide = 0, available = 0;
       drivers.forEach(d => {
-        if (d.is_on_duty || d.active_ride_id) onRide++;
-        else if (d.is_available)              available++;
+        const s = d.status;
+        if (s === 'on_ride'   || d.is_on_duty    || d.activeRide?.id || d.active_ride_id) onRide++;
+        else if (s === 'available' || d.is_available) available++;
       });
       setDriverBreakdown({ total: drivers.length, onRide, available, idle: Math.max(0, drivers.length - onRide - available) });
     } catch (_) {}
