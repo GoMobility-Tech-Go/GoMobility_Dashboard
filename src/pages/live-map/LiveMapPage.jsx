@@ -161,9 +161,10 @@ export default function LiveMapPage() {
 
   const withLocation = drivers.filter(d => d.lat && d.lng);
   const noLocation   = drivers.filter(d => !d.lat || !d.lng);
-  const center = withLocation.length > 0
-    ? [parseFloat(withLocation[0].lat), parseFloat(withLocation[0].lng)]
-    : [28.6139, 77.2090];
+
+  // Always center on Delhi NCR — not on a random driver's location
+  const NCR_CENTER = [28.6139, 77.2090];
+  const NCR_ZOOM   = 11;
 
   // heatmap points: [lat, lng, intensity]
   const heatPoints = withLocation.map(d => [parseFloat(d.lat), parseFloat(d.lng), 1]);
@@ -269,7 +270,7 @@ export default function LiveMapPage() {
             </div>
           </div>
         ) : (
-          <MapContainer center={center} zoom={11} style={{ height:'100%', width:'100%', minHeight:400 }}>
+          <MapContainer center={NCR_CENTER} zoom={NCR_ZOOM} style={{ height:'100%', width:'100%', minHeight:400 }}>
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
