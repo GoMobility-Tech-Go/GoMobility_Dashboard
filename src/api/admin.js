@@ -140,6 +140,14 @@ export const sendGroupNotification = (group, title, body) =>
 export const getLiveMapDrivers = () =>
   api.get(`/admin/drivers/live-map`);
 
+export const getLiveMapRides = () =>
+  api.get('/admin/rides', { params: { limit: 200, status: 'searching' } });
+
+export const getTodayRides = () => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return api.get('/admin/rides', { params: { limit: 500, start_date: today.toISOString() } });
+};
+
 // ── Driver Activity Sessions ──────────────────────────────────────────────────
 export const getDriverActivity = (driverId, limit = 20) =>
   api.get(`/admin/drivers/${driverId}/activity`, { params: { limit } });
