@@ -3,15 +3,15 @@ import { useNavigate } from "react-router-dom";
 import {
   Users, Car, MapPin, IndianRupee, TrendingUp, UserCheck, AlertCircle, Activity,
   ShieldAlert, BarChart2, Receipt, Megaphone, Zap, MessageCircle, Bell, Settings,
-  FileText, Star, RotateCcw, Wallet, CheckCircle,
+  FileText, Star, RotateCcw, Wallet, CheckCircle, ArrowUp, ArrowDown,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import {
   getDashboard, getRevenueAnalytics, getFraudAlerts,
-  getSosHistory, getRides,
+  getSosHistory, getRides, getLiveMapDrivers,
 } from "../../api/admin";
 import { useAuth } from "../../context/AuthContext";
 
@@ -85,7 +85,7 @@ const QuickLink = ({ icon:Icon, label, sub, to, color="#D4AF37", badge, onClick 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SUPER ADMIN DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
-function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBreakdown, loadingStats, loadingChart, loadingAlerts, days, setDays, error, periodLabel }) {
+function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBreakdown, loadingStats, loadingChart, loadingAlerts, days, setDays, error, periodLabel, ridesHourly, ridesHourlyLoad, yesterdayRev, driverBreakdown, convFunnel }) {
   const nav = useNavigate();
   const totalRev = (analytics?.byDay || []).reduce((s,d) => s + Number(d.totalRevenue||0), 0);
   const totalRid = (analytics?.byVehicle || []).reduce((s,v) => s + Number(v.totalRides||0), 0);
@@ -174,6 +174,187 @@ function SuperAdminDashboard({ stats, analytics, fraudAlerts, sosAlerts, rideBre
             <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{desc}</div>
           </div>
         ))}
+      </div>
+
+      {/* ── Real-time Operations Section ───────────────────────────────────── */}
+      <div style={{ marginBottom:24 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+          <span style={{ fontFamily:"Cinzel,serif", fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.5)", textTransform:"uppercase", letterSpacing:"1px" }}>Real-time Operations</span>
+          <span style={{ width:6, height:6, borderRadius:"50%", background:"#22c55e", display:"inline-block", animation:"livePulse 1.5s ease-in-out infinite" }}/>
+          <span style={{ fontSize:11, color:"rgba(34,197,94,0.6)" }}>Live · refreshes every 2 min</span>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:16, marginBottom:16 }}>
+
+          {/* Rides/hour bar chart */}
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, padding:"20px 20px 14px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+              <div>
+                <div style={{ fontFamily:"Cinzel,serif", fontSize:13, color:"#fff", fontWeight:600 }}>Rides / Hour</div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Last 24 hours · gold bar = current hour</div>
+              </div>
+              {!ridesHourlyLoad && ridesHourly.length > 0 && (
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:20, fontWeight:700, color:"#D4AF37", lineHeight:1 }}>
+                    {ridesHourly[new Date().getHours()]?.rides ?? 0}
+                  </div>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>this hour</div>
+                </div>
+              )}
+            </div>
+            {ridesHourlyLoad
+              ? <Skeleton h={150} />
+              : (
+                <ResponsiveContainer width="100%" height={150}>
+                  <BarChart data={ridesHourly} barSize={10} margin={{ top:4, right:4, left:-20, bottom:0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false}/>
+                    <XAxis dataKey="label" tick={{ fill:"rgba(255,255,255,0.3)", fontSize:9 }} axisLine={false} tickLine={false} interval={2}/>
+                    <YAxis tick={{ fill:"rgba(255,255,255,0.25)", fontSize:9 }} axisLine={false} tickLine={false} allowDecimals={false}/>
+                    <Tooltip
+                      content={({ active, payload, label }) =>
+                        active && payload?.length
+                          ? <div style={{ background:"rgba(2,13,38,0.95)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:8, padding:"8px 12px", color:"#fff", fontSize:12, fontFamily:"Outfit,sans-serif" }}>
+                              <div style={{ color:"rgba(212,175,55,0.7)", marginBottom:3 }}>{label}</div>
+                              <strong>{payload[0].value} rides</strong>
+                            </div>
+                          : null
+                      }
+                    />
+                    <ReferenceLine x={ridesHourly[new Date().getHours()]?.label} stroke="rgba(212,175,55,0.3)" strokeDasharray="4 3"/>
+                    <Bar dataKey="rides" radius={[3,3,0,0]}>
+                      {ridesHourly.map((entry, i) => (
+                        <Cell key={i} fill={i === new Date().getHours() ? "#D4AF37" : "rgba(96,165,250,0.55)"}/>
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )
+            }
+          </div>
+
+          {/* Revenue today vs yesterday + Driver utilization */}
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+
+            {/* Revenue comparison */}
+            <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, padding:"18px 20px", flex:1 }}>
+              <div style={{ fontFamily:"Cinzel,serif", fontSize:12, color:"rgba(255,255,255,0.5)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:12 }}>Revenue: Today vs Yesterday</div>
+              {loadingStats
+                ? <Skeleton h={70}/>
+                : (() => {
+                    const today = stats?.todayRevenue ?? 0;
+                    const yest  = yesterdayRev ?? 0;
+                    const diff  = today - yest;
+                    const pct   = yest > 0 ? ((diff / yest) * 100).toFixed(1) : null;
+                    const up    = diff >= 0;
+                    return (
+                      <div>
+                        <div style={{ display:"flex", alignItems:"flex-end", gap:10, marginBottom:10 }}>
+                          <div>
+                            <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginBottom:2 }}>Today</div>
+                            <div style={{ fontSize:24, fontWeight:800, color:"#D4AF37", lineHeight:1 }}>{fmtK(today)}</div>
+                          </div>
+                          {pct !== null && (
+                            <div style={{ display:"flex", alignItems:"center", gap:3, paddingBottom:3, color:up?"#4ade80":"#f87171" }}>
+                              {up ? <ArrowUp size={14}/> : <ArrowDown size={14}/>}
+                              <span style={{ fontSize:13, fontWeight:700 }}>{Math.abs(pct)}%</span>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display:"flex", gap:14 }}>
+                          <div>
+                            <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)" }}>Yesterday</div>
+                            <div style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.5)", marginTop:1 }}>{fmtK(yest)}</div>
+                          </div>
+                          {pct !== null && (
+                            <div>
+                              <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)" }}>Change</div>
+                              <div style={{ fontSize:13, fontWeight:600, color:up?"#4ade80":"#f87171", marginTop:1 }}>
+                                {up ? "+" : ""}{fmtK(Math.abs(diff))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()
+              }
+            </div>
+
+            {/* Driver utilization breakdown */}
+            <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, padding:"18px 20px", flex:1 }}>
+              <div style={{ fontFamily:"Cinzel,serif", fontSize:12, color:"rgba(255,255,255,0.5)", textTransform:"uppercase", letterSpacing:"0.8px", marginBottom:12 }}>Driver Utilization</div>
+              {!driverBreakdown
+                ? <Skeleton h={70}/>
+                : (() => {
+                    const { total, onRide, available, idle } = driverBreakdown;
+                    const segs = [
+                      { label:"On Ride",  val:onRide,    color:"#3b82f6" },
+                      { label:"Available",val:available, color:"#22c55e" },
+                      { label:"Idle",     val:idle,      color:"#f59e0b" },
+                    ];
+                    return (
+                      <div>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
+                          <span style={{ fontSize:24, fontWeight:800, color:"#fff", lineHeight:1 }}>{total}</span>
+                          <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>drivers online</span>
+                        </div>
+                        {/* Stacked bar */}
+                        <div style={{ height:8, borderRadius:4, overflow:"hidden", display:"flex", marginBottom:10 }}>
+                          {segs.map(s => (
+                            <div key={s.label} style={{ flex:s.val || 0, background:s.color, minWidth:s.val>0?2:0 }}/>
+                          ))}
+                          {total === 0 && <div style={{ flex:1, background:"rgba(255,255,255,0.08)" }}/>}
+                        </div>
+                        <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+                          {segs.map(s => (
+                            <div key={s.label} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                              <span style={{ width:7, height:7, borderRadius:"50%", background:s.color, display:"inline-block" }}/>
+                              <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>{s.label}</span>
+                              <span style={{ fontSize:12, fontWeight:700, color:s.color }}>{s.val}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()
+              }
+            </div>
+          </div>
+        </div>
+
+        {/* Conversion funnel */}
+        {convFunnel && (
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, padding:"20px 24px" }}>
+            <div style={{ fontFamily:"Cinzel,serif", fontSize:13, color:"#fff", fontWeight:600, marginBottom:16 }}>Ride Conversion Funnel</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+              {convFunnel.map((step, i) => {
+                const colors = ["#60a5fa","#a78bfa","#f59e0b","#22c55e"];
+                const drop   = i > 0 ? convFunnel[i-1].pct - step.pct : 0;
+                return (
+                  <div key={step.label}>
+                    {/* Arrow connector */}
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                      {i > 0 && (
+                        <div style={{ fontSize:10, color:"#f87171", fontWeight:600, marginRight:4 }}>
+                          -{drop}% drop
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ background:`${colors[i]}10`, border:`1px solid ${colors[i]}30`, borderRadius:12, padding:"14px 16px" }}>
+                      <div style={{ fontSize:10, color:`${colors[i]}90`, textTransform:"uppercase", letterSpacing:"0.7px", marginBottom:6 }}>{step.label}</div>
+                      <div style={{ fontSize:22, fontWeight:800, color:colors[i], lineHeight:1, marginBottom:4 }}>{fmtNum(step.value)}</div>
+                      {/* Progress bar showing % of total */}
+                      <div style={{ height:4, background:"rgba(255,255,255,0.06)", borderRadius:3, marginBottom:5 }}>
+                        <div style={{ width:`${step.pct}%`, height:"100%", background:colors[i], borderRadius:3, transition:"width .5s" }}/>
+                      </div>
+                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>{step.pct}% of total</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Stat Cards */}
@@ -552,6 +733,13 @@ export default function DashboardPage() {
   const [rideBreakdown, setRideBreakdown]   = useState({ completed:0, cancelled:0, loading:true });
   const [loadingAlerts, setLoadingAlerts]   = useState(true);
 
+  // New real-time ops data
+  const [ridesHourly,     setRidesHourly]     = useState([]);
+  const [ridesHourlyLoad, setRidesHourlyLoad] = useState(true);
+  const [yesterdayRev,    setYesterdayRev]    = useState(null);
+  const [driverBreakdown, setDriverBreakdown] = useState(null);
+  const [convFunnel,      setConvFunnel]      = useState(null);
+
   const loadDashboardStats = useCallback(() => {
     setLoadingStats(true);
     const { from, to } = dashPeriodDates;
@@ -587,6 +775,57 @@ export default function DashboardPage() {
       .finally(() => setLoadingChart(false));
   }, [days, isSA]);
 
+  // ── Rides/hour last 24h ────────────────────────────────────────────────────
+  const fetchHourlyRides = useCallback(async () => {
+    if (!isSA) return;
+    setRidesHourlyLoad(true);
+    try {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const res  = await getRides({ limit: 500, start_date: since.toISOString() });
+      const d    = res.data?.data || res.data || {};
+      const all  = d.rides || d.items || d.data || [];
+      const hrs  = Array.from({ length: 24 }, (_, i) => ({
+        hour: i,
+        label: i === 0 ? "12a" : i < 12 ? `${i}a` : i === 12 ? "12p" : `${i-12}p`,
+        rides: 0,
+      }));
+      all.forEach(r => {
+        if (r.created_at) hrs[new Date(r.created_at).getHours()].rides++;
+      });
+      setRidesHourly(hrs);
+    } catch (_) {}
+    finally { setRidesHourlyLoad(false); }
+  }, [isSA]);
+
+  // ── Yesterday revenue ──────────────────────────────────────────────────────
+  const fetchYesterdayRevenue = useCallback(async () => {
+    if (!isSA) return;
+    try {
+      const y = new Date(); y.setDate(y.getDate() - 1); y.setHours(0, 0, 0, 0);
+      const e = new Date(y); e.setHours(23, 59, 59, 999);
+      const res = await getRides({ limit: 500, start_date: y.toISOString(), end_date: e.toISOString() });
+      const d   = res.data?.data || res.data || {};
+      const all = d.rides || d.items || d.data || [];
+      const rev = all.filter(r => r.status === "completed").reduce((s, r) => s + (parseFloat(r.final_fare) || 0), 0);
+      setYesterdayRev(rev);
+    } catch (_) {}
+  }, [isSA]);
+
+  // ── Driver utilization breakdown ───────────────────────────────────────────
+  const fetchDriverBreakdown = useCallback(async () => {
+    if (!isSA) return;
+    try {
+      const res     = await getLiveMapDrivers();
+      const drivers = res.data?.data || [];
+      let onRide = 0, available = 0;
+      drivers.forEach(d => {
+        if (d.is_on_duty || d.active_ride_id) onRide++;
+        else if (d.is_available)              available++;
+      });
+      setDriverBreakdown({ total: drivers.length, onRide, available, idle: Math.max(0, drivers.length - onRide - available) });
+    } catch (_) {}
+  }, [isSA]);
+
   // Load SA-only extra data
   const loadAlertData = useCallback(() => {
     if (!isSA) return;
@@ -606,20 +845,41 @@ export default function DashboardPage() {
       })
       .catch(() => setSosAlerts([]));
 
+    // Ride breakdown + conversion funnel
     Promise.allSettled([
-      getRides({ status: "completed", limit: 1 }),
-      getRides({ status: "cancelled", limit: 1 }),
-    ]).then(([comp, canc]) => {
+      getRides({ status: "completed",      limit: 1 }),
+      getRides({ status: "cancelled",      limit: 1 }),
+      getRides({ status: "requested",      limit: 1 }),
+      getRides({ status: "driver_assigned",limit: 1 }),
+      getRides({ status: "in_progress",    limit: 1 }),
+    ]).then(([comp, canc, req, asgn, prog]) => {
       const getTotal = (res) => {
         if (res.status !== "fulfilled") return 0;
         const d = res.value.data?.data || res.value.data || {};
         return d.pagination?.total || d.total || 0;
       };
-      setRideBreakdown({ completed: getTotal(comp), cancelled: getTotal(canc), loading: false });
+      const completed = getTotal(comp);
+      const cancelled = getTotal(canc);
+      const requested = getTotal(req);
+      const assigned  = getTotal(asgn);
+      const inProg    = getTotal(prog);
+      setRideBreakdown({ completed, cancelled, loading: false });
+      const total = completed + cancelled + requested + assigned + inProg;
+      if (total > 0) {
+        const funnel = [
+          { label: "Requested",   value: total,     pct: 100 },
+          { label: "Assigned",    value: assigned + inProg + completed, pct: 0 },
+          { label: "In Progress", value: inProg + completed, pct: 0 },
+          { label: "Completed",   value: completed, pct: 0 },
+        ].map(f => ({ ...f, pct: total > 0 ? Math.round((f.value / total) * 100) : 0 }));
+        setConvFunnel(funnel);
+      }
     });
   }, [isSA]);
 
-  const alertIntervalRef = useRef(null);
+  const alertIntervalRef  = useRef(null);
+  const opsIntervalRef    = useRef(null);
+
   useEffect(() => {
     loadAlertData();
     if (alertIntervalRef.current) clearInterval(alertIntervalRef.current);
@@ -630,9 +890,24 @@ export default function DashboardPage() {
     return () => clearInterval(alertIntervalRef.current);
   }, [loadAlertData]);
 
+  // Real-time ops: rides/hour + driver breakdown + yesterday revenue
+  useEffect(() => {
+    if (!isSA) return;
+    fetchHourlyRides();
+    fetchYesterdayRevenue();
+    fetchDriverBreakdown();
+    if (opsIntervalRef.current) clearInterval(opsIntervalRef.current);
+    opsIntervalRef.current = setInterval(() => {
+      if (document.hidden) return;
+      fetchHourlyRides();
+      fetchDriverBreakdown();
+    }, 120_000);
+    return () => clearInterval(opsIntervalRef.current);
+  }, [isSA, fetchHourlyRides, fetchYesterdayRevenue, fetchDriverBreakdown]);
+
   return (
     <div style={{ fontFamily:"Outfit,sans-serif" }}>
-      <style>{`@keyframes gmPulse{0%,100%{opacity:1}50%{opacity:0.45}}`}</style>
+      <style>{`@keyframes gmPulse{0%,100%{opacity:1}50%{opacity:0.45}}@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(1.5)}}`}</style>
 
       {!actualIsSA && (
         <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:16 }}>
@@ -679,6 +954,10 @@ export default function DashboardPage() {
             loadingAlerts={loadingAlerts}
             days={days} setDays={setDays} error={error}
             periodLabel={dashPeriodLabel}
+            ridesHourly={ridesHourly} ridesHourlyLoad={ridesHourlyLoad}
+            yesterdayRev={yesterdayRev}
+            driverBreakdown={driverBreakdown}
+            convFunnel={convFunnel}
           />
         : <AdminDashboard stats={stats} loadingStats={loadingStats} error={error} periodLabel={dashPeriodLabel} />
       }
