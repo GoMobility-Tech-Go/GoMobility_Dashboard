@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ShieldCheck, ShieldX, UserCheck, UserX,
@@ -904,6 +904,11 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const [toast, setToast]       = useState(null);
   const [acting, setActing]     = useState({});
   const [exporting, setExporting] = useState(false);
+  const [selectedIds, setSelectedIds]             = useState(new Set());
+  const [bulkActing, setBulkActing]               = useState(false);
+  const [showPending7Days, setShowPending7Days]   = useState(false);
+  const [expandedDriverId, setExpandedDriverId]   = useState(null);
+  const [expandedDocsCache, setExpandedDocsCache] = useState({});
 
   // ── Onboarding status filter ──────────────────────────────────────────
   const [onboardingStatus, setOnboardingStatus] = useState([]);
@@ -980,7 +985,8 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
     setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" });
     setOnboardingStatus([]);
     setVehicleTypeFilter('all'); if (!ncrMode) setCityFilter(''); setDriverAccountStatus([]);
-    setShowOnlyOnDuty(false); setShowOnlyTestDrivers(false);
+    setShowOnlyOnDuty(false); setShowOnlyTestDrivers(false); setShowPending7Days(false);
+    setSelectedIds(new Set());
   };
 
   // Modals
@@ -1023,16 +1029,18 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
     if (driverAccountStatus.length > 0) params.account_status = driverAccountStatus.join(',');
     if (showOnlyOnDuty)      params.is_on_duty   = 'true';
     if (showOnlyTestDrivers) params.is_test_user = 'true';
+    if (showPending7Days) { const d7 = new Date(); d7.setDate(d7.getDate() - 7); params.registered_before = d7.toISOString(); params.onboarding_status = params.onboarding_status || 'in_progress,not_started'; }
     getDrivers(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
         setDrivers(d.drivers || d.items || d.data || []);
         setPagination(d.pagination || null);
         setInProgressDocs({});       // reset on each page load
+        setSelectedIds(new Set());   // clear selection on page change
       })
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
-  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates, onboardingStatus, vehicleTypeFilter, cityFilter, driverAccountStatus, showOnlyOnDuty, showOnlyTestDrivers]);
+  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates, onboardingStatus, vehicleTypeFilter, cityFilter, driverAccountStatus, showOnlyOnDuty, showOnlyTestDrivers, showPending7Days]);
 
   const handleExportDrivers = async () => {
     setExporting(true);
@@ -1053,6 +1061,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       if (driverAccountStatus.length > 0) params.account_status = driverAccountStatus.join(',');
       if (showOnlyOnDuty)      { params.is_on_duty_op = 'eq'; params.is_on_duty_val = 'true'; }
       if (showOnlyTestDrivers) { params.is_test_user_op = 'eq'; params.is_test_user_val = 'true'; }
+      if (showPending7Days) { const d7 = new Date(); d7.setDate(d7.getDate() - 7); params.registered_before = d7.toISOString(); params.onboarding_status = params.onboarding_status || 'in_progress,not_started'; }
 
       const res  = await getDrivers(params);
       const d    = res.data?.data || res.data || {};
@@ -1268,6 +1277,47 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       if (tab === "Fraud Alerts") loadFraud();
     } catch (err) { showToast(err.response?.data?.message || "Suspend failed.", "error"); }
     finally { setActing((p) => ({ ...p, ["sus"+userId]: false })); }
+  };
+
+  const handleBulkVerify = async () => {
+    if (!selectedIds.size) return;
+    setBulkActing(true);
+    const ids = [...selectedIds];
+    let ok = 0, fail = 0;
+    await Promise.allSettled(ids.map(async (dId) => {
+      try { await verifyDriver(dId, true); ok++; } catch { fail++; }
+    }));
+    setBulkActing(false);
+    setSelectedIds(new Set());
+    showToast(`Verified ${ok} driver(s)${fail ? ` (${fail} failed)` : ''}.`, fail ? 'error' : 'success');
+    loadDrivers(); loadStats();
+  };
+
+  const handleBulkBlock = async () => {
+    if (!selectedIds.size) return;
+    setBulkActing(true);
+    const ids = [...selectedIds];
+    let ok = 0, fail = 0;
+    await Promise.allSettled(ids.map(async (dId) => {
+      try { await updateDriverStatus(dId, false); ok++; } catch { fail++; }
+    }));
+    setBulkActing(false);
+    setSelectedIds(new Set());
+    showToast(`Blocked ${ok} driver(s)${fail ? ` (${fail} failed)` : ''}.`, fail ? 'error' : 'success');
+    loadDrivers();
+  };
+
+  const toggleExpandDriver = async (dId, userId) => {
+    if (expandedDriverId === dId) { setExpandedDriverId(null); return; }
+    setExpandedDriverId(dId);
+    if (expandedDocsCache[userId] !== undefined) return;
+    setExpandedDocsCache(p => ({ ...p, [userId]: null }));
+    try {
+      const res = await getDriverKycStatus(userId);
+      const data = res.data?.data || res.data || {};
+      const docs = data.documents || data.items || (Array.isArray(data) ? data : []);
+      setExpandedDocsCache(p => ({ ...p, [userId]: docs }));
+    } catch { setExpandedDocsCache(p => ({ ...p, [userId]: [] })); }
   };
 
   const handleApproveKyc = async (docId) => {
@@ -1603,6 +1653,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
             <DrvVisibilityToggle active={includeUnverifiedDrivers} onToggle={() => { setIncludeUnverifiedDrivers(v=>!v); setOffset(0); }} label="KYC-Incomplete" />
             <DrvVisibilityToggle active={showOnlyOnDuty}           onToggle={() => { setShowOnlyOnDuty(v=>!v); setOffset(0); }}           label="On Duty" />
             <DrvVisibilityToggle active={showOnlyTestDrivers}      onToggle={() => { setShowOnlyTestDrivers(v=>!v); setOffset(0); }}      label="Test Users" />
+            <DrvVisibilityToggle active={showPending7Days}         onToggle={() => { setShowPending7Days(v=>!v); setOffset(0); }}         label="Pending > 7 Days" />
             <button
               onClick={handleExportDrivers}
               disabled={exporting}
@@ -1686,11 +1737,48 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
             </div>
           )}
 
+          {/* Bulk action bar — visible when drivers are selected */}
+          {selectedIds.size > 0 && (
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', marginBottom:10, background:'rgba(212,175,55,0.08)', border:'1px solid rgba(212,175,55,0.3)', borderRadius:12, flexWrap:'wrap' }}>
+              <span style={{ fontSize:13, fontWeight:700, color:GOLD }}>
+                {selectedIds.size} driver{selectedIds.size > 1 ? 's' : ''} selected
+              </span>
+              <button
+                disabled={bulkActing}
+                onClick={handleBulkVerify}
+                style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', background:'rgba(74,222,128,0.12)', border:'1px solid rgba(74,222,128,0.3)', borderRadius:8, color:'#4ade80', fontSize:12, fontWeight:700, fontFamily:'Outfit,sans-serif', cursor:bulkActing?'not-allowed':'pointer', opacity:bulkActing?0.5:1 }}>
+                <ShieldCheck size={13}/>{bulkActing ? 'Working…' : 'Verify All'}
+              </button>
+              <button
+                disabled={bulkActing}
+                onClick={handleBulkBlock}
+                style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:8, color:'#f87171', fontSize:12, fontWeight:700, fontFamily:'Outfit,sans-serif', cursor:bulkActing?'not-allowed':'pointer', opacity:bulkActing?0.5:1 }}>
+                <UserX size={13}/>Block All
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                style={{ marginLeft:'auto', padding:'6px 12px', background:'transparent', border:'1px solid rgba(255,255,255,0.12)', borderRadius:8, color:'rgba(255,255,255,0.5)', fontSize:12, cursor:'pointer', fontFamily:'Outfit,sans-serif' }}>
+                <X size={12} style={{ marginRight:4 }}/>Deselect All
+              </button>
+            </div>
+          )}
+
           <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"visible" }}>
             <div style={{ overflowX:"auto", overflowY:"visible" }}>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead>
                   <tr>
+                    {/* Select-all checkbox */}
+                    <th style={{ padding:'12px 10px 12px 16px', borderBottom:'1px solid rgba(212,175,55,0.1)', width:36 }}>
+                      <input type="checkbox"
+                        style={{ accentColor:GOLD, width:15, height:15, cursor:'pointer' }}
+                        checked={drivers.length > 0 && drivers.every(d => selectedIds.has(d.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedIds(new Set(drivers.map(d => d.id)));
+                          else setSelectedIds(new Set());
+                        }}
+                      />
+                    </th>
                     <th style={drvTh(sort.col==="name")}  onClick={()=>toggleDriverSort("name")}>
                       <FilterHead label="Driver" meta={fMeta("name")} filter={filters.name}
                         onChange={v => setFilter("name", v)} onClear={() => clearFilter("name")} />
@@ -1732,17 +1820,26 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                 <tbody>
                   {loading
                     ? Array(6).fill(0).map((_,i)=>(
-                        <tr key={i}><td colSpan={12}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
+                        <tr key={i}><td colSpan={13}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
                       ))
                     : drivers.length === 0
-                      ? <tr><td colSpan={12} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers match these filters</td></tr>
+                      ? <tr><td colSpan={13} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers match these filters</td></tr>
                       : drivers.map((d) => {
                           const isSuspended = d.is_suspended || d.suspended;
                           const userId = d.user_id || d.userId;
                           const isVerified = !!(d.is_verified || d.verified_at);
                           const vt = Array.isArray(d.vehicle_type) ? d.vehicle_type.join(", ") : (d.vehicle_type || d.vehicleType);
                           return (
-                            <tr key={d.id} onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
+                            <React.Fragment key={d.id}>
+                            <tr onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
+                              <td style={{ padding:'0 10px 0 16px', verticalAlign:'middle', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                                <input type="checkbox"
+                                  style={{ accentColor:GOLD, width:14, height:14, cursor:'pointer' }}
+                                  checked={selectedIds.has(d.id)}
+                                  onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) next.add(d.id); else next.delete(d.id); setSelectedIds(next); }}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </td>
                               <TD>
                                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                                   <div style={{ width:38, height:38, borderRadius:"50%", background:"rgba(212,175,55,0.12)", border:"1.5px solid rgba(212,175,55,0.28)", flexShrink:0, overflow:"hidden", position:"relative", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -1849,9 +1946,15 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                               <TD>
                                 <div style={{ display:"flex", gap:6 }}>
                                   <button
+                                    onClick={() => toggleExpandDriver(d.id, userId)}
+                                    title="Toggle inline doc preview"
+                                    style={{ display:"flex", alignItems:"center", gap:4, padding:"5px 8px", background: expandedDriverId===d.id?"rgba(96,165,250,0.15)":"rgba(96,165,250,0.07)", border:`1px solid ${expandedDriverId===d.id?"rgba(96,165,250,0.4)":"rgba(96,165,250,0.18)"}`, borderRadius:8, color:"#60a5fa", fontSize:11, cursor:"pointer" }}>
+                                    {expandedDriverId===d.id ? <EyeOff size={11}/> : <Eye size={11}/>}
+                                  </button>
+                                  <button
                                     onClick={() => navigate(`/driver-onboarding/${d.id}`, { state: { userId } })}
                                     style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:8, color:"#D4AF37", fontSize:11, cursor:"pointer", fontFamily:"Outfit,sans-serif", fontWeight:600 }}>
-                                    <Eye size={12}/> Details
+                                    Details
                                   </button>
                                   <button
                                     onClick={() => {
@@ -1874,6 +1977,48 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                                 </div>
                               </TD>
                             </tr>
+                            {/* Inline doc preview row */}
+                            {expandedDriverId === d.id && (() => {
+                              const docs = expandedDocsCache[userId];
+                              return (
+                                <tr key="docs-row">
+                                  <td colSpan={13} style={{ padding:0, borderBottom:'1px solid rgba(212,175,55,0.15)' }}>
+                                    <div style={{ padding:'12px 20px', background:'rgba(0,0,0,0.25)' }}>
+                                      <div style={{ fontSize:11, fontWeight:700, color:'rgba(212,175,55,0.7)', textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:10 }}>
+                                        Documents — {d.full_name || d.name || 'Driver'}
+                                      </div>
+                                      {docs === null ? (
+                                        <div style={{ fontSize:12, color:'rgba(255,255,255,0.35)', fontStyle:'italic' }}>Loading docs…</div>
+                                      ) : docs.length === 0 ? (
+                                        <div style={{ fontSize:12, color:'rgba(255,255,255,0.35)' }}>No documents uploaded yet</div>
+                                      ) : (
+                                        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                                          {docs.map((doc, di) => {
+                                            const s = (doc.status||'pending').toLowerCase();
+                                            const colorCfg = DOC_STATUS_COLOR[s] || DOC_STATUS_COLOR.pending;
+                                            return (
+                                              <div key={di} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, width:90 }}>
+                                                <div
+                                                  onClick={() => doc.file_url && window.open(doc.file_url,'_blank')}
+                                                  style={{ width:80, height:64, borderRadius:8, overflow:'hidden', border:`1px solid ${colorCfg.border}`, background:'rgba(255,255,255,0.04)', display:'flex', alignItems:'center', justifyContent:'center', cursor:doc.file_url?'pointer':'default', flexShrink:0 }}>
+                                                  {doc.file_url
+                                                    ? <img src={doc.file_url} alt="doc" style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>e.target.style.display='none'} />
+                                                    : <CreditCard size={18} color="rgba(212,175,55,0.25)"/>
+                                                  }
+                                                </div>
+                                                <div style={{ fontSize:10, textAlign:'center', fontWeight:700, color:colorCfg.color }}>{DOC_SHORT[doc.document_type||doc.type]||doc.document_type||'?'}</div>
+                                                <span style={{ fontSize:9, padding:'1px 6px', borderRadius:10, background:colorCfg.bg, color:colorCfg.color, border:`1px solid ${colorCfg.border}`, fontWeight:700 }}>{s}</span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })()}
+                            </React.Fragment>
                           );
                         })
                   }
