@@ -984,7 +984,6 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
     setOnboardingStatus([]);
     setVehicleTypeFilter('all'); if (!ncrMode) setCityFilter(''); setDriverAccountStatus([]);
     setShowOnlyOnDuty(false); setShowOnlyTestDrivers(false); setShowPending7Days(false);
-    setSelectedIds(new Set());
   };
 
   // Modals
@@ -1034,7 +1033,6 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
         setDrivers(d.drivers || d.items || d.data || []);
         setPagination(d.pagination || null);
         setInProgressDocs({});       // reset on each page load
-        setSelectedIds(new Set());   // clear selection on page change
       })
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
