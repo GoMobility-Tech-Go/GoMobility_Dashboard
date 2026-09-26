@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.heat';
 import { getLiveMapDrivers, sendGroupNotification } from '../../api/admin';
-import { RefreshCw, Bell, X, Send, Car, MapPin, MapPinOff } from 'lucide-react';
+import { RefreshCw, Bell, X, Send, Car, MapPin, MapPinOff, Layers, Flame } from 'lucide-react';
 
 // Fix default Leaflet marker icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -22,6 +23,31 @@ const CAR_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="white" xm
 const BIKE_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="5.5" cy="17" r="3"/><circle cx="18.5" cy="17" r="3"/><path d="M9 17l3-7h4l2.5 7"/><path d="M12 10l-1.5-3"/><path d="M16 10l2-2.5 3.5 1"/></svg>`;
 
 const AUTO_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="8" width="13" height="7" rx="1"/><path d="M3 11h13"/><path d="M16 9h4l1 6h-5V9z"/><circle cx="8" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>`;
+
+// Heatmap layer component — uses leaflet.heat under the hood
+function HeatmapLayer({ points }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!points || points.length === 0) return;
+    const heat = L.heatLayer(points, {
+      radius: 40,
+      blur: 30,
+      maxZoom: 14,
+      max: 1.0,
+      gradient: {
+        0.0: '#3b82f6', // blue  — sparse
+        0.3: '#06b6d4', // cyan
+        0.5: '#22c55e', // green
+        0.7: '#f59e0b', // amber
+        0.85:'#ef4444', // red
+        1.0: '#7c3aed', // purple — very dense
+      },
+    });
+    heat.addTo(map);
+    return () => { map.removeLayer(heat); };
+  }, [map, points]);
+  return null;
+}
 
 const vehicleIcon = (type) => {
   const t = (type?.toLowerCase() === 'cab') ? 'car' : (type?.toLowerCase() || '');
@@ -105,11 +131,13 @@ function GroupNotifyModal({ onClose }) {
   );
 }
 
+// view: 'markers' | 'heatmap' | 'both'
 export default function LiveMapPage() {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [notifyOpen, setNotifyOpen] = useState(false);
+  const [view, setView] = useState('both');
   const intervalRef = useRef(null);
 
   const fetchDrivers = async () => {
@@ -137,6 +165,9 @@ export default function LiveMapPage() {
     ? [parseFloat(withLocation[0].lat), parseFloat(withLocation[0].lng)]
     : [28.6139, 77.2090];
 
+  // heatmap points: [lat, lng, intensity]
+  const heatPoints = withLocation.map(d => [parseFloat(d.lat), parseFloat(d.lng), 1]);
+
   return (
     <div className="flex flex-col" style={{ minHeight:'100vh' }}>
       {/* Header */}
@@ -159,6 +190,23 @@ export default function LiveMapPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* View toggle */}
+          <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1 gap-0.5">
+            {[
+              { key: 'markers', label: 'Markers', icon: <MapPin size={13}/> },
+              { key: 'both',    label: 'Both',    icon: <Layers size={13}/> },
+              { key: 'heatmap', label: 'Heatmap', icon: <Flame size={13}/> },
+            ].map(({ key, label, icon }) => (
+              <button key={key} onClick={() => setView(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  view === key
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}>
+                {icon}{label}
+              </button>
+            ))}
+          </div>
           <button onClick={() => { setLoading(true); fetchDrivers(); }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
             <RefreshCw size={14}/> Refresh
@@ -172,12 +220,26 @@ export default function LiveMapPage() {
 
       {/* Legend */}
       <div className="px-6 py-2 bg-white dark:bg-gray-900 border-b dark:border-gray-800 flex items-center gap-4 flex-shrink-0 flex-wrap">
-        {Object.entries(VEHICLE_COLORS).map(([type, color]) => (
+        {view !== 'heatmap' && Object.entries(VEHICLE_COLORS).map(([type, color]) => (
           <span key={type} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
             <span className="w-3 h-3 rounded-full" style={{ background: color }}/>
             {VEHICLE_LABELS[type] || type.charAt(0).toUpperCase()+type.slice(1)}
           </span>
         ))}
+        {view !== 'markers' && (
+          <span className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+            <span className="text-gray-400">Density:</span>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded-sm" style={{ background:'#3b82f6' }}/>
+              <span>Sparse</span>
+            </span>
+            <span className="w-12 h-2 rounded-full" style={{ background:'linear-gradient(to right,#3b82f6,#22c55e,#f59e0b,#ef4444,#7c3aed)' }}/>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded-sm" style={{ background:'#7c3aed' }}/>
+              <span>Dense</span>
+            </span>
+          </span>
+        )}
         <span className="ml-auto text-xs text-gray-400">Auto-refreshes every 30s</span>
       </div>
 
@@ -212,7 +274,10 @@ export default function LiveMapPage() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
             />
-            {withLocation.map(d => (
+            {/* Heatmap layer */}
+            {view !== 'markers' && <HeatmapLayer points={heatPoints} />}
+            {/* Individual markers */}
+            {view !== 'heatmap' && withLocation.map(d => (
               <Marker key={d.id} position={[parseFloat(d.lat), parseFloat(d.lng)]} icon={vehicleIcon(d.vehicle_type)}>
                 <Popup>
                   <div className="min-w-[160px]">
