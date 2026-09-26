@@ -47,7 +47,6 @@ const ADMIN_MENU = [
     { label:"Driver Metrics",    to:"/driver-metrics",       icon:Activity    },
     { label:"Push Notifications", to:"/notifications",        icon:Bell        },
   ]},
-  // GoMobility CRM (separate backend — gomobility-crm). Journeys + campaigns, PRD 28.
   { label:"CRM", items:[
     { label:"CRM Overview",       to:"/crm",                  icon:Target, end:true },
     { label:"CRM Analytics",      to:"/crm/analytics",        icon:BarChart3   },
@@ -83,50 +82,83 @@ const SA_EXTRA = [
   ]},
 ];
 
-// ── Logs page — only these two phone numbers can see it ───────────────────────
 const LOGS_ALLOWED = new Set(["6205356010", "9540594976"]);
 const normPhone = (p) => (p || "").replace(/\D/g, "").slice(-10);
+
+// Check if a notification is SOS/emergency type
+const isSosNotif = (n) => {
+  if (n.is_read) return false;
+  const title = (n.title || "").toLowerCase();
+  const body  = (n.body  || n.message || "").toLowerCase();
+  return n.type === "sos" || n.type === "emergency" ||
+    title.includes("sos") || title.includes("emergency") || title.includes("safety alert") ||
+    body.includes("sos")  || body.includes("emergency");
+};
 
 export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, setDesktopCollapsed, sidebarWidth }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [bellOpen, setBellOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-  const [notifs, setNotifs] = useState([]);
+  const [profileOpen, setProfileOpen]   = useState(false);
+  const [bellOpen, setBellOpen]         = useState(false);
+  const [unread, setUnread]             = useState(0);
+  const [sosCount, setSosCount]         = useState(0);
+  const [notifs, setNotifs]             = useState([]);
   const [notifsLoading, setNotifsLoading] = useState(false);
-  const ref = useRef(null);
+  const ref     = useRef(null);
   const bellRef = useRef(null);
-  const isSA = user?.role === "Super Admin";
+  const isSA        = user?.role === "Super Admin";
   const canViewLogs = LOGS_ALLOWED.has(normPhone(user?.phone));
 
-  // Filter out Logs item for non-allowed phones
   const baseGroups = isSA ? [...ADMIN_MENU, ...SA_EXTRA] : ADMIN_MENU;
   const groups = baseGroups.map(g => ({
     ...g,
     items: g.items.filter(item => item.to !== "/logs" || canViewLogs),
   })).filter(g => g.items.length > 0);
 
-  const openBell = () => {
-    setBellOpen(p => !p);
-    if (!bellOpen) {
-      setNotifsLoading(true);
+  // Fetch notifications list (used when bell is opened)
+  const fetchNotifList = () => {
+    setNotifsLoading(true);
+    getAdminNotifications()
+      .then((res) => {
+        const d    = res.data?.data || res.data || {};
+        const list = d.notifications || d.items || (Array.isArray(d) ? d : []);
+        setNotifs(list);
+        const unreadList = list.filter(n => !n.is_read);
+        setUnread(unreadList.length);
+        setSosCount(unreadList.filter(isSosNotif).length);
+      })
+      .catch(() => setNotifs([]))
+      .finally(() => setNotifsLoading(false));
+  };
+
+  // Background poll for unread count every 30s
+  useEffect(() => {
+    const poll = () => {
       getAdminNotifications()
         .then((res) => {
-          const d = res.data?.data || res.data || {};
+          const d    = res.data?.data || res.data || {};
           const list = d.notifications || d.items || (Array.isArray(d) ? d : []);
-          setNotifs(list);
-          setUnread(list.filter(n => !n.is_read).length);
+          const unreadList = list.filter(n => !n.is_read);
+          setUnread(unreadList.length);
+          setSosCount(unreadList.filter(isSosNotif).length);
         })
-        .catch(() => setNotifs([]))
-        .finally(() => setNotifsLoading(false));
-    }
+        .catch(() => {});
+    };
+    poll(); // immediate first poll
+    const t = setInterval(poll, 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const openBell = () => {
+    setBellOpen(p => !p);
+    if (!bellOpen) fetchNotifList();
   };
 
   const handleMarkAll = async () => {
     try {
       await markAllNotifRead();
       setUnread(0);
+      setSosCount(0);
       setNotifs(p => p.map(n => ({ ...n, is_read: true })));
     } catch {}
   };
@@ -134,14 +166,19 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
   const handleMarkOne = async (id) => {
     try {
       await markNotifRead(id);
-      setNotifs(p => p.map(n => n.id === id ? { ...n, is_read: true } : n));
-      setUnread(p => Math.max(0, p - 1));
+      setNotifs(p => {
+        const updated = p.map(n => n.id === id ? { ...n, is_read: true } : n);
+        const unreadList = updated.filter(n => !n.is_read);
+        setUnread(unreadList.length);
+        setSosCount(unreadList.filter(isSosNotif).length);
+        return updated;
+      });
     } catch {}
   };
 
   useEffect(() => {
     const h = e => {
-      if (ref.current && !ref.current.contains(e.target)) setProfileOpen(false);
+      if (ref.current     && !ref.current.contains(e.target))     setProfileOpen(false);
       if (bellRef.current && !bellRef.current.contains(e.target)) setBellOpen(false);
     };
     document.addEventListener("mousedown", h);
@@ -158,8 +195,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
     }
   };
 
+  const hasSos      = sosCount > 0;
+  const bellColor   = hasSos ? "#ef4444" : bellOpen ? "#D4AF37" : "rgba(255,255,255,0.55)";
+  const badgeBg     = hasSos ? "#ef4444" : "#ef4444";
+
   return (
     <>
+      <style>{`
+        @keyframes sosPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.2);opacity:0.7} }
+      `}</style>
+
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
@@ -196,7 +241,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
         <nav className="gm-nav" style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding: desktopCollapsed ? "10px 8px 10px" : "12px 10px 10px" }}>
           {groups.map((g, gi) => (
             <div key={g.label} style={{ marginBottom: desktopCollapsed ? 2 : 6 }}>
-              {/* Expanded: section labels */}
               {g.crown && !desktopCollapsed && (
                 <>
                   <div style={{ height:1, background:"linear-gradient(90deg,rgba(212,175,55,0.28),transparent)", margin:"8px 8px 6px" }}/>
@@ -210,7 +254,6 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
                   {g.label}
                 </div>
               )}
-              {/* Collapsed: divider between groups */}
               {desktopCollapsed && gi > 0 && (
                 <div style={{ height:1, background:"rgba(212,175,55,0.12)", margin:"4px 10px 6px" }}/>
               )}
@@ -236,20 +279,25 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
           <button
             onClick={openBell}
             title="Notifications"
-            style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:desktopCollapsed?"8px 0":"9px 10px", borderRadius:10, border:"1px solid transparent", background:"none", cursor:"pointer", transition:"all .2s", justifyContent:desktopCollapsed?"center":"flex-start", position:"relative" }}
-            onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.04)";e.currentTarget.style.borderColor="rgba(212,175,55,0.15)";}}
-            onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.borderColor="transparent";}}
+            style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:desktopCollapsed?"8px 0":"9px 10px", borderRadius:10, border:`1px solid ${hasSos?"rgba(239,68,68,0.25)":"transparent"}`, background: hasSos ? "rgba(239,68,68,0.05)" : "none", cursor:"pointer", transition:"all .2s", justifyContent:desktopCollapsed?"center":"flex-start", position:"relative" }}
+            onMouseEnter={e=>{ e.currentTarget.style.background= hasSos?"rgba(239,68,68,0.08)":"rgba(255,255,255,0.04)"; if(!hasSos) e.currentTarget.style.borderColor="rgba(212,175,55,0.15)"; }}
+            onMouseLeave={e=>{ e.currentTarget.style.background= hasSos?"rgba(239,68,68,0.05)":"none"; e.currentTarget.style.borderColor= hasSos?"rgba(239,68,68,0.25)":"transparent"; }}
           >
             <div style={{ position:"relative", flexShrink:0 }}>
-              <Bell size={17} color={bellOpen?"#D4AF37":"rgba(255,255,255,0.55)"} />
-              {unread > 0 && (
-                <span style={{ position:"absolute", top:-5, right:-5, minWidth:16, height:16, borderRadius:8, background:"#ef4444", border:"1.5px solid #020c20", fontSize:9, fontWeight:700, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px", lineHeight:1 }}>
+              <Bell size={17} color={bellColor} style={{ animation: hasSos ? "sosPulse 1.5s ease-in-out infinite" : "none" }} />
+              {(unread > 0 || hasSos) && (
+                <span style={{ position:"absolute", top:-5, right:-5, minWidth:16, height:16, borderRadius:8, background: hasSos ? "#ef4444" : "#ef4444", border:"1.5px solid #020c20", fontSize:9, fontWeight:700, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px", lineHeight:1, animation: hasSos ? "sosPulse 1.5s ease-in-out infinite" : "none" }}>
                   {unread > 99 ? "99+" : unread}
                 </span>
               )}
             </div>
             {!desktopCollapsed && (
-              <span style={{ fontSize:13, color:bellOpen?"#D4AF37":"rgba(255,255,255,0.6)", fontFamily:"Outfit,sans-serif", fontWeight:500 }}>Notifications</span>
+              <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <span style={{ fontSize:13, color: hasSos ? "#f87171" : bellOpen?"#D4AF37":"rgba(255,255,255,0.6)", fontFamily:"Outfit,sans-serif", fontWeight:500 }}>Notifications</span>
+                {hasSos && (
+                  <span style={{ fontSize:9, fontWeight:800, color:"#ef4444", background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.35)", borderRadius:20, padding:"1px 6px" }}>SOS</span>
+                )}
+              </div>
             )}
           </button>
 
@@ -257,14 +305,21 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
           {bellOpen && (
             <div style={{ position:"absolute", bottom:"calc(100% + 6px)", left:desktopCollapsed?60:10, right:desktopCollapsed?"auto":10, width:desktopCollapsed?300:undefined, background:"linear-gradient(135deg,#020c20,#030f28)", border:"1px solid rgba(212,175,55,0.22)", borderRadius:14, boxShadow:"0 20px 60px rgba(0,0,0,0.6)", zIndex:200, overflow:"hidden" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderBottom:"1px solid rgba(212,175,55,0.1)" }}>
-                <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:700, color:"#D4AF37" }}>Notifications</span>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontFamily:"Cinzel,serif", fontSize:12, fontWeight:700, color:"#D4AF37" }}>Notifications</span>
+                  {hasSos && (
+                    <span style={{ fontSize:9, fontWeight:800, color:"#ef4444", background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:20, padding:"1px 7px" }}>
+                      {sosCount} SOS
+                    </span>
+                  )}
+                </div>
                 {unread > 0 && (
                   <button onClick={handleMarkAll} style={{ display:"flex", alignItems:"center", gap:4, fontSize:10.5, color:"rgba(255,255,255,0.5)", background:"none", border:"none", cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
                     <CheckCheck size={11}/> Mark all read
                   </button>
                 )}
               </div>
-              <div style={{ maxHeight:300, overflowY:"auto" }}>
+              <div style={{ maxHeight:320, overflowY:"auto" }}>
                 {notifsLoading ? (
                   <div style={{ padding:24, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>Loading…</div>
                 ) : notifs.length === 0 ? (
@@ -272,26 +327,40 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
                     <Bell size={24} color="rgba(255,255,255,0.1)" style={{ marginBottom:8, display:"block", margin:"0 auto 8px" }} />
                     No notifications
                   </div>
-                ) : notifs.map((n) => (
-                  <div
-                    key={n.id}
-                    onClick={() => !n.is_read && handleMarkOne(n.id)}
-                    style={{ padding:"11px 14px", borderBottom:"1px solid rgba(255,255,255,0.04)", background:n.is_read?"transparent":"rgba(212,175,55,0.04)", cursor:n.is_read?"default":"pointer", transition:"background .15s" }}
-                    onMouseEnter={e=>{if(!n.is_read)e.currentTarget.style.background="rgba(212,175,55,0.08)";}}
-                    onMouseLeave={e=>{e.currentTarget.style.background=n.is_read?"transparent":"rgba(212,175,55,0.04)";}}
-                  >
-                    <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
-                      {!n.is_read && <span style={{ width:6, height:6, borderRadius:"50%", background:"#D4AF37", flexShrink:0, marginTop:4 }}/>}
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontSize:12.5, color:"rgba(255,255,255,0.82)", fontFamily:"Outfit,sans-serif", lineHeight:1.4, marginLeft:n.is_read?14:0 }}>{n.title || n.message || n.body || "System notification"}</div>
-                        {(n.body && n.title) && <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:3, lineHeight:1.4, marginLeft:n.is_read?14:0 }}>{n.body}</div>}
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:4, marginLeft:n.is_read?14:0 }}>
-                          {n.created_at ? new Date(n.created_at).toLocaleString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : ""}
+                ) : notifs.map((n) => {
+                  const isSos     = isSosNotif(n);
+                  const accentBg  = isSos ? "rgba(239,68,68,0.07)" : "rgba(212,175,55,0.04)";
+                  const dotColor  = isSos ? "#ef4444" : "#D4AF37";
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => !n.is_read && handleMarkOne(n.id)}
+                      style={{ padding:"11px 14px", borderBottom:"1px solid rgba(255,255,255,0.04)", background:n.is_read?"transparent":accentBg, cursor:n.is_read?"default":"pointer", transition:"background .15s", borderLeft: isSos && !n.is_read ? "2px solid #ef4444" : "2px solid transparent" }}
+                      onMouseEnter={e=>{ if(!n.is_read) e.currentTarget.style.background= isSos?"rgba(239,68,68,0.12)":"rgba(212,175,55,0.08)"; }}
+                      onMouseLeave={e=>{ e.currentTarget.style.background=n.is_read?"transparent":accentBg; }}
+                    >
+                      <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
+                        {!n.is_read && (
+                          <span style={{ width:6, height:6, borderRadius:"50%", background:dotColor, flexShrink:0, marginTop:4, animation: isSos ? "sosPulse 1.5s ease-in-out infinite" : "none" }}/>
+                        )}
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+                            <div style={{ fontSize:12.5, color:"rgba(255,255,255,0.82)", fontFamily:"Outfit,sans-serif", lineHeight:1.4, marginLeft:n.is_read?14:0 }}>{n.title || n.message || n.body || "System notification"}</div>
+                            {isSos && (
+                              <span style={{ fontSize:8.5, fontWeight:800, color:"#ef4444", background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:20, padding:"1px 5px", flexShrink:0 }}>SOS</span>
+                            )}
+                          </div>
+                          {(n.body && n.title) && (
+                            <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:2, lineHeight:1.4, marginLeft:n.is_read?14:0 }}>{n.body}</div>
+                          )}
+                          <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:4, marginLeft:n.is_read?14:0 }}>
+                            {n.created_at ? new Date(n.created_at).toLocaleString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : ""}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -330,7 +399,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
 
       </aside>
 
-      {/* Collapse button — OUTSIDE aside so CSS transform doesn't affect fixed positioning */}
+      {/* Collapse button */}
       <button
         id="gm-collapse-btn"
         onClick={() => setDesktopCollapsed(p => !p)}

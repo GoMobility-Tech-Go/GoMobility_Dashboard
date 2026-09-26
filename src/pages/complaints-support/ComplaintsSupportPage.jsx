@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Search, AlertTriangle, Clock, CheckCircle, XCircle,
   ChevronDown, Send, RefreshCw, Tag, User, Phone,
   Car, Calendar, MessageSquare, ShieldAlert, Filter,
+  ChevronUp, Zap,
 } from "lucide-react";
 import {
   getAdminSupportStats, getAdminSupportTickets,
@@ -28,11 +29,11 @@ const PRIORITY_CFG = {
   low:    { color: T60,       bg: T06,                       border: T12,                      label: "Low"    },
 };
 const STATUS_CFG = {
-  open:            { color: "#f87171", bg: "rgba(248,113,113,0.10)", border: "rgba(248,113,113,0.28)", label: "Open"          },
-  in_progress:     { color: "#fbbf24", bg: "rgba(251,191,36,0.10)",  border: "rgba(251,191,36,0.28)",  label: "In Progress"   },
-  waiting_on_user: { color: "#60a5fa", bg: "rgba(96,165,250,0.10)",  border: "rgba(96,165,250,0.28)",  label: "Waiting"       },
-  resolved:        { color: "#4ade80", bg: "rgba(74,222,128,0.10)",  border: "rgba(74,222,128,0.28)",  label: "Resolved"      },
-  closed:          { color: T38,       bg: T06,                       border: T12,                      label: "Closed"        },
+  open:            { color: "#f87171", bg: "rgba(248,113,113,0.10)", border: "rgba(248,113,113,0.28)", label: "Open"        },
+  in_progress:     { color: "#fbbf24", bg: "rgba(251,191,36,0.10)",  border: "rgba(251,191,36,0.28)",  label: "In Progress" },
+  waiting_on_user: { color: "#60a5fa", bg: "rgba(96,165,250,0.10)",  border: "rgba(96,165,250,0.28)",  label: "Waiting"     },
+  resolved:        { color: "#4ade80", bg: "rgba(74,222,128,0.10)",  border: "rgba(74,222,128,0.28)",  label: "Resolved"    },
+  closed:          { color: T38,       bg: T06,                       border: T12,                      label: "Closed"      },
 };
 const CATEGORY_LABELS = {
   ride_issue:      "Ride Issue",
@@ -43,13 +44,47 @@ const CATEGORY_LABELS = {
   account:         "Account",
   other:           "Other",
 };
+const CATEGORY_COLORS = {
+  ride_issue:      "#60a5fa",
+  payment_issue:   "#f59e0b",
+  driver_behavior: "#f87171",
+  safety_concern:  "#a78bfa",
+  app_bug:         "#4ade80",
+  account:         "#34d399",
+  other:           T38,
+};
+
+const CANNED_REPLIES = [
+  { label:"Investigating",      text:"We've received your complaint and are currently investigating the issue. We'll update you within 24 hours." },
+  { label:"Issue Resolved",     text:"Your issue has been resolved from our end. Please let us know if you experience any further problems." },
+  { label:"Need More Info",     text:"To assist you better, could you please provide more details about the issue? When did it occur and what exactly happened?" },
+  { label:"Driver Contacted",   text:"We've reached out to the driver regarding your concern and appropriate action will be taken based on our review." },
+  { label:"Refund Processing",  text:"Your refund request is being processed. The amount will be credited to your original payment method within 3–5 business days." },
+  { label:"Apology + Escalate", text:"We sincerely apologize for the inconvenience caused. Your case has been escalated to our senior support team for priority resolution." },
+  { label:"App Update",         text:"This issue may be related to your app version. Please update the GO Mobility app to the latest version and try again." },
+  { label:"Closing Ticket",     text:"We hope your issue has been resolved. We're closing this ticket now. Feel free to raise a new ticket if you need further assistance." },
+];
+
 const ALL_STATUSES   = ["open","in_progress","waiting_on_user","resolved","closed"];
 const ALL_PRIORITIES = ["urgent","high","medium","low"];
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS);
 const PAGE_SIZE = 20;
+const ESCALATE_HOURS = 24;
 
-// ─── Small helpers ─────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => d ? new Date(d).toLocaleString("en-IN", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "—";
+
+function elapsedLabel(createdAt, now) {
+  if (!createdAt) return null;
+  const ms = now - new Date(createdAt).getTime();
+  if (ms < 0) return null;
+  const totalMins = Math.floor(ms / 60000);
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h >= 48) return `${Math.floor(h/24)}d`;
+  if (h > 0)   return `${h}h ${m}m`;
+  return `${m}m`;
+}
 
 function Badge({ label, color, bg, border, size = 11 }) {
   return (
@@ -92,26 +127,40 @@ function SelectFilter({ value, onChange, options, placeholder }) {
 }
 
 // ─── Ticket list item ──────────────────────────────────────────────────────────
-function TicketRow({ ticket, selected, onClick }) {
-  const sc = STATUS_CFG[ticket.status]   || STATUS_CFG.open;
+function TicketRow({ ticket, selected, onClick, now }) {
+  const sc = STATUS_CFG[ticket.status]     || STATUS_CFG.open;
   const pc = PRIORITY_CFG[ticket.priority] || PRIORITY_CFG.medium;
   const isActive = selected?.id === ticket.id;
+
+  const isUnresolved   = !["resolved","closed"].includes(ticket.status);
+  const msOld          = now - new Date(ticket.created_at || 0).getTime();
+  const hoursOld       = msOld / 3600000;
+  const isEscalated    = isUnresolved && hoursOld >= ESCALATE_HOURS;
+  const elapsed        = elapsedLabel(ticket.created_at, now);
+
   return (
     <div
       onClick={onClick}
       style={{
         padding: "12px 14px", borderRadius: 10, cursor: "pointer", position: "relative",
         background: isActive ? GOLD10 : "transparent",
-        border: `1px solid ${isActive ? GOLD35 : "transparent"}`,
+        border: `1px solid ${isActive ? GOLD35 : isEscalated ? "rgba(248,113,113,0.22)" : "transparent"}`,
         marginBottom: 4,
         transition: "background .15s, border .15s",
       }}
     >
       {/* priority left bar */}
-      <div style={{ position:"absolute", left:0, top:8, bottom:8, width:3, borderRadius:"0 2px 2px 0", background: pc.color }} />
+      <div style={{ position:"absolute", left:0, top:8, bottom:8, width:3, borderRadius:"0 2px 2px 0", background: isEscalated ? "#f87171" : pc.color }} />
       <div style={{ paddingLeft:8 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-          <span style={{ fontSize:10, fontWeight:700, color:GOLD, letterSpacing:"0.5px" }}>{ticket.ticket_number}</span>
+          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ fontSize:10, fontWeight:700, color:GOLD, letterSpacing:"0.5px" }}>{ticket.ticket_number}</span>
+            {isEscalated && (
+              <span title={`Unresolved for ${elapsed}`} style={{ display:"flex", alignItems:"center", gap:3, padding:"1px 6px", borderRadius:20, fontSize:9, fontWeight:800, background:"rgba(248,113,113,0.18)", color:"#f87171", border:"1px solid rgba(248,113,113,0.35)", animation:"slaFlash 2s ease-in-out infinite" }}>
+                <Zap size={8}/> ESCALATE
+              </span>
+            )}
+          </div>
           <Badge label={sc.label} color={sc.color} bg={sc.bg} border={sc.border} size={10} />
         </div>
         <div style={{ fontSize:12.5, fontWeight:600, color:T88, marginBottom:4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -121,6 +170,12 @@ function TicketRow({ ticket, selected, onClick }) {
           <span style={{ fontSize:10, color:T38 }}>{CATEGORY_LABELS[ticket.category] || ticket.category}</span>
           <span style={{ fontSize:10, color:T38 }}>•</span>
           <span style={{ fontSize:10, color:T38 }}>{ticket.user_full_name || "—"}</span>
+          {elapsed && (
+            <>
+              <span style={{ fontSize:10, color:T38 }}>•</span>
+              <span style={{ fontSize:10, color: isEscalated ? "#f87171" : T38 }}>{elapsed}</span>
+            </>
+          )}
           <span style={{ marginLeft:"auto", fontSize:10, color:T38 }}>{fmtDate(ticket.created_at)}</span>
         </div>
       </div>
@@ -149,19 +204,33 @@ function Bubble({ msg }) {
 }
 
 // ─── Detail panel ──────────────────────────────────────────────────────────────
-function DetailPanel({ ticket, messages, onStatusChange, onReply, updating }) {
-  const [reply, setReply]         = useState("");
-  const [sending, setSending]     = useState(false);
+function DetailPanel({ ticket, messages, onStatusChange, onReply, updating, now }) {
+  const [reply, setReply]             = useState("");
+  const [sending, setSending]         = useState(false);
   const [resolveNote, setResolveNote] = useState("");
   const [showResolve, setShowResolve] = useState(false);
-  const threadRef = useRef(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const threadRef  = useRef(null);
+  const templatesRef = useRef(null);
 
   useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [messages]);
 
+  // Close templates dropdown on outside click
+  useEffect(() => {
+    const h = e => { if (templatesRef.current && !templatesRef.current.contains(e.target)) setShowTemplates(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
   const sc = STATUS_CFG[ticket.status] || STATUS_CFG.open;
   const pc = PRIORITY_CFG[ticket.priority] || PRIORITY_CFG.medium;
+
+  const isUnresolved = !["resolved","closed"].includes(ticket.status);
+  const hoursOld     = now ? (now - new Date(ticket.created_at || 0).getTime()) / 3600000 : 0;
+  const isEscalated  = isUnresolved && hoursOld >= ESCALATE_HOURS;
+  const elapsed      = elapsedLabel(ticket.created_at, now || Date.now());
 
   const handleSend = async () => {
     if (!reply.trim()) return;
@@ -177,28 +246,43 @@ function DetailPanel({ ticket, messages, onStatusChange, onReply, updating }) {
     setResolveNote("");
   };
 
+  const insertTemplate = (text) => {
+    setReply(text);
+    setShowTemplates(false);
+  };
+
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", gap:0 }}>
 
       {/* Header */}
       <div style={{ padding:"16px 20px", borderBottom:`1px solid ${T06}`, flexShrink:0 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8, flexWrap:"wrap" }}>
           <span style={{ fontSize:11, fontWeight:700, color:GOLD, letterSpacing:"0.6px" }}>{ticket.ticket_number}</span>
           <Badge label={sc.label} color={sc.color} bg={sc.bg} border={sc.border} />
           <Badge label={pc.label} color={pc.color} bg={pc.bg} border={pc.border} />
           <Badge label={CATEGORY_LABELS[ticket.category] || ticket.category} color={T60} bg={T06} border={T12} />
+          {isEscalated && (
+            <span style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 8px", borderRadius:20, fontSize:10, fontWeight:800, background:"rgba(248,113,113,0.18)", color:"#f87171", border:"1px solid rgba(248,113,113,0.35)" }}>
+              <Zap size={10}/> Unresolved {elapsed}
+            </span>
+          )}
         </div>
         <div style={{ fontSize:15, fontWeight:700, color:T88, lineHeight:1.3 }}>{ticket.subject}</div>
       </div>
 
       {/* Meta */}
       <div style={{ padding:"12px 20px", borderBottom:`1px solid ${T06}`, flexShrink:0, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 16px" }}>
-        <MetaRow icon={User}     label="Submitted by"    value={ticket.user_full_name || "—"} />
-        <MetaRow icon={Phone}    label="Phone"           value={ticket.user_phone || "—"} />
-        <MetaRow icon={Tag}      label="Role"            value={ticket.user_role || "—"} />
-        <MetaRow icon={Car}      label="Ride ID"         value={ticket.ride_id ? `#${ticket.ride_id}` : "—"} />
-        <MetaRow icon={Calendar} label="Created"         value={fmtDate(ticket.created_at)} />
+        <MetaRow icon={User}     label="Submitted by"  value={ticket.user_full_name || "—"} />
+        <MetaRow icon={Phone}    label="Phone"         value={ticket.user_phone || "—"} />
+        <MetaRow icon={Tag}      label="Role"          value={ticket.user_role || "—"} />
+        <MetaRow icon={Car}      label="Ride ID"       value={ticket.ride_id ? `#${ticket.ride_id}` : "—"} />
+        <MetaRow icon={Calendar} label="Created"       value={fmtDate(ticket.created_at)} />
         {ticket.resolved_at && <MetaRow icon={CheckCircle} label="Resolved" value={fmtDate(ticket.resolved_at)} />}
+        {elapsed && isUnresolved && (
+          <MetaRow icon={Clock} label="SLA Elapsed" value={
+            <span style={{ color: isEscalated ? "#f87171" : "#fbbf24", fontWeight:700 }}>{elapsed}</span>
+          }/>
+        )}
       </div>
 
       {/* Description */}
@@ -229,15 +313,12 @@ function DetailPanel({ ticket, messages, onStatusChange, onReply, updating }) {
       {!["resolved","closed"].includes(ticket.status) && (
         <div style={{ padding:"10px 20px", borderTop:`1px solid ${T06}`, flexShrink:0, display:"flex", gap:6, flexWrap:"wrap" }}>
           {ticket.status !== "in_progress" && (
-            <ActionBtn label="Mark In Progress" color="#fbbf24" disabled={updating}
-              onClick={() => onStatusChange("in_progress")} />
+            <ActionBtn label="Mark In Progress" color="#fbbf24" disabled={updating} onClick={() => onStatusChange("in_progress")} />
           )}
           {ticket.status !== "waiting_on_user" && (
-            <ActionBtn label="Waiting on User" color="#60a5fa" disabled={updating}
-              onClick={() => onStatusChange("waiting_on_user")} />
+            <ActionBtn label="Waiting on User" color="#60a5fa" disabled={updating} onClick={() => onStatusChange("waiting_on_user")} />
           )}
-          <ActionBtn label="Resolve" color="#4ade80" disabled={updating}
-            onClick={() => setShowResolve(v => !v)} />
+          <ActionBtn label="Resolve" color="#4ade80" disabled={updating} onClick={() => setShowResolve(v => !v)} />
         </div>
       )}
 
@@ -261,6 +342,32 @@ function DetailPanel({ ticket, messages, onStatusChange, onReply, updating }) {
       {/* Reply box */}
       {!["closed"].includes(ticket.status) && (
         <div style={{ padding:"10px 20px 14px", borderTop:`1px solid ${T06}`, flexShrink:0 }}>
+          {/* Templates button */}
+          <div ref={templatesRef} style={{ position:"relative", marginBottom:8 }}>
+            <button
+              onClick={() => setShowTemplates(v => !v)}
+              style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", background:GOLD10, border:`1px solid ${GOLD20}`, borderRadius:8, color:GOLD, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
+              📋 Templates {showTemplates ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
+            </button>
+            {showTemplates && (
+              <div style={{ position:"absolute", bottom:"calc(100% + 6px)", left:0, width:340, background:"linear-gradient(135deg,#020c20,#030f28)", border:`1px solid ${GOLD20}`, borderRadius:12, boxShadow:"0 16px 48px rgba(0,0,0,0.6)", zIndex:50, overflow:"hidden" }}>
+                <div style={{ padding:"8px 12px", borderBottom:`1px solid ${T06}`, fontSize:10, fontWeight:700, color:T38, letterSpacing:"1px", textTransform:"uppercase" }}>Quick Templates</div>
+                {CANNED_REPLIES.map((c, i) => (
+                  <button
+                    key={i}
+                    onClick={() => insertTemplate(c.text)}
+                    style={{ width:"100%", textAlign:"left", padding:"9px 14px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"Outfit,sans-serif", borderBottom:`1px solid ${T06}`, transition:"background .12s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = GOLD10}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <div style={{ fontSize:12, fontWeight:600, color:GOLD, marginBottom:2 }}>{c.label}</div>
+                    <div style={{ fontSize:11, color:T38, lineHeight:1.4, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" }}>{c.text}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
             <textarea
               value={reply}
@@ -305,25 +412,53 @@ function ActionBtn({ label, color, onClick, disabled }) {
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function ComplaintsSupportPage() {
-  const [stats,       setStats]      = useState(null);
-  const [tickets,     setTickets]    = useState([]);
-  const [total,       setTotal]      = useState(0);
-  const [page,        setPage]       = useState(1);
-  const [loading,     setLoading]    = useState(true);
-  const [statsLoading,setStatsLoading] = useState(true);
+  const [stats,        setStats]       = useState(null);
+  const [tickets,      setTickets]     = useState([]);
+  const [total,        setTotal]       = useState(0);
+  const [page,         setPage]        = useState(1);
+  const [loading,      setLoading]     = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
 
-  const [selected,    setSelected]   = useState(null);
-  const [detail,      setDetail]     = useState(null);   // { ticket, messages }
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [updating,    setUpdating]   = useState(false);
+  const [selected,     setSelected]    = useState(null);
+  const [detail,       setDetail]      = useState(null);
+  const [detailLoading,setDetailLoading] = useState(false);
+  const [updating,     setUpdating]    = useState(false);
+
+  // Live clock for SLA timers — ticks every 60s
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, []);
 
   // Filters
-  const [search,      setSearch]     = useState("");
-  const [filterStatus,   setFilterStatus]   = useState("");
+  const [search,         setSearch]        = useState("");
+  const [filterStatus,   setFilterStatus]  = useState("");
   const [filterPriority, setFilterPriority] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Category count from loaded tickets
+  const categoryStats = useMemo(() => {
+    const counts = {};
+    tickets.forEach(t => {
+      const cat = t.category || "other";
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return Object.entries(CATEGORY_LABELS)
+      .map(([key, label]) => ({ key, label, count: counts[key] || 0, color: CATEGORY_COLORS[key] }))
+      .filter(c => c.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, [tickets]);
+
+  // Escalated count
+  const escalatedCount = useMemo(() =>
+    tickets.filter(t => {
+      if (["resolved","closed"].includes(t.status)) return false;
+      return (now - new Date(t.created_at || 0).getTime()) / 3600000 >= ESCALATE_HOURS;
+    }).length
+  , [tickets, now]);
 
   // ── Fetch stats ─────────────────────────────────────────────────────────────
   const fetchStats = useCallback(() => {
@@ -402,7 +537,10 @@ export default function ComplaintsSupportPage() {
   };
 
   return (
-    <div style={{ padding:24, fontFamily:"Outfit,sans-serif", color:T88, height:"100vh", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:20, overflow:"hidden" }}>
+    <div style={{ padding:24, fontFamily:"Outfit,sans-serif", color:T88, height:"100vh", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:16, overflow:"hidden" }}>
+      <style>{`
+        @keyframes slaFlash { 0%,100%{opacity:1} 50%{opacity:0.5} }
+      `}</style>
 
       {/* Page header */}
       <div style={{ flexShrink:0 }}>
@@ -420,7 +558,32 @@ export default function ComplaintsSupportPage() {
         <StatCard icon={MessageSquare} label="Waiting"     value={stats?.waiting}      color="#60a5fa" loading={statsLoading} />
         <StatCard icon={CheckCircle}   label="Resolved"    value={stats?.resolved}     color="#4ade80" loading={statsLoading} />
         <StatCard icon={XCircle}       label="Urgent"      value={stats?.urgent}       color="#f87171" loading={statsLoading} />
+        {escalatedCount > 0 && (
+          <StatCard icon={Zap} label="Escalated >24h" value={escalatedCount} color="#f87171" loading={false} />
+        )}
       </div>
+
+      {/* Category breakdown chips */}
+      {categoryStats.length > 0 && (
+        <div style={{ flexShrink:0, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <span style={{ fontSize:10, fontWeight:700, color:T38, textTransform:"uppercase", letterSpacing:"1px", whiteSpace:"nowrap" }}>By Category:</span>
+          {categoryStats.map(c => (
+            <button
+              key={c.key}
+              onClick={() => setFilterCategory(filterCategory === c.key ? "" : c.key)}
+              style={{
+                display:"flex", alignItems:"center", gap:5, padding:"4px 11px", borderRadius:20, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"Outfit,sans-serif",
+                background: filterCategory === c.key ? `${c.color}22` : T06,
+                border: `1px solid ${filterCategory === c.key ? c.color+"55" : T12}`,
+                color: filterCategory === c.key ? c.color : T60,
+                transition:"all .15s",
+              }}>
+              <span style={{ width:6, height:6, borderRadius:"50%", background:c.color, flexShrink:0 }}/>
+              {c.label} <span style={{ fontFamily:"Cinzel,serif", fontVariantNumeric:"tabular-nums" }}>{c.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filter bar */}
       <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0, flexWrap:"wrap" }}>
@@ -430,7 +593,7 @@ export default function ComplaintsSupportPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             onKeyDown={handleSearch}
-            placeholder="Search by ticket #, subject, user... (Enter)"
+            placeholder="Search by ticket #, subject, user… (Enter)"
             style={{ background:"transparent", border:"none", outline:"none", color:T88, fontSize:13, fontFamily:"Outfit,sans-serif", width:"100%" }}
           />
         </div>
@@ -465,7 +628,7 @@ export default function ComplaintsSupportPage() {
                     No tickets found
                   </div>
                 : tickets.map(t => (
-                    <TicketRow key={t.id} ticket={t} selected={selected} onClick={() => setSelected(t)} />
+                    <TicketRow key={t.id} ticket={t} selected={selected} onClick={() => setSelected(t)} now={now} />
                   ))
             }
           </div>
@@ -497,6 +660,7 @@ export default function ComplaintsSupportPage() {
                   onStatusChange={handleStatusChange}
                   onReply={handleReply}
                   updating={updating}
+                  now={now}
                 />
               : <div style={{ display:"flex", alignItems:"center", justifyContent:"center", flex:1, color:T38 }}>
                   <div style={{ textAlign:"center" }}>
