@@ -145,7 +145,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, desktopCollapsed, s
         .catch(() => {});
     };
     poll(); // immediate first poll
-    const t = setInterval(poll, 30000);
+    const t = setInterval(poll, 60000);
     return () => clearInterval(t);
   }, []);
 

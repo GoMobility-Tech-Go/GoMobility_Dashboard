@@ -271,7 +271,29 @@ export default function LiveMapPage() {
         getLiveMapRides(),
         getTodayRides(),
       ]);
-      setDrivers(drRes.data?.data || []);
+      // /admin/driver-metrics/live-map returns { data: { drivers: [...], count, generatedAt } }
+      const metricsData = drRes.data?.data;
+      const rawDrivers = metricsData?.drivers || metricsData || [];
+      // Normalise to flat shape the rest of the component expects
+      setDrivers(
+        Array.isArray(rawDrivers)
+          ? rawDrivers.map(d => ({
+              ...d,
+              id:           d.driverId ?? d.id,
+              full_name:    d.name      ?? d.full_name,
+              phone_number: d.phone     ?? d.phone_number,
+              lat:          d.location?.latitude  ?? d.lat ?? d.latitude,
+              lng:          d.location?.longitude ?? d.lng ?? d.longitude,
+              vehicle_type: (d.vehicle?.types?.[0] ?? d.vehicle_type ?? '').toLowerCase(),
+              is_available: d.status === 'available' || d.is_available,
+              is_on_duty:   d.status === 'on_ride'   || d.is_on_duty,
+              active_ride_id:         d.activeRide?.id ?? d.active_ride_id,
+              city_name:              d.city?.name     ?? d.city_name,
+              online_seconds:         d.session?.durationSeconds ?? d.online_seconds,
+              session_rides_completed:d.session?.ridesCompleted  ?? d.session_rides_completed,
+            }))
+          : []
+      );
       setDemandRides(demRes.data?.data || demRes.data?.rides || []);
       setHistoryRides(histRes.data?.data || histRes.data?.rides || []);
       setLastRefresh(new Date());
@@ -284,19 +306,27 @@ export default function LiveMapPage() {
     fetchAll();
     intervalRef.current = setInterval(() => {
       if (!document.hidden) fetchAll();
-    }, 30_000);
+    }, 60_000);
     return () => clearInterval(intervalRef.current);
   }, [fetchAll]);
 
   // ── filtered driver sets ──────────────────────────────────────────────────
   const withLocation = drivers.filter(d => {
-    if (!d.lat && !d.latitude) return false;
+    const lat = d.lat ?? d.latitude ?? d.location?.latitude;
+    const lng = d.lng ?? d.longitude ?? d.location?.longitude;
+    if (!lat || !lng) return false;
     if (!vehicleFilter) return true;
     const t = (d.vehicle_type || '').toLowerCase();
     return t === vehicleFilter || (vehicleFilter === 'car' && t === 'cab');
-  }).map(d => ({ ...d, lat: d.lat || d.latitude, lng: d.lng || d.longitude }));
+  }).map(d => ({
+    ...d,
+    lat: d.lat ?? d.latitude ?? d.location?.latitude,
+    lng: d.lng ?? d.longitude ?? d.location?.longitude,
+  }));
 
-  const noLocation = drivers.filter(d => !d.lat && !d.latitude && !d.lng && !d.longitude);
+  const noLocation = drivers.filter(d =>
+    !d.lat && !d.latitude && !d.location?.latitude
+  );
 
   // idle = available, not on duty, no active ride
   const idleDrivers = withLocation.filter(d =>
@@ -316,12 +346,29 @@ export default function LiveMapPage() {
     .filter(r => r.dropoff_latitude && r.dropoff_longitude)
     .map(r => [parseFloat(r.dropoff_latitude), parseFloat(r.dropoff_longitude), 0.6]);
 
+  // Demo NCR points — shown as fallback when no real data so heatmap is always visible
+  const DEMO_NCR = [
+    [28.6139,77.2090,0.9],[28.6304,77.2177,0.8],[28.5355,77.3910,0.7],
+    [28.4595,77.0266,0.6],[28.7041,77.1025,0.8],[28.6562,77.2410,0.7],
+    [28.5921,77.0460,0.6],[28.4744,77.5040,0.5],[28.6692,77.4538,0.6],
+    [28.5494,77.2001,0.9],[28.6129,77.3295,0.7],[28.5018,77.4058,0.6],
+    [28.6757,77.1634,0.8],[28.5921,77.2294,0.75],[28.7495,77.1170,0.5],
+    [28.6300,77.0800,0.65],[28.5700,77.3200,0.7],[28.6800,77.2500,0.6],
+    [28.5200,77.1800,0.8],[28.6500,77.3800,0.55],[28.4900,77.0800,0.5],
+    [28.7200,77.0900,0.6],[28.6100,77.4100,0.55],[28.5600,77.2700,0.85],
+  ];
+  const isDemoSupply  = supplyPoints.length  === 0;
+  const isDemoDemand  = demandPoints.length  === 0;
+  const isDemoRides   = pickupPoints.length  === 0;
+  const isDemoIdle    = idlePoints.length    === 0;
+
   const heatPoints = {
-    supply: supplyPoints,
-    demand: demandPoints,
-    rides:  [...pickupPoints, ...dropoffPoints],
-    idle:   idlePoints,
+    supply: isDemoSupply  ? DEMO_NCR : supplyPoints,
+    demand: isDemoDemand  ? DEMO_NCR.map(([la,ln]) => [la+0.02,ln-0.01,0.7]) : demandPoints,
+    rides:  isDemoRides   ? DEMO_NCR.map(([la,ln]) => [la-0.01,ln+0.02,0.65]) : [...pickupPoints, ...dropoffPoints],
+    idle:   isDemoIdle    ? DEMO_NCR.filter((_,i)=>i%3===0) : idlePoints,
   };
+  const isDemo = { supply:isDemoSupply, demand:isDemoDemand, rides:isDemoRides, idle:isDemoIdle };
 
   const heatGradients = {
     supply: { 0.0:'#3b82f6', 0.4:'#06b6d4', 0.65:'#22c55e', 0.85:'#f59e0b', 1.0:'#ef4444' },
@@ -451,6 +498,13 @@ export default function LiveMapPage() {
           </div>
         )}
 
+        {/* Sample data badge */}
+        {view !== 'markers' && isDemo[activeLayer] && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+            Sample data — no live drivers yet
+          </span>
+        )}
+
         {/* Heatmap density legend */}
         {view !== 'markers' && (
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 ml-auto">
@@ -471,7 +525,7 @@ export default function LiveMapPage() {
             ))}
           </div>
         )}
-        <span className="text-xs text-gray-400 ml-auto">Auto-refreshes every 30s</span>
+        <span className="text-xs text-gray-400 ml-auto">Auto-refreshes every 60s</span>
       </div>
 
       {/* ── Map ── */}

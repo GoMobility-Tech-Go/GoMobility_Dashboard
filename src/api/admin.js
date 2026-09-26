@@ -138,7 +138,7 @@ export const sendGroupNotification = (group, title, body) =>
 
 // ── Live Map ──────────────────────────────────────────────────────────────────
 export const getLiveMapDrivers = () =>
-  api.get(`/admin/drivers/live-map`);
+  api.get(`/admin/driver-metrics/live-map`);
 
 export const getLiveMapRides = () =>
   api.get('/admin/rides', { params: { limit: 200, status: 'searching' } });

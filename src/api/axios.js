@@ -24,6 +24,8 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 api.interceptors.response.use(
   (res) => {
     const ms = Date.now() - (res.config.metadata?.startTime || Date.now());
@@ -38,19 +40,35 @@ api.interceptors.response.use(
     });
     return res;
   },
-  (err) => {
+  async (err) => {
     const ms = Date.now() - (err.config?.metadata?.startTime || Date.now());
+    const status = err.response?.status || 0;
+
+    // 429 — respect Retry-After header, then retry once automatically
+    if (status === 429) {
+      const cfg = err.config;
+      cfg._retryCount = (cfg._retryCount || 0) + 1;
+      if (cfg._retryCount <= 2) {
+        const retryAfter = parseInt(err.response?.headers?.['retry-after'] || '0', 10);
+        const wait = retryAfter > 0 ? retryAfter * 1000 : cfg._retryCount * 3000; // 3s, 6s
+        await sleep(wait);
+        cfg.metadata = { startTime: Date.now() };
+        return api(cfg);
+      }
+    }
+
     pushLog({
       id:       Date.now() + Math.random(),
       method:   err.config?.method?.toUpperCase() || 'GET',
       url:      err.config?.url || '',
-      status:   err.response?.status || 0,
+      status,
       ms,
       ts:       new Date().toISOString(),
       ok:       false,
       error:    err.response?.data?.message || err.message || 'Network error',
     });
-    if (err.response?.status === 401) {
+
+    if (status === 401) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('admin_user');
       window.location.href = '/login';

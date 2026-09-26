@@ -37,8 +37,6 @@ function Content() {
   const scheduledCount = scheduled.length;
   const unreadCount   = history.filter(m => !m.read).length;
 
-  const fakeDelivery = () => Math.floor(Math.random() * 12) + 86; // 86–97%
-  const fakeOpen     = () => Math.floor(Math.random() * 22) + 14; // 14–35%
 
   const sendBroadcast = async () => {
     if (!composeMsg.trim()) { toast("Enter a message", "error"); return; }
@@ -85,8 +83,6 @@ function Content() {
         message:     composeMsg,
         sentAt:      new Date().toLocaleString("en-IN", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }),
         read:        false,
-        deliveryPct: fakeDelivery(),
-        openPct:     fakeOpen(),
       }, ...prev]);
       toast(`Broadcast sent to ${targetLabel}!`, "success");
       setComposeMsg("");
@@ -211,8 +207,8 @@ function Content() {
               "broadcast-drivers":  <>All verified + active <strong style={{ color:"#60A5FA" }}>drivers</strong> with FCM token.</>,
               "broadcast-users":    <>All active <strong style={{ color:"#60A5FA" }}>passengers</strong> with FCM token.</>,
               "broadcast-gold":     <>All <strong style={{ color:"#D4AF37" }}>Gold tier</strong> drivers.</>,
-              "outdated-app-ncr":   <>NCR verified drivers on app version <strong style={{ color:"#F87171" }}>older than v1.3.3</strong> — ~238 drivers.</>,
-              "outdated-app-all":   <>All India verified drivers on app version <strong style={{ color:"#F87171" }}>older than v1.3.3</strong> — ~289 drivers.</>,
+              "outdated-app-ncr":   <>NCR verified drivers on app version <strong style={{ color:"#F87171" }}>older than v1.3.3</strong>.</>,
+              "outdated-app-all":   <>All India verified drivers on app version <strong style={{ color:"#F87171" }}>older than v1.3.3</strong>.</>,
             }[composeType] || "Selected audience.")} {scheduleAt ? "Will be queued." : "Sends via FCM push. Cannot be undone."}
           </div>
 
@@ -244,8 +240,6 @@ function Content() {
                   <th>Title</th>
                   <th>Message</th>
                   <th>Sent At</th>
-                  <th>Delivery</th>
-                  <th>Opens</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -263,22 +257,6 @@ function Content() {
                     <td style={{ fontWeight:600 }}>{m.title}</td>
                     <td style={{ fontSize:12, maxWidth:200, color:"rgba(255,255,255,0.6)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.message}</td>
                     <td style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontFamily:"monospace" }}>{m.sentAt}</td>
-                    <td>
-                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                        <div style={{ width:44, height:5, background:"rgba(255,255,255,0.08)", borderRadius:3 }}>
-                          <div style={{ width:`${m.deliveryPct}%`, height:"100%", background:"#4ade80", borderRadius:3 }}/>
-                        </div>
-                        <span style={{ fontSize:11, color:"#4ade80", fontFamily:"monospace", fontVariantNumeric:"tabular-nums" }}>{m.deliveryPct}%</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                        <div style={{ width:44, height:5, background:"rgba(255,255,255,0.08)", borderRadius:3 }}>
-                          <div style={{ width:`${m.openPct}%`, height:"100%", background:"#60a5fa", borderRadius:3 }}/>
-                        </div>
-                        <span style={{ fontSize:11, color:"#60a5fa", fontFamily:"monospace", fontVariantNumeric:"tabular-nums" }}>{m.openPct}%</span>
-                      </div>
-                    </td>
                     <td>
                       <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:100, fontSize:10.5, fontWeight:600, background:"rgba(52,211,153,0.1)", border:"1px solid rgba(52,211,153,0.25)", color:"#34D399" }}>✓ Sent</span>
                     </td>
