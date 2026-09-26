@@ -41,9 +41,10 @@ import SettlementsPage from "../pages/settlements/SettlementsPage";
 import NcrDriversPage from "../pages/ncr-drivers/NcrDriversPage";
 import NcrPassengersPage from "../pages/ncr-passengers/NcrPassengersPage";
 import LiveMapPage from "../pages/live-map/LiveMapPage";
-// GoMobility CRM (alag backend) — screens yahin admin dashboard mein
+// GoMobility CRM (separate backend) — screens live inside the admin dashboard
 import { CrmLayout } from "../pages/crm/crmShared";
 import CrmOverviewPage from "../pages/crm/CrmOverviewPage";
+import CrmAnalyticsPage from "../pages/crm/CrmAnalyticsPage";
 import CrmJourneysPage from "../pages/crm/CrmJourneysPage";
 import CrmJourneyDetailPage from "../pages/crm/CrmJourneyDetailPage";
 import CrmCampaignsPage from "../pages/crm/CrmCampaignsPage";
@@ -90,10 +91,11 @@ const routes = [
         { path:"notifications", element:<NotificationsPage/> },
         { path:"settings", element:<SettingsPage/> },
         { path:"logs", element:<LogsPage/> },
-        // ── CRM — access CRM backend deta hai (role: super_admin → admin, admin → approver, ops_team → marketer)
+        // ── CRM — access is granted by the CRM backend (super_admin → admin, admin → approver, ops_team → marketer)
         {
           path:"crm", element:<CrmLayout/>, children:[
             { index:true,                element:<CrmOverviewPage/> },
+            { path:"analytics",          element:<CrmAnalyticsPage/> },
             { path:"journeys",           element:<CrmJourneysPage/> },
             { path:"journeys/:key",      element:<CrmJourneyDetailPage/> },
             { path:"campaigns",          element:<CrmCampaignsPage/> },

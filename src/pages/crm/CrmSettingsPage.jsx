@@ -1,4 +1,4 @@
-// CRM global settings (PRD §2.1) + system health. Badlaav sirf CRM admin (super admin); kill switch ON koi bhi.
+// CRM global settings (PRD §2.1) and system health. Only CRM admins can change settings; anyone can turn the kill switch on.
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import { FormGroup, Toggle, TableCard } from "../../components/ui";
@@ -6,13 +6,19 @@ import { crmPatch } from "../../api/crm";
 import { CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, Section, Hint, ago } from "./crmShared";
 
 const NUMS = [
-  ["frequencyCap.marketingPerWeek", "Marketing messages / hafta (per user)", "PRD: 2"],
-  ["frequencyCap.totalPerDay", "Kul messages / din (per user)", "PRD: 3"],
-  ["quietHours.startHour", "Quiet hours shuru (IST ghanta, 0–23)", "Is waqt se koi message nahi"],
-  ["quietHours.endHour", "Quiet hours khatam (IST ghanta)", "Is waqt ke baad phir se"],
-  ["campaignApprovalAboveInr", "Approval chahiye — kharcha isse zyada (₹)", "PRD: ₹500"],
-  ["campaignThrottlePerHour", "Campaign max messages / ghanta", "Koi campaign isse tez nahi"],
+  ["frequencyCap.marketingPerWeek", "Marketing messages per week (per contact)", "PRD recommendation: 2"],
+  ["frequencyCap.totalPerDay", "Total messages per day (per contact)", "PRD recommendation: 3"],
+  ["quietHours.startHour", "Quiet hours start (IST hour, 0–23)", "No messages from this hour"],
+  ["quietHours.endHour", "Quiet hours end (IST hour, 0–23)", "Messages resume at this hour"],
+  ["campaignApprovalAboveInr", "Approval required above (₹)", "PRD recommendation: ₹500"],
+  ["campaignThrottlePerHour", "Campaign messages per hour (max)", "No campaign sends faster than this"],
 ];
+const LABEL = {
+  mongo: "Database (MongoDB)", redis: "Queue (Redis)", replica: "Ride data (read-only replica)",
+  api: "API", worker: "Worker", ingest: "Data ingest",
+  contacts: "Contact sync", signups: "Sign-up events", rides: "Ride events", kyc: "KYC events", online: "Driver online events",
+  commerce: "Dues & subscription events", "journey-runner": "Journey runner", "journey-scheduler": "Journey scheduler", "event-requeue": "Event recovery",
+};
 const get = (o, path) => path.split(".").reduce((x, k) => x?.[k], o);
 const nest = (flat) => {
   const out = {};
@@ -28,17 +34,21 @@ function Health() {
   const { data: h, error } = useCrm("/health", { refreshMs: 15000 });
   if (error && !h) return <ErrorNote error={error} />;
   if (!h) return <Loading />;
-  const row = (name, x, extra) => (
-    <tr key={name}><td>{name}</td><td><Pill tone={x.ok ? "green" : "red"}>{x.ok ? "OK" : "Problem"}</Pill></td><td style={{ fontSize: 12 }}>{extra}{x.err ? ` — ${x.err}` : ""}{x.lastError ? ` — aakhri error: ${x.lastError}` : ""}</td></tr>
+  const row = (group, name, x, extra) => (
+    <tr key={group + name}>
+      <td>{LABEL[name] || name}<div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.3)" }}>{group}</div></td>
+      <td><Pill tone={x.ok ? "green" : "red"}>{x.ok ? "Healthy" : "Issue"}</Pill></td>
+      <td style={{ fontSize: 12 }}>{extra}{x.err ? ` — ${x.err}` : ""}{x.lastError ? ` — last error: ${x.lastError}` : ""}</td>
+    </tr>
   );
   return (
-    <TableCard title={h.ok ? "System health — sab theek" : "System health — dhyan dein"} icon="🩺">
+    <TableCard title={h.ok ? "System Health — all systems operational" : "System Health — attention needed"} icon="🩺">
       <table className="gm-table">
-        <thead><tr><th>Hissa</th><th>Status</th><th>Detail</th></tr></thead>
+        <thead><tr><th>Component</th><th>Status</th><th>Details</th></tr></thead>
         <tbody>
-          {Object.entries(h.deps || {}).map(([k, x]) => row(k === "replica" ? "Ride DB (read-only)" : k, x, `${x.ms} ms`))}
-          {Object.entries(h.processes || {}).map(([k, x]) => row(`Process: ${k}`, x, x.ok ? `heartbeat ${ago(x.lastBeatSecAgo)}` : ""))}
-          {Object.entries(h.loops || {}).map(([k, x]) => row(`Loop: ${k}`, x, x.lastOkSecAgo != null ? `aakhri baar ${ago(x.lastOkSecAgo)}` : "kabhi nahi chala"))}
+          {Object.entries(h.deps || {}).map(([k, x]) => row("Dependency", k, x, `${x.ms} ms`))}
+          {Object.entries(h.processes || {}).map(([k, x]) => row("Process", k, x, x.ok ? `Heartbeat ${ago(x.lastBeatSecAgo)}` : ""))}
+          {Object.entries(h.loops || {}).map(([k, x]) => row("Background job", k, x, x.lastOkSecAgo != null ? `Last run ${ago(x.lastOkSecAgo)}` : "Has not run yet"))}
         </tbody>
       </table>
     </TableCard>
@@ -58,25 +68,25 @@ export default function CrmSettingsPage() {
 
   async function save() {
     const flat = {};
-    for (const [p] of NUMS) {
+    for (const [p, label] of NUMS) {
       const v = Number(form[p]);
-      if (form[p] === "" || !Number.isInteger(v) || v < 0) return window.alert(`Sahi number daalein: ${p}`);
+      if (form[p] === "" || !Number.isInteger(v) || v < 0) return window.alert(`Please enter a whole number for "${label}".`);
       if (v !== get(s.data, p)) flat[p] = v;
     }
     for (const k of ["dryRun", "transactionalBypassesCaps"]) if (form[k] !== !!s.data[k]) flat[k] = form[k];
-    if (!Object.keys(flat).length) return window.alert("Kuch badla nahi");
-    if (flat.dryRun === false && !window.confirm("DRY RUN OFF karein? Ab ASLI messages jaane lagenge (paisa lagega).")) return;
-    const r = await run("save", () => crmPatch("/settings", nest(flat)), "Settings save — 10 sec mein har process pe lag jayengi");
+    if (!Object.keys(flat).length) return window.alert("No changes to save.");
+    if (flat.dryRun === false && !window.confirm("Turn dry run OFF? Real messages will start going out and will incur costs.")) return;
+    const r = await run("save", () => crmPatch("/settings", nest(flat)), "Settings saved — applied everywhere within 10 seconds");
     if (r) s.reload();
   }
 
   return (
-    <CrmPage title="CRM Settings" subtitle="Global rules — har journey aur campaign pe lagte hain (PRD §2.1)">
+    <CrmPage title="CRM Settings" subtitle="Global rules applied to every journey and campaign (PRD §2.1)">
       <ErrorNote error={s.error} />
       {!form ? <Loading /> : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 16, alignItems: "start" }}>
-          <Section title="Rules">
-            {!admin && <div style={{ marginBottom: 12 }}><Hint>Sirf CRM admin (super admin) badal sakta hai. Aap dekh sakte hain.</Hint></div>}
+        <div className="crm-1-1" style={{ alignItems: "start" }}>
+          <Section title="Messaging Rules">
+            {!admin && <div style={{ marginBottom: 12 }}><Hint>Only CRM admins can change these settings.</Hint></div>}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
               {NUMS.map(([p, label, hint]) => (
                 <FormGroup key={p} label={label} hint={hint}>
@@ -85,14 +95,14 @@ export default function CrmSettingsPage() {
               ))}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, margin: "6px 0 16px" }}>
-              <Toggle checked={form.dryRun} onChange={(v) => admin && setForm((f) => ({ ...f, dryRun: v }))} label="Dry run — koi asli message nahi, sirf log (testing ke liye)" />
-              <Toggle checked={form.transactionalBypassesCaps} onChange={(v) => admin && setForm((f) => ({ ...f, transactionalBypassesCaps: v }))} label="Transactional messages frequency cap se bahar (quiet hours phir bhi lagte hain)" />
+              <Toggle checked={form.dryRun} onChange={(v) => admin && setForm((f) => ({ ...f, dryRun: v }))} label="Dry run — log messages without sending them" />
+              <Toggle checked={form.transactionalBypassesCaps} onChange={(v) => admin && setForm((f) => ({ ...f, transactionalBypassesCaps: v }))} label="Transactional messages bypass frequency caps (quiet hours still apply)" />
             </div>
-            {admin && <button className="btn-gold" disabled={!!busy} onClick={save}><Save size={14} /> {busy ? "Save ho raha…" : "Save"}</button>}
+            {admin && <button className="btn-gold" disabled={!!busy} onClick={save}><Save size={14} /> {busy ? "Saving…" : "Save changes"}</button>}
           </Section>
           <div>
             <Health />
-            <div style={{ marginTop: 12 }}><Hint>Kill switch upar status bar mein hai — ON karne pe 10 second mein CRM ka har message ruk jaata hai.</Hint></div>
+            <div style={{ marginTop: 12 }}><Hint>The kill switch is in the status bar at the top of every CRM page — it stops all CRM messaging within 10 seconds.</Hint></div>
           </div>
         </div>
       )}

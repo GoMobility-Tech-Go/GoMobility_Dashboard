@@ -47,9 +47,10 @@ const ADMIN_MENU = [
     { label:"Driver Metrics",    to:"/driver-metrics",       icon:Activity    },
     { label:"Push Notifications", to:"/notifications",        icon:Bell        },
   ]},
-  // GoMobility CRM (alag backend — gomobility-crm). Journeys + campaigns, PRD 28.
+  // GoMobility CRM (separate backend — gomobility-crm). Journeys + campaigns, PRD 28.
   { label:"CRM", items:[
     { label:"CRM Overview",       to:"/crm",                  icon:Target, end:true },
+    { label:"CRM Analytics",      to:"/crm/analytics",        icon:BarChart3   },
     { label:"Journeys",           to:"/crm/journeys",         icon:GitBranch   },
     { label:"CRM Campaigns",      to:"/crm/campaigns",        icon:Megaphone   },
     { label:"Approvals",          to:"/crm/approvals",        icon:CheckCheck  },

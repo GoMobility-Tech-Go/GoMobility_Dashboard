@@ -1,4 +1,4 @@
-// Naya campaign / draft edit. PRD §3.1: segment → channel → content → schedule. Estimate + approval detail page pe.
+// New campaign / edit draft. PRD §3.1: audience → channel → content → schedule. Estimate and approval happen on the detail page.
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Users } from "lucide-react";
@@ -7,14 +7,14 @@ import { crmGet, crmPatch, crmPost } from "../../api/crm";
 import { CrmPage, useAction, Section, Hint, ErrorNote, Loading, Pill, num, CHANNEL } from "./crmShared";
 
 const NUM_FILTERS = [
-  ["lastRideDaysAgoGte", "Aakhri ride kam se kam (din pehle)"], ["lastRideDaysAgoLte", "Aakhri ride zyada se zyada (din pehle)"],
-  ["signupDaysAgoGte", "Signup kam se kam (din pehle)"], ["signupDaysAgoLte", "Signup zyada se zyada (din pehle)"],
-  ["rides7dGte", "Rides (7 din) ≥"], ["rides7dLte", "Rides (7 din) ≤"],
-  ["rides30dGte", "Rides (30 din) ≥"], ["rides30dLte", "Rides (30 din) ≤"],
-  ["ridesTotalGte", "Kul rides ≥"], ["ridesTotalLte", "Kul rides ≤"],
-  ["lifetimeSpendGte", "Kul kharcha ≥ ₹"], ["lifetimeSpendLte", "Kul kharcha ≤ ₹"],
+  ["lastRideDaysAgoGte", "Last ride at least (days ago)"], ["lastRideDaysAgoLte", "Last ride at most (days ago)"],
+  ["signupDaysAgoGte", "Signed up at least (days ago)"], ["signupDaysAgoLte", "Signed up at most (days ago)"],
+  ["rides7dGte", "Rides in 7 days ≥"], ["rides7dLte", "Rides in 7 days ≤"],
+  ["rides30dGte", "Rides in 30 days ≥"], ["rides30dLte", "Rides in 30 days ≤"],
+  ["ridesTotalGte", "Lifetime rides ≥"], ["ridesTotalLte", "Lifetime rides ≤"],
+  ["lifetimeSpendGte", "Lifetime spend ≥ ₹"], ["lifetimeSpendLte", "Lifetime spend ≤ ₹"],
 ];
-const LIST_FILTERS = [["cityIds", "City IDs (comma se)"], ["kycStatus", "KYC status (verified, rejected…)"], ["subscriptionTier", "Subscription plan (basic_saver, gold_rider…)"]];
+const LIST_FILTERS = [["cityIds", "City IDs (comma separated)"], ["kycStatus", "KYC status (e.g. verified, rejected)"], ["subscriptionTier", "Subscription plan (e.g. basic_saver, gold_rider)"]];
 const CHANNELS = ["push", "whatsapp_utility", "whatsapp_marketing", "sms"];
 
 const EMPTY = {
@@ -34,6 +34,7 @@ function toSpec(f) {
     : { templateName: f.templateName, templateParams: csv(f.templateParams), language: f.language || "en" };
   if (f.fallback === "sms") Object.assign(content, { body: content.body || f.body, smsTemplateId: f.smsTemplateId });
   if (f.fallback === "push") Object.assign(content, { title: f.title, body: content.body || f.body });
+  if (f.fallback.startsWith("whatsapp_")) Object.assign(content, { templateName: f.templateName, templateParams: csv(f.templateParams), language: f.language || "en" });
   const spec = { name: f.name, category: f.category, segment, channel: f.channel, content };
   spec.fallback = f.fallback || undefined;
   if (f.scheduledAt) spec.scheduledAt = new Date(f.scheduledAt).toISOString();
@@ -66,17 +67,17 @@ export default function CrmCampaignFormPage() {
 
   useEffect(() => {
     if (!id) return;
-    crmGet(`/campaigns/${id}`).then((c) => setF(fromCampaign(c))).catch(() => setLoadErr("Campaign load nahi hua"));
+    crmGet(`/campaigns/${id}`).then((c) => setF(fromCampaign(c))).catch(() => setLoadErr("Could not load this campaign."));
   }, [id]);
 
-  if (loadErr) return <CrmPage title="Campaign edit"><ErrorNote error={loadErr} /></CrmPage>;
-  if (!f) return <CrmPage title="Campaign edit"><Loading /></CrmPage>;
+  if (loadErr) return <CrmPage title="Edit Campaign"><ErrorNote error={loadErr} /></CrmPage>;
+  if (!f) return <CrmPage title="Edit Campaign"><Loading /></CrmPage>;
 
   const set = (k, v) => { setF((p) => ({ ...p, [k]: v })); setPreview(null); };
   const setIn = (group, k, v) => { setF((p) => ({ ...p, [group]: { ...p[group], [k]: v } })); setPreview(null); };
   const needsSms = f.channel === "sms" || f.fallback === "sms";
   const needsPush = f.channel === "push" || f.fallback === "push";
-  const isWa = f.channel.startsWith("whatsapp_");
+  const needsWa = f.channel.startsWith("whatsapp_") || f.fallback.startsWith("whatsapp_");
 
   async function doPreview() {
     const spec = toSpec(f);
@@ -86,8 +87,9 @@ export default function CrmCampaignFormPage() {
   async function save() {
     setFormErr(null);
     const spec = toSpec(f);
-    if (!spec.name.trim()) return setFormErr("Campaign ka naam likhein");
-    const r = await run("save", () => (id ? crmPatch(`/campaigns/${id}`, spec) : crmPost("/campaigns", spec)), id ? "Campaign update — ab dobara estimate karein" : "Draft ban gaya — ab estimate karein");
+    if (!spec.name.trim()) return setFormErr("Please give the campaign a name.");
+    const r = await run("save", () => (id ? crmPatch(`/campaigns/${id}`, spec) : crmPost("/campaigns", spec)),
+      id ? "Campaign updated — run the estimate again" : "Draft created — next, run the cost estimate");
     if (r?._id) navigate(`/crm/campaigns/${r._id}`);
   }
 
@@ -95,24 +97,24 @@ export default function CrmCampaignFormPage() {
 
   return (
     <CrmPage
-      title={id ? "Campaign edit" : "Naya campaign"}
-      subtitle="Save karne ke baad estimate (kitne log, kitna ₹) dikhega — uske bina send nahi hota"
-      actions={<Link to={id ? `/crm/campaigns/${id}` : "/crm/campaigns"} className="btn-outline"><ArrowLeft size={14} /> Wapas</Link>}
+      title={id ? "Edit Campaign" : "New Campaign"}
+      subtitle="Save as a draft, then review the reach and cost estimate before submitting"
+      actions={<Link to={id ? `/crm/campaigns/${id}` : "/crm/campaigns"} className="btn-outline"><ArrowLeft size={14} /> Back</Link>}
     >
       <ErrorNote error={formErr} />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 16 }}>
+      <div className="crm-1-1" style={{ alignItems: "start" }}>
         <div>
-          <Section title="1. Kisko bhejna hai (segment)">
-            <FormGroup label="Campaign ka naam">{input("name", { placeholder: "Jaise: Gurgaon drivers — weekend demand" })}</FormGroup>
+          <Section title="1. Audience" subtitle="Evaluated again at send time, so the audience is always current">
+            <FormGroup label="Campaign name">{input("name", { placeholder: "e.g. Gurugram drivers — weekend demand" })}</FormGroup>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormGroup label="Role">
+              <FormGroup label="Audience">
                 <select className="gm-input" value={f.role} onChange={(e) => set("role", e.target.value)}>
                   <option value="passenger">Passengers</option><option value="driver">Drivers</option>
                 </select>
               </FormGroup>
               <FormGroup label="Push token">
                 <select className="gm-input" value={f.hasPushToken} onChange={(e) => set("hasPushToken", e.target.value)}>
-                  <option value="">Koi bhi</option><option value="yes">Hai</option><option value="no">Nahi hai</option>
+                  <option value="">Any</option><option value="yes">Has token</option><option value="no">No token</option>
                 </select>
               </FormGroup>
             </div>
@@ -129,18 +131,18 @@ export default function CrmCampaignFormPage() {
               </FormGroup>
             ))}
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <button className="btn-outline" disabled={!!busy} onClick={doPreview}><Users size={14} /> {busy === "preview" ? "Gin rahe…" : "Kitne log? (preview)"}</button>
+              <button className="btn-outline" disabled={!!busy} onClick={doPreview}><Users size={14} /> {busy === "preview" ? "Counting…" : "Preview audience"}</button>
               {preview && <span style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", fontFamily: "Outfit,sans-serif" }}>
-                <b style={{ color: "#D4AF37" }}>{num(preview.matched)}</b> match · <b style={{ color: "#34D399" }}>{num(preview.reachable)}</b> tak pahunch sakte (consent / suppression ke baad)
+                <b style={{ color: "#D4AF37" }}>{num(preview.matched)}</b> matched · <b style={{ color: "#34D399" }}>{num(preview.reachable)}</b> reachable after consent and suppression
               </span>}
             </div>
           </Section>
         </div>
 
         <div>
-          <Section title="2. Channel aur message">
+          <Section title="2. Channel & Message">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormGroup label="Type" hint={f.category === "transactional" ? "Opt-out/caps bypass — hamesha approval lagega" : "Sirf marketing consent walon ko"}>
+              <FormGroup label="Message type" hint={f.category === "transactional" ? "Bypasses marketing opt-out — always needs a second approver" : "Only sent to contacts with marketing consent"}>
                 <select className="gm-input" value={f.category} onChange={(e) => set("category", e.target.value)}>
                   <option value="marketing">Marketing</option><option value="transactional">Transactional</option>
                 </select>
@@ -151,45 +153,46 @@ export default function CrmCampaignFormPage() {
                 </select>
               </FormGroup>
             </div>
-            <FormGroup label="Fallback (pehla channel na chale toh)">
+            <FormGroup label="Fallback channel" hint="Used when the first channel is not available for a contact">
               <select className="gm-input" value={f.fallback} onChange={(e) => set("fallback", e.target.value)}>
-                <option value="">Koi nahi</option>
+                <option value="">None</option>
                 {CHANNELS.filter((c) => c !== f.channel).map((c) => <option key={c} value={c}>{CHANNEL[c]}</option>)}
               </select>
             </FormGroup>
             {needsPush && <FormGroup label="Push title">{input("title", { maxLength: 65 })}</FormGroup>}
             {(needsPush || needsSms) && (
-              <FormGroup label={needsSms ? "Text (SMS: DLT template se bilkul same)" : "Push body"} hint={needsSms && f.category === "marketing" ? "Marketing SMS mein opt-out line zaroori: 'Band karne ke liye STOP bhejein.'" : undefined}>
+              <FormGroup label={needsSms ? "Message text (must match the DLT template exactly)" : "Push body"}
+                hint={needsSms && f.category === "marketing" ? "Marketing SMS must include an opt-out line, e.g. 'Reply STOP to unsubscribe.'" : undefined}>
                 <textarea className="gm-input" rows={3} value={f.body} onChange={(e) => set("body", e.target.value)} />
               </FormGroup>
             )}
             {needsSms && <FormGroup label="MSG91 template ID (DLT)">{input("smsTemplateId")}</FormGroup>}
-            {(isWa || f.fallback.startsWith("whatsapp_")) && (
+            {needsWa && (
               <>
-                <FormGroup label="WhatsApp template naam (Meta pe approved)">{input("templateName", { placeholder: "passenger_offer_v1" })}</FormGroup>
+                <FormGroup label="WhatsApp template name (approved by Meta)">{input("templateName", { placeholder: "e.g. passenger_offer_v1" })}</FormGroup>
                 <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
-                  <FormGroup label="Template params (comma se)" hint="{{profile.rides30d}} jaise placeholder chalte hain">{input("templateParams")}</FormGroup>
+                  <FormGroup label="Template parameters (comma separated)" hint="Placeholders such as {{profile.rides30d}} are supported">{input("templateParams")}</FormGroup>
                   <FormGroup label="Language">{input("language")}</FormGroup>
                 </div>
               </>
             )}
-            {f.channel === "whatsapp_marketing" && <Pill tone="orange">WhatsApp marketing ≈ ₹1.02 / message — sabse mehenga channel</Pill>}
+            {f.channel === "whatsapp_marketing" && <Pill tone="orange">WhatsApp marketing costs about ₹1.02 per message — the most expensive channel</Pill>}
           </Section>
 
-          <Section title="3. Kab aur kitni tezi se">
+          <Section title="3. Schedule & Pacing">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormGroup label="Schedule (khaali = approve hote hi)">
+              <FormGroup label="Send at" hint="Leave empty to send as soon as it is approved">
                 <input className="gm-input" type="datetime-local" value={f.scheduledAt} onChange={(e) => set("scheduledAt", e.target.value)} style={{ colorScheme: "dark" }} />
               </FormGroup>
-              <FormGroup label="Max per ghanta" hint="Settings ki limit se zyada nahi ho sakta">
+              <FormGroup label="Max messages per hour" hint="Cannot exceed the global limit in CRM Settings">
                 <input className="gm-input" type="number" min="1" value={f.throttlePerHour} onChange={(e) => set("throttlePerHour", e.target.value)} />
               </FormGroup>
             </div>
-            <Hint>Quiet hours aur frequency cap send ke waqt apne aap lagte hain — jo log us waqt cap pe hain, unhe skip kiya jayega.</Hint>
+            <Hint>Quiet hours and frequency caps are applied automatically at send time; contacts who hit a cap are skipped.</Hint>
           </Section>
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button className="btn-gold" disabled={!!busy} onClick={save}>{busy === "save" ? "Save ho raha…" : id ? "Update draft" : "Draft save karein"}</button>
+            <button className="btn-gold" disabled={!!busy} onClick={save}>{busy === "save" ? "Saving…" : id ? "Update draft" : "Save draft"}</button>
           </div>
         </div>
       </div>
