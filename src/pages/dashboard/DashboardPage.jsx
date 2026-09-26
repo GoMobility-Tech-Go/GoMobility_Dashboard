@@ -847,19 +847,20 @@ export default function DashboardPage() {
       })
       .catch(() => setSosAlerts([]));
 
-    // Ride breakdown + conversion funnel
-    Promise.allSettled([
-      getRides({ status: "completed",      limit: 1 }),
-      getRides({ status: "cancelled",      limit: 1 }),
-      getRides({ status: "requested",      limit: 1 }),
-      getRides({ status: "driver_assigned",limit: 1 }),
-      getRides({ status: "in_progress",    limit: 1 }),
-    ]).then(([comp, canc, req, asgn, prog]) => {
+    // Ride breakdown + conversion funnel — sequential to avoid 429
+    (async () => {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const safeGet = async (params) => { try { return await getRides(params); } catch { return null; } };
       const getTotal = (res) => {
-        if (res.status !== "fulfilled") return 0;
-        const d = res.value.data?.data || res.value.data || {};
+        if (!res) return 0;
+        const d = res.data?.data || res.data || {};
         return d.pagination?.total || d.total || 0;
       };
+      const comp = await safeGet({ status: "completed", limit: 1 }); await sleep(300);
+      const canc = await safeGet({ status: "cancelled", limit: 1 }); await sleep(300);
+      const req  = await safeGet({ status: "requested", limit: 1 }); await sleep(300);
+      const asgn = await safeGet({ status: "accepted",  limit: 1 }); await sleep(300);
+      const prog = await safeGet({ status: "ongoing",   limit: 1 });
       const completed = getTotal(comp);
       const cancelled = getTotal(canc);
       const requested = getTotal(req);
@@ -869,14 +870,14 @@ export default function DashboardPage() {
       const total = completed + cancelled + requested + assigned + inProg;
       if (total > 0) {
         const funnel = [
-          { label: "Requested",   value: total,     pct: 100 },
-          { label: "Assigned",    value: assigned + inProg + completed, pct: 0 },
-          { label: "In Progress", value: inProg + completed, pct: 0 },
-          { label: "Completed",   value: completed, pct: 0 },
+          { label: "Requested",   value: total,                          pct: 100 },
+          { label: "Assigned",    value: assigned + inProg + completed,  pct: 0 },
+          { label: "In Progress", value: inProg + completed,             pct: 0 },
+          { label: "Completed",   value: completed,                      pct: 0 },
         ].map(f => ({ ...f, pct: total > 0 ? Math.round((f.value / total) * 100) : 0 }));
         setConvFunnel(funnel);
       }
-    });
+    })();
   }, [isSA]);
 
   const alertIntervalRef  = useRef(null);
@@ -895,9 +896,9 @@ export default function DashboardPage() {
   // Real-time ops: rides/hour + driver breakdown + yesterday revenue
   useEffect(() => {
     if (!isSA) return;
-    fetchHourlyRides();
-    fetchYesterdayRevenue();
     fetchDriverBreakdown();
+    setTimeout(() => fetchHourlyRides(), 2000);
+    setTimeout(() => fetchYesterdayRevenue(), 4000);
     if (opsIntervalRef.current) clearInterval(opsIntervalRef.current);
     opsIntervalRef.current = setInterval(() => {
       if (document.hidden) return;
