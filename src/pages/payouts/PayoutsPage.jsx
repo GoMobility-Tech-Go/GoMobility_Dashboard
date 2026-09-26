@@ -31,8 +31,6 @@ export default function PayoutsPage() {
   const [endDate, setEndDate]         = useState("");
   const [offset, setOffset]           = useState(0);
   const [toast, setToast]             = useState(null);
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [bulkActing, setBulkActing]   = useState(false);
   const [retrying, setRetrying]       = useState({});
   const LIMIT = 10;
 
@@ -41,7 +39,6 @@ export default function PayoutsPage() {
   const load = useCallback(() => {
     setLoading(true);
     setError(false);
-    setSelectedIds(new Set());
     const params = { limit: LIMIT, offset };
     if (statusFilter) params.status = statusFilter;
     if (startDate)    params.start_date = startDate;
@@ -71,45 +68,6 @@ export default function PayoutsPage() {
     { label:"Failed",       value: failedCount,           icon:"❌", color:"#f87171" },
     { label:"Loaded Total", value: fmtRupee(totalAmount), icon:"💰", color:"#D4AF37" },
   ];
-
-  const pendingPayouts       = payouts.filter(p => p.status === "pending");
-  const selectedPendingItems = payouts.filter(p => selectedIds.has(p.id) && p.status === "pending");
-  const allPendingSelected   = pendingPayouts.length > 0 && pendingPayouts.every(p => selectedIds.has(p.id));
-  const somePendingSelected  = pendingPayouts.some(p => selectedIds.has(p.id));
-
-  const toggleSelect = (id) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (allPendingSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(pendingPayouts.map(p => p.id)));
-    }
-  };
-
-  const handleBulkProcess = async () => {
-    if (selectedPendingItems.length === 0) return;
-    setBulkActing(true);
-    try {
-      setPayouts(prev => prev.map(p =>
-        selectedIds.has(p.id) && p.status === "pending"
-          ? { ...p, status: "processing" }
-          : p
-      ));
-      showToast(`${selectedPendingItems.length} payout(s) marked as processing.`, "success");
-      setSelectedIds(new Set());
-    } catch {
-      showToast("Bulk processing failed.", "error");
-    } finally {
-      setBulkActing(false);
-    }
-  };
 
   const handleRetry = async (payout) => {
     const key = `r${payout.id}`;
@@ -161,26 +119,6 @@ export default function PayoutsPage() {
         ))}
       </div>
 
-      {/* Bulk Action Bar */}
-      {selectedIds.size > 0 && (
-        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 18px", background:"rgba(212,175,55,0.07)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:12, marginBottom:16, flexWrap:"wrap" }}>
-          <span style={{ fontSize:13, fontWeight:700, color:"#D4AF37" }}>{selectedIds.size} selected</span>
-          {selectedPendingItems.length > 0 && (
-            <button
-              onClick={handleBulkProcess}
-              disabled={bulkActing}
-              style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 16px", background:"rgba(34,197,94,0.15)", border:"1px solid rgba(34,197,94,0.35)", borderRadius:8, color:"#4ade80", fontSize:12, fontWeight:700, cursor:"pointer", opacity:bulkActing?0.5:1, fontFamily:"Outfit,sans-serif" }}>
-              ✓ Process {selectedPendingItems.length} Pending
-            </button>
-          )}
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 12px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.25)", borderRadius:8, color:"#f87171", fontSize:12, cursor:"pointer", fontFamily:"Outfit,sans-serif" }}>
-            <X size={12}/> Deselect All
-          </button>
-        </div>
-      )}
-
       {/* Filters */}
       <div style={{ display:"flex", gap:12, marginBottom:18, flexWrap:"wrap", alignItems:"center" }}>
         <select
@@ -228,28 +166,16 @@ export default function PayoutsPage() {
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr>
-                <TH style={{ width:44, paddingLeft:20 }} c={
-                  pendingPayouts.length > 0 ? (
-                    <input
-                      type="checkbox"
-                      checked={allPendingSelected}
-                      ref={el => { if (el) el.indeterminate = !allPendingSelected && somePendingSelected; }}
-                      onChange={toggleSelectAll}
-                      style={{ width:15, height:15, cursor:"pointer", accentColor:"#D4AF37" }}
-                      title="Select all pending"
-                    />
-                  ) : <span/>
-                }/>
                 {["Driver","Phone","Amount","Status","Bank Details","Transaction ID","Date","Action"].map((c) => <TH key={c} c={c} />)}
               </tr>
             </thead>
             <tbody>
               {loading
                 ? Array(6).fill(0).map((_,i) => (
-                    <tr key={i}><td colSpan={9}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
+                    <tr key={i}><td colSpan={8}><div style={{ height:48, background:"rgba(255,255,255,0.03)", margin:"4px 0", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
                   ))
                 : payouts.length === 0 && !error
-                  ? <tr><td colSpan={9} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>
+                  ? <tr><td colSpan={8} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>
                       <div style={{ fontSize:32, marginBottom:10 }}>💸</div>
                       No withdrawal transactions found
                     </td></tr>
@@ -265,27 +191,13 @@ export default function PayoutsPage() {
                       const bankVerified = p.bank_verified ?? p.bank_details?.verified ?? null;
                       const isPending   = p.status === "pending";
                       const isFailed    = p.status === "failed";
-                      const isSelected  = selectedIds.has(p.id);
                       const retryKey    = `r${p.id}`;
                       const failReason  = p.failure_reason || p.error_message || p.failure_message;
                       return (
                         <tr key={p.id || i}
-                          style={{ background: isSelected ? "rgba(212,175,55,0.05)" : "" }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = isSelected ? "rgba(212,175,55,0.08)" : "rgba(212,175,55,0.03)"}
-                          onMouseLeave={(e) => e.currentTarget.style.background = isSelected ? "rgba(212,175,55,0.05)" : ""}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "rgba(212,175,55,0.03)"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = ""}
                         >
-                          <TD style={{ paddingLeft:20, width:44 }}>
-                            {isPending ? (
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleSelect(p.id)}
-                                style={{ width:15, height:15, cursor:"pointer", accentColor:"#D4AF37" }}
-                              />
-                            ) : (
-                              <div style={{ width:15 }} />
-                            )}
-                          </TD>
                           <TD><div style={{ fontWeight:600, color:"#fff" }}>{driverName}</div></TD>
                           <TD style={{ fontSize:12, color:"rgba(255,255,255,0.6)" }}>{driverPhone}</TD>
                           <TD><span style={{ fontWeight:700, color:"#D4AF37", fontSize:14 }}>{fmtRupee(p.amount)}</span></TD>

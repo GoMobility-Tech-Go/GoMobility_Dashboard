@@ -904,8 +904,6 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const [toast, setToast]       = useState(null);
   const [acting, setActing]     = useState({});
   const [exporting, setExporting] = useState(false);
-  const [selectedIds, setSelectedIds]             = useState(new Set());
-  const [bulkActing, setBulkActing]               = useState(false);
   const [showPending7Days, setShowPending7Days]   = useState(false);
   const [expandedDriverId, setExpandedDriverId]   = useState(null);
   const [expandedDocsCache, setExpandedDocsCache] = useState({});
@@ -1277,34 +1275,6 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       if (tab === "Fraud Alerts") loadFraud();
     } catch (err) { showToast(err.response?.data?.message || "Suspend failed.", "error"); }
     finally { setActing((p) => ({ ...p, ["sus"+userId]: false })); }
-  };
-
-  const handleBulkVerify = async () => {
-    if (!selectedIds.size) return;
-    setBulkActing(true);
-    const ids = [...selectedIds];
-    let ok = 0, fail = 0;
-    await Promise.allSettled(ids.map(async (dId) => {
-      try { await verifyDriver(dId, true); ok++; } catch { fail++; }
-    }));
-    setBulkActing(false);
-    setSelectedIds(new Set());
-    showToast(`Verified ${ok} driver(s)${fail ? ` (${fail} failed)` : ''}.`, fail ? 'error' : 'success');
-    loadDrivers(); loadStats();
-  };
-
-  const handleBulkBlock = async () => {
-    if (!selectedIds.size) return;
-    setBulkActing(true);
-    const ids = [...selectedIds];
-    let ok = 0, fail = 0;
-    await Promise.allSettled(ids.map(async (dId) => {
-      try { await updateDriverStatus(dId, false); ok++; } catch { fail++; }
-    }));
-    setBulkActing(false);
-    setSelectedIds(new Set());
-    showToast(`Blocked ${ok} driver(s)${fail ? ` (${fail} failed)` : ''}.`, fail ? 'error' : 'success');
-    loadDrivers();
   };
 
   const toggleExpandDriver = async (dId, userId) => {
@@ -1737,48 +1707,11 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
             </div>
           )}
 
-          {/* Bulk action bar — visible when drivers are selected */}
-          {selectedIds.size > 0 && (
-            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', marginBottom:10, background:'rgba(212,175,55,0.08)', border:'1px solid rgba(212,175,55,0.3)', borderRadius:12, flexWrap:'wrap' }}>
-              <span style={{ fontSize:13, fontWeight:700, color:GOLD }}>
-                {selectedIds.size} driver{selectedIds.size > 1 ? 's' : ''} selected
-              </span>
-              <button
-                disabled={bulkActing}
-                onClick={handleBulkVerify}
-                style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', background:'rgba(74,222,128,0.12)', border:'1px solid rgba(74,222,128,0.3)', borderRadius:8, color:'#4ade80', fontSize:12, fontWeight:700, fontFamily:'Outfit,sans-serif', cursor:bulkActing?'not-allowed':'pointer', opacity:bulkActing?0.5:1 }}>
-                <ShieldCheck size={13}/>{bulkActing ? 'Working…' : 'Verify All'}
-              </button>
-              <button
-                disabled={bulkActing}
-                onClick={handleBulkBlock}
-                style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:8, color:'#f87171', fontSize:12, fontWeight:700, fontFamily:'Outfit,sans-serif', cursor:bulkActing?'not-allowed':'pointer', opacity:bulkActing?0.5:1 }}>
-                <UserX size={13}/>Block All
-              </button>
-              <button
-                onClick={() => setSelectedIds(new Set())}
-                style={{ marginLeft:'auto', padding:'6px 12px', background:'transparent', border:'1px solid rgba(255,255,255,0.12)', borderRadius:8, color:'rgba(255,255,255,0.5)', fontSize:12, cursor:'pointer', fontFamily:'Outfit,sans-serif' }}>
-                <X size={12} style={{ marginRight:4 }}/>Deselect All
-              </button>
-            </div>
-          )}
-
           <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"visible" }}>
             <div style={{ overflowX:"auto", overflowY:"visible" }}>
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead>
                   <tr>
-                    {/* Select-all checkbox */}
-                    <th style={{ padding:'12px 10px 12px 16px', borderBottom:'1px solid rgba(212,175,55,0.1)', width:36 }}>
-                      <input type="checkbox"
-                        style={{ accentColor:GOLD, width:15, height:15, cursor:'pointer' }}
-                        checked={drivers.length > 0 && drivers.every(d => selectedIds.has(d.id))}
-                        onChange={(e) => {
-                          if (e.target.checked) setSelectedIds(new Set(drivers.map(d => d.id)));
-                          else setSelectedIds(new Set());
-                        }}
-                      />
-                    </th>
                     <th style={drvTh(sort.col==="name")}  onClick={()=>toggleDriverSort("name")}>
                       <FilterHead label="Driver" meta={fMeta("name")} filter={filters.name}
                         onChange={v => setFilter("name", v)} onClear={() => clearFilter("name")} />
@@ -1820,10 +1753,10 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                 <tbody>
                   {loading
                     ? Array(6).fill(0).map((_,i)=>(
-                        <tr key={i}><td colSpan={13}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
+                        <tr key={i}><td colSpan={12}><div style={{ height:52, background:"rgba(255,255,255,0.03)", margin:"3px 8px", borderRadius:8, animation:"gmPulse 1.5s ease-in-out infinite" }}/></td></tr>
                       ))
                     : drivers.length === 0
-                      ? <tr><td colSpan={13} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers match these filters</td></tr>
+                      ? <tr><td colSpan={12} style={{ padding:52, textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:13 }}>No drivers match these filters</td></tr>
                       : drivers.map((d) => {
                           const isSuspended = d.is_suspended || d.suspended;
                           const userId = d.user_id || d.userId;
@@ -1832,14 +1765,6 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                           return (
                             <React.Fragment key={d.id}>
                             <tr onMouseEnter={(e)=>e.currentTarget.style.background="rgba(212,175,55,0.03)"} onMouseLeave={(e)=>e.currentTarget.style.background=""}>
-                              <td style={{ padding:'0 10px 0 16px', verticalAlign:'middle', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
-                                <input type="checkbox"
-                                  style={{ accentColor:GOLD, width:14, height:14, cursor:'pointer' }}
-                                  checked={selectedIds.has(d.id)}
-                                  onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) next.add(d.id); else next.delete(d.id); setSelectedIds(next); }}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              </td>
                               <TD>
                                 <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                                   <div style={{ width:38, height:38, borderRadius:"50%", background:"rgba(212,175,55,0.12)", border:"1.5px solid rgba(212,175,55,0.28)", flexShrink:0, overflow:"hidden", position:"relative", display:"flex", alignItems:"center", justifyContent:"center" }}>
