@@ -15,6 +15,20 @@ import "./index.css";
   }
 })();
 
+// Local CRM testing only: http://localhost:5173/?devLogin=super_admin | admin | ops_team
+// Needs the CRM backend running with `npm run dev:local` (DEV_AUTH). import.meta.env.DEV is false in
+// production builds, so Vite removes this block entirely.
+if (import.meta.env.DEV) {
+  const role = new URLSearchParams(window.location.search).get("devLogin");
+  if (["super_admin", "admin", "ops_team"].includes(role)) {
+    localStorage.setItem("access_token", `dev-${role}`);
+    localStorage.setItem("admin_user", JSON.stringify({
+      id: `dev-${role}`, name: `Local ${role.replace("_", " ")}`, role: role === "super_admin" ? "Super Admin" : "Admin", initials: "LT",
+    }));
+    window.history.replaceState(null, "", "/crm");
+  }
+}
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <>
     <BrowserRouter>

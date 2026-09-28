@@ -19,6 +19,11 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
+  // Local CRM testing (?devLogin=…, see main.jsx): never send the fake token to the live ride backend, and
+  // don't let its 401 sign the tester out. Removed from production builds (import.meta.env.DEV is false).
+  if (import.meta.env.DEV && token?.startsWith('dev-')) {
+    return Promise.reject(new axios.CanceledError('Ride backend calls are disabled during local CRM testing'));
+  }
   if (token) config.headers.Authorization = `Bearer ${token}`;
   config.metadata = { startTime: Date.now() };
   return config;
