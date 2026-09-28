@@ -12,9 +12,19 @@ const NUM_FILTERS = [
   ["rides7dGte", "Rides in 7 days ≥"], ["rides7dLte", "Rides in 7 days ≤"],
   ["rides30dGte", "Rides in 30 days ≥"], ["rides30dLte", "Rides in 30 days ≤"],
   ["ridesTotalGte", "Lifetime rides ≥"], ["ridesTotalLte", "Lifetime rides ≤"],
-  ["lifetimeSpendGte", "Lifetime spend ≥ ₹"], ["lifetimeSpendLte", "Lifetime spend ≤ ₹"],
+  ["lifetimeSpendGte", "Lifetime spend ≥ ₹", 1, "passenger"], ["lifetimeSpendLte", "Lifetime spend ≤ ₹", 1, "passenger"],
+  ["rides90dGte", "Rides in 90 days ≥", 1, "passenger"], ["rides90dLte", "Rides in 90 days ≤", 1, "passenger"],
+  ["avgFareGte", "Average fare ≥ ₹", 1, "passenger"], ["avgFareLte", "Average fare ≤ ₹", 1, "passenger"],
+  ["onlineHours7dGte", "Online hours (7 days) ≥", 1, "driver"], ["onlineHours7dLte", "Online hours (7 days) ≤", 1, "driver"],
+  ["acceptanceRate7dGte", "Acceptance rate (7 days) ≥ %", 0.01, "driver"], ["acceptanceRate7dLte", "Acceptance rate (7 days) ≤ %", 0.01, "driver"],
+  ["earningsTotalGte", "Lifetime earnings ≥ ₹", 1, "driver"], ["earningsTotalLte", "Lifetime earnings ≤ ₹", 1, "driver"],
 ];
-const LIST_FILTERS = [["cityIds", "City IDs (comma separated)"], ["kycStatus", "KYC status (e.g. verified, rejected)"], ["subscriptionTier", "Subscription plan (e.g. basic_saver, gold_rider)"]];
+const scaleOf = (k) => NUM_FILTERS.find(([x]) => x === k)?.[2] || 1;
+const LIST_FILTERS = [
+  ["cityIds", "City IDs (comma separated)"], ["states", "States (e.g. HR, DL)"], ["vehicleTypes", "Vehicle types (bike, auto, car)"],
+  ["kycStatus", "KYC status (e.g. verified, rejected)", "driver"], ["subscriptionTier", "Subscription plan (e.g. basic_saver, gold_rider)", "passenger"],
+];
+const forRole = (role) => ([, , , r]) => !r || r === role;
 const CHANNELS = ["push", "whatsapp_utility", "whatsapp_marketing", "sms"];
 
 const EMPTY = {
@@ -26,8 +36,11 @@ const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolea
 
 function toSpec(f) {
   const segment = { role: f.role };
-  for (const [k] of NUM_FILTERS) if (f.filters[k] !== "" && f.filters[k] != null) segment[k] = Number(f.filters[k]);
-  for (const [k] of LIST_FILTERS) if (csv(f.lists[k]).length) segment[k] = csv(f.lists[k]);
+  // role ke bahar wale filters mat bhejo (driver segment mein "average fare" ka matlab nahi)
+  for (const [k, , scale = 1, role] of NUM_FILTERS) {
+    if ((!role || role === f.role) && f.filters[k] !== "" && f.filters[k] != null) segment[k] = +(Number(f.filters[k]) * scale).toFixed(4);
+  }
+  for (const [k, , role] of LIST_FILTERS) if ((!role || role === f.role) && csv(f.lists[k]).length) segment[k] = csv(f.lists[k]);
   if (f.hasPushToken) segment.hasPushToken = f.hasPushToken === "yes";
   const content = f.channel === "push" ? { title: f.title, body: f.body }
     : f.channel === "sms" ? { body: f.body, smsTemplateId: f.smsTemplateId }
@@ -48,7 +61,7 @@ function fromCampaign(c) {
   return {
     ...EMPTY, name: c.name || "", category: c.category || "marketing", role: s.role || "passenger",
     hasPushToken: s.hasPushToken == null ? "" : s.hasPushToken ? "yes" : "no",
-    filters: Object.fromEntries(NUM_FILTERS.filter(([k]) => s[k] != null).map(([k]) => [k, String(s[k])])),
+    filters: Object.fromEntries(NUM_FILTERS.filter(([k]) => s[k] != null).map(([k]) => [k, String(+(s[k] / scaleOf(k)).toFixed(2))])),
     lists: Object.fromEntries(LIST_FILTERS.filter(([k]) => s[k]).map(([k]) => [k, s[k].join(", ")])),
     channel: c.channel, fallback: c.fallback || "", title: ct.title || "", body: ct.body || "",
     templateName: ct.templateName || "", templateParams: (ct.templateParams || []).join(", "), language: ct.language || "en",
@@ -119,13 +132,13 @@ export default function CrmCampaignFormPage() {
               </FormGroup>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
-              {NUM_FILTERS.map(([k, label]) => (
+              {NUM_FILTERS.filter(forRole(f.role)).map(([k, label]) => (
                 <FormGroup key={k} label={label}>
                   <input className="gm-input" type="number" min="0" value={f.filters[k] ?? ""} onChange={(e) => setIn("filters", k, e.target.value)} />
                 </FormGroup>
               ))}
             </div>
-            {LIST_FILTERS.map(([k, label]) => (
+            {LIST_FILTERS.filter(([, , role]) => !role || role === f.role).map(([k, label]) => (
               <FormGroup key={k} label={label}>
                 <input className="gm-input" value={f.lists[k] ?? ""} onChange={(e) => setIn("lists", k, e.target.value)} />
               </FormGroup>

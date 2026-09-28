@@ -47,6 +47,7 @@ import CrmOverviewPage from "../pages/crm/CrmOverviewPage";
 import CrmAnalyticsPage from "../pages/crm/CrmAnalyticsPage";
 import CrmJourneysPage from "../pages/crm/CrmJourneysPage";
 import CrmJourneyDetailPage from "../pages/crm/CrmJourneyDetailPage";
+import CrmJourneyEditPage from "../pages/crm/CrmJourneyEditPage";
 import CrmCampaignsPage from "../pages/crm/CrmCampaignsPage";
 import CrmCampaignFormPage from "../pages/crm/CrmCampaignFormPage";
 import CrmCampaignDetailPage from "../pages/crm/CrmCampaignDetailPage";
@@ -98,6 +99,7 @@ const routes = [
             { path:"analytics",          element:<CrmAnalyticsPage/> },
             { path:"journeys",           element:<CrmJourneysPage/> },
             { path:"journeys/:key",      element:<CrmJourneyDetailPage/> },
+            { path:"journeys/:key/edit", element:<CrmJourneyEditPage/> },
             { path:"campaigns",          element:<CrmCampaignsPage/> },
             { path:"campaigns/new",      element:<CrmCampaignFormPage/> },
             { path:"campaigns/:id",      element:<CrmCampaignDetailPage/> },

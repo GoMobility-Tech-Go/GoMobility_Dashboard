@@ -56,7 +56,14 @@ function Detail({ userId, onChanged }) {
           <Fact label="Rides · 30 days" value={num(p.rides30d)} />
           <Fact label="Last ride" value={dt(p.lastRideAt)} />
           <Fact label="Signed up" value={dt(p.signupAt)} />
-          <Fact label="City" value={c.cityId || "—"} />
+          <Fact label="City / state" value={`${c.cityId || "—"}${p.state ? ` · ${p.state}` : ""}`} />
+          {!isDriver && <Fact label="Rides · 90 days" value={num(p.rides90d)} />}
+          {!isDriver && <Fact label="Average fare" value={inr(p.avgFare)} />}
+          {isDriver && <Fact label="Online hours · 7 days" value={p.onlineHours7d == null ? "—" : `${p.onlineHours7d} h`} />}
+          {isDriver && <Fact label="Acceptance · 7 days" value={p.acceptanceRate7d == null ? "—" : `${Math.round(p.acceptanceRate7d * 100)}% of ${num(p.offers7d)}`} />}
+          {isDriver && <Fact label="Lifetime earnings" value={inr(p.earningsTotal)} />}
+          {p.vehicleTypes?.length > 0 && <Fact label="Vehicle" value={p.vehicleTypes.join(", ")} />}
+          <Fact label="Last login" value={dt(p.lastLoginAt)} />
           {!isDriver && <Fact label="Lifetime spend" value={inr(p.lifetimeSpend)} />}
           {isDriver && <Fact label="Missing documents" value={p.missingDocs || "None"} />}
         </div>

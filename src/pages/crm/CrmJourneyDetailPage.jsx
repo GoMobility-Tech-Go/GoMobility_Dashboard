@@ -2,9 +2,9 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, LabelList } from "recharts";
-import { ArrowLeft, Send, Clock, GitBranch, LogOut, BellRing, Users, Target, IndianRupee, Percent } from "lucide-react";
-import { StatCard, TableCard } from "../../components/ui";
-import { crmPost } from "../../api/crm";
+import { ArrowLeft, Send, Clock, GitBranch, LogOut, BellRing, Users, Target, IndianRupee, Percent, Pencil, History } from "lucide-react";
+import { StatCard, TableCard, Modal } from "../../components/ui";
+import { crmGet, crmPost } from "../../api/crm";
 import {
   CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, StatusPill, CategoryPill, Hint, ChartCard, ChartTooltip, Legend,
   NoChartData, RangeButtons, COLORS, CHANNEL, axisTick, gridStroke, inr, num, pct, dt, statusLabel,
@@ -48,6 +48,8 @@ export default function CrmJourneyDetailPage() {
   const j = useCrm(path);
   const f = useCrm(`${path}/funnel`, { params: { days }, refreshMs: 60000 });
   const runs = useCrm(`${path}/runs`, { refreshMs: 60000 });
+  const versions = useCrm(`${path}/versions`);
+  const [viewing, setViewing] = useState(null);   // { version, def }
   const { busy, run } = useAction();
   const d = j.data, fn = f.data;
 
@@ -72,6 +74,14 @@ export default function CrmJourneyDetailPage() {
     await run("toggle", () => crmPost(`${path}/toggle`, { enabled: !d.enabled }), d.enabled ? "Journey paused" : "Journey turned on");
     j.reload();
   }
+  async function viewVersion(v) {
+    try { setViewing(await crmGet(`${path}/versions/${v}`)); } catch { window.alert("Could not load that version."); }
+  }
+  async function restore(v) {
+    if (!window.confirm(`Restore version ${v}? It is published as a new version; contacts already in the journey finish on their current version.`)) return;
+    const r = await run("restore", () => crmPost(`${path}/restore`, { version: v }), null);
+    if (r) { window.alert(r.changed ? `Restored — now version ${r.version}.` : "That version is already the current definition."); setViewing(null); j.reload(); versions.reload(); }
+  }
   async function stop() {
     if (!window.confirm("End all ACTIVE runs of this journey? No further messages will be sent to them.")) return;
     const r = await run("stop", () => crmPost(`${path}/stop`), null);
@@ -85,6 +95,7 @@ export default function CrmJourneyDetailPage() {
       actions={
         <>
           <Link to="/crm/journeys" className="btn-outline"><ArrowLeft size={14} /> Journeys</Link>
+          {d && can(me, "admin") && <Link to={`/crm/journeys/${encodeURIComponent(key)}/edit`} className="btn-outline"><Pencil size={14} /> Edit</Link>}
           {d && can(me, "admin") && <button className={d.enabled ? "btn-outline" : "btn-gold"} disabled={!!busy} onClick={toggle}>{d.enabled ? "Pause" : "Turn on"}</button>}
           {d && can(me, "admin") && <button className="btn-danger" disabled={!!busy} onClick={stop}>Stop active runs</button>}
         </>
@@ -198,6 +209,43 @@ export default function CrmJourneyDetailPage() {
               </table>
             </TableCard>
           </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <TableCard title="Version History" icon={<History size={14} />}>
+              <table className="gm-table">
+                <thead><tr><th>Version</th><th>Published by</th><th>When</th><th></th></tr></thead>
+                <tbody>
+                  {(versions.data || []).map((v) => (
+                    <tr key={v.version}>
+                      <td>v{v.version} {v.version === d.version && <Pill tone="green">Current</Pill>}</td>
+                      <td style={{ fontSize: 12 }}>{v.createdBy === "seed" ? "Catalog (deploy)" : v.createdBy === "backfill" ? "Initial" : v.createdBy}</td>
+                      <td>{dt(v.createdAt)}</td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button className="btn-outline btn-xs" onClick={() => viewVersion(v.version)}>View</button>{" "}
+                        {can(me, "admin") && v.version !== d.version && <button className="btn-outline btn-xs" disabled={!!busy} onClick={() => restore(v.version)}>Restore</button>}
+                      </td>
+                    </tr>
+                  ))}
+                  {versions.data && !versions.data.length && <tr><td colSpan={4} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No history yet</td></tr>}
+                </tbody>
+              </table>
+            </TableCard>
+          </div>
+          <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `Version ${viewing.version}` : ""} maxWidth={760}>
+            {viewing && (
+              <>
+                <Hint>Published by {viewing.createdBy} · {dt(viewing.createdAt)}</Hint>
+                <pre style={{ marginTop: 12, maxHeight: 460, overflow: "auto", background: "rgba(0,0,0,0.25)", border: "1px solid rgba(212,175,55,0.12)", borderRadius: 10, padding: 14, fontSize: 12, color: "rgba(255,255,255,0.8)", fontFamily: "Consolas, monospace" }}>
+                  {JSON.stringify(viewing.def, null, 2)}
+                </pre>
+                {can(me, "admin") && viewing.version !== d.version && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                    <button className="btn-gold" disabled={!!busy} onClick={() => restore(viewing.version)}>Restore this version</button>
+                  </div>
+                )}
+              </>
+            )}
+          </Modal>
 
           <TableCard title="Recent Runs" icon="🏃">
             <table className="gm-table">
