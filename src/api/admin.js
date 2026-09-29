@@ -107,10 +107,10 @@ export const getNotificationHistory = (params = {}) =>
 
 // ── Support / Complaints (admin) ───────────────────────────────────────────────
 export const getAdminSupportStats    = ()             => api.get('/admin/support/stats');
-export const getAdminSupportTickets  = (params = {})  => api.get('/admin/support/tickets', { params });
-export const getAdminSupportTicket   = (id)           => api.get(`/admin/support/tickets/${id}`);
-export const updateAdminSupportTicket = (id, patch)   => api.patch(`/admin/support/tickets/${id}`, patch);
-export const adminReplyToTicket      = (id, message)  => api.post(`/admin/support/tickets/${id}/reply`, { message });
+export const getAdminSupportTickets  = (params = {})  => api.get('/admin/support', { params });
+export const getAdminSupportTicket   = (id)           => api.get(`/admin/support/${id}`);
+export const updateAdminSupportTicket = (id, patch)   => api.patch(`/admin/support/${id}`, patch);
+export const adminReplyToTicket      = (id, message)  => api.post(`/admin/support/${id}/reply`, { message });
 
 // ── SOS / Emergency ───────────────────────────────────────────────────────────
 export const getSosHistory = (params = {}) =>
