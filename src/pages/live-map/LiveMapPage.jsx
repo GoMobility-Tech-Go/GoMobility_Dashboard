@@ -662,7 +662,7 @@ export default function LiveMapPage() {
                     <p className="text-gray-500 text-xs mt-0.5">{d.phone_number}</p>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {d.vehicle_type && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium capitalize">{d.vehicle_type}</span>}
-                      {d.city || d.city_name ? <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{d.city || d.city_name}</span> : null}
+                      {d.city_name ? <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{d.city_name}</span> : null}
                       {d.is_on_duty ? <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">On ride</span>
                         : <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">Available</span>}
                     </div>
