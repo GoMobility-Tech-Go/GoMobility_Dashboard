@@ -363,6 +363,11 @@ export default function LiveMapPage() {
     socketRef.current = socket;
 
     socket.on('connect', () => {
+      // JWT middleware already sets userId+role from token — just trigger registration
+      socket.emit('auth:login', {});
+    });
+
+    socket.on('auth:success', () => {
       socket.emit('admin:subscribe_live');
     });
 
