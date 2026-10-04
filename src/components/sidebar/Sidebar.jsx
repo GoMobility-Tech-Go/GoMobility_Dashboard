@@ -61,6 +61,7 @@ const ADMIN_MENU = [
   { label:"System", items:[
     { label:"Settings",           to:"/settings",             icon:Settings    },
     { label:"Logs",               to:"/logs",                 icon:FileText    },
+    { label:"System Monitoring",  to:"/system-monitoring",    icon:Activity    },
   ]},
 ];
 

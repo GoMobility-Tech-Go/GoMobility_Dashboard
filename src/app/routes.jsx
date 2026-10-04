@@ -34,6 +34,7 @@ import ZonesMapPage from "../pages/zones/ZonesMapPage";
 import ZoneEditorPage from "../pages/zones/ZoneEditorPage";
 import ZoneAnalyticsPage from "../pages/zones/ZoneAnalyticsPage";
 import LogsPage from "../pages/logs/LogsPage";
+import SystemMonitoringPage from "../pages/system-monitoring/SystemMonitoringPage";
 import InvoicePage from "../pages/invoices/InvoicePage";
 import DriverMetricsPage from "../pages/driver-metrics/DriverMetricsPage";
 import DriverMetricsDetailPage from "../pages/driver-metrics/DriverMetricsDetailPage";
@@ -92,6 +93,7 @@ const routes = [
         { path:"notifications", element:<NotificationsPage/> },
         { path:"settings", element:<SettingsPage/> },
         { path:"logs", element:<LogsPage/> },
+        { path:"system-monitoring", element:<SystemMonitoringPage/> },
         // ── CRM — access is granted by the CRM backend (super_admin → admin, admin → approver, ops_team → marketer)
         {
           path:"crm", element:<CrmLayout/>, children:[

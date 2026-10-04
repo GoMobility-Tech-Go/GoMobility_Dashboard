@@ -109,4 +109,12 @@ export const api = {
   // ── Refunds (unified) ─────────────────────────────────────────
   createRefund: (data) =>
     request('/admin/refunds', { method: 'POST', body: JSON.stringify(data) }),
+
+  // ── Payment Alerts Log ────────────────────────────────────────
+  getPaymentAlerts: (params = {}) =>
+    request(`/admin/payment-alerts?${new URLSearchParams(params)}`),
+
+  // ── WhatsApp Bot Stats ────────────────────────────────────────
+  getWhatsappStats: (days = 7) =>
+    request(`/admin/whatsapp/stats?days=${days}`),
 };

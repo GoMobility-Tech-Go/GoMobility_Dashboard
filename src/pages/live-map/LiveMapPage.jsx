@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { io } from 'socket.io-client';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -246,6 +247,41 @@ function ZoneNotifyModal({ drivers, onClose, onSent }) {
   );
 }
 
+// ── Smooth animated marker ────────────────────────────────────────────────────
+// Position change pe CSS transition se smoothly move karta hai.
+// Leaflet marker ka `_icon` div directly manipulate karte hain.
+function AnimatedMarker({ position, icon, children, isLive }) {
+  const markerRef = useRef(null);
+  const prevPosRef = useRef(position);
+
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker) return;
+    const [newLat, newLng] = position;
+    const [oldLat, oldLng] = prevPosRef.current;
+    if (newLat === oldLat && newLng === oldLng) return;
+
+    // CSS transition enable karo icon pe
+    const el = marker._icon;
+    if (el) {
+      el.style.transition = 'transform 600ms cubic-bezier(0.25,0.46,0.45,0.94)';
+    }
+
+    marker.setLatLng([newLat, newLng]);
+    prevPosRef.current = position;
+  }, [position]);
+
+  return (
+    <Marker
+      ref={markerRef}
+      position={position}
+      icon={icon}
+    >
+      {children}
+    </Marker>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 // view modes: 'markers' | 'heatmap' | 'both'
 // layer modes (can combine): 'supply' | 'demand' | 'rides' | 'idle'
@@ -262,7 +298,28 @@ export default function LiveMapPage() {
   const [drawMode,     setDrawMode]     = useState(false);
   const [zonedDrivers, setZonedDrivers] = useState(null);
   const [zoneClear,    setZoneClear]    = useState(null);
+  const [liveConnected, setLiveConnected] = useState(false);
   const intervalRef = useRef(null);
+  const socketRef   = useRef(null);
+  // userId → { lat, lng } latest socket pings — avoid full re-render on every ping
+  const livePingsRef = useRef(new Map());
+
+  const normaliseDriver = (d) => ({
+    ...d,
+    id:           d.driverId ?? d.id,
+    user_id:      d.userId   ?? d.user_id,   // UUID — socket matching ke liye
+    full_name:    d.name      ?? d.full_name,
+    phone_number: d.phone     ?? d.phone_number,
+    lat:          d.location?.latitude  ?? d.lat ?? d.latitude,
+    lng:          d.location?.longitude ?? d.lng ?? d.longitude,
+    vehicle_type: (d.vehicle?.types?.[0] ?? d.vehicle_type ?? '').toLowerCase(),
+    is_available: d.status === 'available' || d.is_available,
+    is_on_duty:   d.status === 'on_ride'   || d.is_on_duty,
+    active_ride_id:          d.activeRide?.id ?? d.active_ride_id,
+    city_name:               d.city?.name     ?? d.city_name,
+    online_seconds:          d.session?.durationSeconds ?? d.online_seconds,
+    session_rides_completed: d.session?.ridesCompleted  ?? d.session_rides_completed,
+  });
 
   const fetchAll = useCallback(async () => {
     try {
@@ -274,26 +331,14 @@ export default function LiveMapPage() {
       // /admin/driver-metrics/live-map returns { data: { drivers: [...], count, generatedAt } }
       const metricsData = drRes.data?.data;
       const rawDrivers = metricsData?.drivers || metricsData || [];
-      // Normalise to flat shape the rest of the component expects
-      setDrivers(
-        Array.isArray(rawDrivers)
-          ? rawDrivers.map(d => ({
-              ...d,
-              id:           d.driverId ?? d.id,
-              full_name:    d.name      ?? d.full_name,
-              phone_number: d.phone     ?? d.phone_number,
-              lat:          d.location?.latitude  ?? d.lat ?? d.latitude,
-              lng:          d.location?.longitude ?? d.lng ?? d.longitude,
-              vehicle_type: (d.vehicle?.types?.[0] ?? d.vehicle_type ?? '').toLowerCase(),
-              is_available: d.status === 'available' || d.is_available,
-              is_on_duty:   d.status === 'on_ride'   || d.is_on_duty,
-              active_ride_id:         d.activeRide?.id ?? d.active_ride_id,
-              city_name:              d.city?.name     ?? d.city_name,
-              online_seconds:         d.session?.durationSeconds ?? d.online_seconds,
-              session_rides_completed:d.session?.ridesCompleted  ?? d.session_rides_completed,
-            }))
-          : []
-      );
+      setDrivers(prev => {
+        const normalised = Array.isArray(rawDrivers) ? rawDrivers.map(normaliseDriver) : [];
+        // Socket se jo latest pings aaye hain unhe merge karo — API ke stale coords override mat karo
+        return normalised.map(d => {
+          const ping = livePingsRef.current.get(d.user_id);
+          return ping ? { ...d, lat: ping.lat, lng: ping.lng } : d;
+        });
+      });
       // /admin/rides returns { data: { rides:[...], pagination:{...} } }
       setDemandRides(demRes.data?.data?.rides  || []);
       setHistoryRides(histRes.data?.data?.rides || []);
@@ -301,6 +346,51 @@ export default function LiveMapPage() {
     } catch (e) {
       console.error('Live map fetch error:', e);
     } finally { setLoading(false); }
+  }, []);
+
+  // ── Socket: real-time driver pings ──────────────────────────────────────────
+  useEffect(() => {
+    const BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1')
+      .replace(/\/api\/v1\/?$/, '');
+    const token = localStorage.getItem('access_token') || localStorage.getItem('goMobilityAccessToken') || '';
+
+    const socket = io(BASE, {
+      auth:       { token },
+      transports: ['websocket', 'polling'],
+      reconnectionDelay: 2000,
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('admin:subscribe_live');
+    });
+
+    socket.on('admin:subscribed', () => {
+      setLiveConnected(true);
+    });
+
+    socket.on('disconnect', () => {
+      setLiveConnected(false);
+    });
+
+    socket.on('admin:driver_ping', ({ driverId, lat, lng, rideId }) => {
+      // Store latest ping
+      livePingsRef.current.set(driverId, { lat, lng });
+
+      // Update driver in state — only lat/lng so React batches nicely
+      setDrivers(prev => prev.map(d => {
+        if (d.user_id !== driverId) return d;
+        return { ...d, lat, lng, is_on_duty: rideId ? true : d.is_on_duty };
+      }));
+    });
+
+    return () => {
+      socket.emit('admin:unsubscribe_live');
+      socket.disconnect();
+      socketRef.current = null;
+      setLiveConnected(false);
+    };
   }, []);
 
   useEffect(() => {
@@ -526,7 +616,11 @@ export default function LiveMapPage() {
             ))}
           </div>
         )}
-        <span className="text-xs text-gray-400 ml-auto">Auto-refreshes every 60s</span>
+        <span className="text-xs text-gray-400 ml-auto flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${liveConnected ? 'bg-green-400' : 'bg-gray-400'}`}
+            style={liveConnected ? { animation: 'ping 1.5s cubic-bezier(0,0,0.2,1) infinite' } : {}}/>
+          {liveConnected ? 'Live — real-time' : 'Connecting… (60s fallback)'}
+        </span>
       </div>
 
       {/* ── Map ── */}
@@ -554,9 +648,14 @@ export default function LiveMapPage() {
               />
             )}
 
-            {/* Supply markers */}
+            {/* Supply markers — AnimatedMarker smoothly moves on socket ping */}
             {view !== 'heatmap' && activeLayer === 'supply' && withLocation.map(d => (
-              <Marker key={d.id || d.driver_id} position={[parseFloat(d.lat), parseFloat(d.lng)]} icon={vehicleIcon(d.vehicle_type)}>
+              <AnimatedMarker
+                key={d.id || d.driver_id}
+                position={[parseFloat(d.lat), parseFloat(d.lng)]}
+                icon={vehicleIcon(d.vehicle_type)}
+                isLive={liveConnected}
+              >
                 <Popup>
                   <div className="min-w-[160px]">
                     <p className="font-semibold text-gray-900 text-sm">{d.full_name}</p>
@@ -574,7 +673,7 @@ export default function LiveMapPage() {
                     )}
                   </div>
                 </Popup>
-              </Marker>
+              </AnimatedMarker>
             ))}
 
             {/* Demand markers (searching rides) */}

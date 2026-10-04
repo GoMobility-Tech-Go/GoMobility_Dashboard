@@ -27,6 +27,15 @@ const Toast = ({ msg, type, onClose }) => (
   </div>
 );
 
+// ── Push Channel options (PRD v1.0) ──────────────────────────────────────────
+const PUSH_CHANNELS = [
+  { value: 'promotions',    label: 'Promotions',    icon: '🎯', desc: 'Default — offers, campaigns, engagement',       sound: 'default'         },
+  { value: 'ride_updates',  label: 'Ride Updates',  icon: '🚗', desc: 'Ride status, driver arrived, trip changes',     sound: 'soft_ping.mp3'   },
+  { value: 'payments',      label: 'Payments',      icon: '💰', desc: 'Fare receipts, wallet credits, settlements',   sound: 'cash_register.mp3'},
+  { value: 'ride_requests', label: 'Ride Requests', icon: '🔔', desc: 'New ride offer to driver — MAX priority alarm', sound: 'alarm.mp3'       },
+  { value: 'sos_alerts',    label: 'SOS Alerts',    icon: '🚨', desc: 'Emergency — iOS DND bypass, critical alert',    sound: 'emergency.mp3'   },
+];
+
 // ── Audience options ──────────────────────────────────────────────────────────
 const AUDIENCES = [
   { value:"all_users",             label:"All Users",                    icon:"👥", group:"Mixed",      desc:"All passengers + online drivers" },
@@ -508,12 +517,13 @@ const PhonePreview = ({ title, body }) => (
 
 // ── Tab 1 — Send Now ─────────────────────────────────────────────────────────
 function SendNowTab({ showToast }) {
-  const [title, setTitle]       = useState("");
-  const [body, setBody]         = useState("");
-  const [audience, setAudience] = useState("all_users");
-  const [sending, setSending]   = useState(false);
-  const [schedule, setSchedule] = useState(null);
-  const [history, setHistory]   = useState([]);
+  const [title, setTitle]         = useState("");
+  const [body, setBody]           = useState("");
+  const [audience, setAudience]   = useState("all_users");
+  const [channelId, setChannelId] = useState("promotions");
+  const [sending, setSending]     = useState(false);
+  const [schedule, setSchedule]   = useState(null);
+  const [history, setHistory]     = useState([]);
 
   useEffect(() => {
     getNotificationSchedule()
@@ -525,14 +535,15 @@ function SendNowTab({ showToast }) {
   const handleSend = async () => {
     if (!title.trim() || !body.trim()) { showToast("Title and message are required.", "error"); return; }
     const label = AUDIENCES.find(a => a.value === audience)?.label || audience;
-    if (!window.confirm(`Send "${title}" to "${label}"?`)) return;
+    const ch    = PUSH_CHANNELS.find(c => c.value === channelId);
+    if (!window.confirm(`Send "${title}" to "${label}" via ${ch?.label || channelId} channel?`)) return;
     setSending(true);
     try {
-      const res = await triggerEngagement({ title, body, target_audience: audience });
+      const res = await triggerEngagement({ title, body, target_audience: audience, channel_id: channelId });
       const d   = res.data?.data;
       const pSent = d?.passengers?.sent || 0;
       const dSent = d?.drivers?.sent    || 0;
-      const entry = { title, body, audience, sentAt: new Date().toISOString(), sent: pSent + dSent };
+      const entry = { title, body, audience, channelId, sentAt: new Date().toISOString(), sent: pSent + dSent };
       const updated = [entry, ...history].slice(0, 10);
       setHistory(updated);
       try { sessionStorage.setItem("notif_sent_log", JSON.stringify(updated)); } catch {}
@@ -613,6 +624,27 @@ function SendNowTab({ showToast }) {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Push Channel */}
+            <div>
+              <label style={LABEL_STYLE}>Push Channel *</label>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                {PUSH_CHANNELS.map(ch => (
+                  <button key={ch.value} onClick={() => setChannelId(ch.value)} style={{
+                    padding:"8px 10px", borderRadius:9, cursor:"pointer", textAlign:"left",
+                    border:`1px solid ${channelId===ch.value ? "#D4AF37" : "rgba(212,175,55,0.1)"}`,
+                    background: channelId===ch.value ? "rgba(212,175,55,0.1)" : "rgba(255,255,255,0.02)",
+                  }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+                      <span style={{ fontSize:13 }}>{ch.icon}</span>
+                      <span style={{ fontSize:11, fontWeight:600, color: channelId===ch.value ? "#D4AF37" : "rgba(255,255,255,0.7)" }}>{ch.label}</span>
+                    </div>
+                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.25)", paddingLeft:19 }}>{ch.desc}</div>
+                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.2)", paddingLeft:19, marginTop:1 }}>🔊 {ch.sound}</div>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>
