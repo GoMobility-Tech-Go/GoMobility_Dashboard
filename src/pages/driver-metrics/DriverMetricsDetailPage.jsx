@@ -679,7 +679,7 @@ function LocationTrailTab({ driverId }) {
           </div>
         ) : (
           <MapContainer center={center} zoom={13} style={{ height:"100%",width:"100%",background:"#020d26" }}>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO'/>
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors'/>
             <Polyline positions={positions} pathOptions={{ color:"#D4AF37",weight:3,opacity:0.75 }}/>
             {positions.length > 0 && (
               <CircleMarker center={positions[0]} radius={8} pathOptions={{ color:"#22c55e",fillColor:"#22c55e",fillOpacity:0.9,weight:2 }}>
