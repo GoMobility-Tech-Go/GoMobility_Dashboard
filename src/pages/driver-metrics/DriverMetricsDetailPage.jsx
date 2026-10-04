@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, AlertTriangle, WifiOff, PowerOff, Clock,
   Star, IndianRupee, Car, Activity, BarChart2, MapPin,
   Calendar, Coffee, TrendingUp, CheckCircle, XCircle, X,
 } from "lucide-react";
-import { MapContainer, TileLayer, Polyline, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
@@ -644,56 +645,109 @@ function LocationTrailTab({ driverId }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Backend uses latitude/longitude consistently
-  const positions = trail
-    .map(p => [Number(p.latitude), Number(p.longitude)])
-    .filter(([lat, lng]) => lat && lng);
+  const validTrail = useMemo(() =>
+    trail.filter(p => Number(p.latitude) && Number(p.longitude)), [trail]);
 
-  const center = positions.length > 0 ? positions[Math.floor(positions.length / 2)] : [20.5937, 78.9629];
+  // Split into colored segments: blue = on ride, orange = idle
+  const segments = useMemo(() => {
+    const segs = [];
+    if (validTrail.length === 0) return segs;
+    let curr = { onDuty: validTrail[0].isOnDuty, pts: [[Number(validTrail[0].latitude), Number(validTrail[0].longitude)]] };
+    for (let i = 1; i < validTrail.length; i++) {
+      const p = validTrail[i];
+      const pos = [Number(p.latitude), Number(p.longitude)];
+      if (p.isOnDuty === curr.onDuty) {
+        curr.pts.push(pos);
+      } else {
+        const last = curr.pts[curr.pts.length - 1];
+        segs.push(curr);
+        curr = { onDuty: p.isOnDuty, pts: [last, pos] };
+      }
+    }
+    segs.push(curr);
+    return segs;
+  }, [validTrail]);
+
+  const center = validTrail.length > 0
+    ? [Number(validTrail[Math.floor(validTrail.length / 2)].latitude), Number(validTrail[Math.floor(validTrail.length / 2)].longitude)]
+    : [20.5937, 78.9629];
+
+  const pinIcon = (color, label) => L.divIcon({
+    className: '',
+    html: `<div style="display:flex;flex-direction:column;align-items:center">
+      <div style="width:20px;height:20px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>
+      <div style="width:2px;height:10px;background:${color};opacity:0.7"></div>
+    </div>`,
+    iconSize: [20, 30],
+    iconAnchor: [10, 30],
+    popupAnchor: [0, -30],
+  });
+
+  const startPin  = validTrail.length > 0 ? [Number(validTrail[0].latitude), Number(validTrail[0].longitude)] : null;
+  const endPin    = validTrail.length > 1 ? [Number(validTrail[validTrail.length-1].latitude), Number(validTrail[validTrail.length-1].longitude)] : null;
 
   return (
     <div>
       <div style={{ display:"flex",gap:8,marginBottom:16,alignItems:"center",flexWrap:"wrap" }}>
         <input type="date" className="dm-inp" value={date} onChange={e=>setDate(e.target.value)} max={todayIso()}/>
         {meta && (
-          <div style={{ display:"flex",gap:16,marginLeft:8,flexWrap:"wrap" }}>
+          <div style={{ display:"flex",gap:16,marginLeft:8,flexWrap:"wrap",alignItems:"center" }}>
             <span style={{ fontSize:12,color:"rgba(255,255,255,0.45)",fontFamily:"Outfit,sans-serif" }}>
               <span style={{ color:"rgba(212,175,55,0.55)" }}>Pings: </span>{fmtNum(meta.count)}
             </span>
-            {meta.truncated && <span style={{ fontSize:11,color:"#F59E0B",fontFamily:"Outfit,sans-serif" }}>⚠ Truncated — too many points</span>}
-            {meta.breadcrumbsEnabled === false && <span style={{ fontSize:11,color:"#f87171",fontFamily:"Outfit,sans-serif" }}>⚠ Location tracking disabled</span>}
+            {/* Legend */}
+            <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:11,color:"rgba(255,255,255,0.5)",fontFamily:"Outfit,sans-serif" }}>
+              <span style={{ display:"inline-block",width:20,height:3,background:"#3B82F6",borderRadius:2 }}/>On Ride
+            </span>
+            <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:11,color:"rgba(255,255,255,0.5)",fontFamily:"Outfit,sans-serif" }}>
+              <span style={{ display:"inline-block",width:20,height:3,background:"#F97316",borderRadius:2 }}/>Idle
+            </span>
+            {meta.truncated && <span style={{ fontSize:11,color:"#F59E0B",fontFamily:"Outfit,sans-serif" }}>⚠ Truncated</span>}
+            {meta.breadcrumbsEnabled === false && <span style={{ fontSize:11,color:"#f87171",fontFamily:"Outfit,sans-serif" }}>⚠ Tracking disabled</span>}
           </div>
         )}
       </div>
 
-      <div className="dm-card" style={{ height:460,overflow:"hidden" }}>
+      <div className="dm-card" style={{ height:500,overflow:"hidden" }}>
         {loading ? (
           <div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12 }}>
             <div style={{ width:28,height:28,border:"3px solid rgba(212,175,55,0.3)",borderTopColor:"#D4AF37",borderRadius:"50%",animation:"spin 0.9s linear infinite" }}/>
             <p style={{ color:"rgba(255,255,255,0.3)",fontSize:13,fontFamily:"Outfit,sans-serif",margin:0 }}>Loading trail…</p>
           </div>
-        ) : positions.length === 0 ? (
+        ) : validTrail.length === 0 ? (
           <div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:8 }}>
             <MapPin size={32} color="rgba(212,175,55,0.25)"/>
             <p style={{ color:"rgba(255,255,255,0.25)",fontSize:13,fontFamily:"Outfit,sans-serif",margin:0 }}>No location pings for {date}</p>
           </div>
         ) : (
-          <MapContainer center={center} zoom={13} style={{ height:"100%",width:"100%",background:"#020d26" }}>
+          <MapContainer center={center} zoom={14} style={{ height:"100%",width:"100%" }}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors'/>
-            <Polyline positions={positions} pathOptions={{ color:"#D4AF37",weight:3,opacity:0.75 }}/>
-            {positions.length > 0 && (
-              <CircleMarker center={positions[0]} radius={8} pathOptions={{ color:"#22c55e",fillColor:"#22c55e",fillOpacity:0.9,weight:2 }}>
-                <Popup><span style={{ color:"#22c55e",fontWeight:600 }}>Start</span>{trail[0]?.recordedAt && <span style={{ fontSize:11,display:"block",color:"rgba(255,255,255,0.5)" }}>{fmtTime(trail[0].recordedAt)}</span>}</Popup>
-              </CircleMarker>
-            )}
-            {positions.length > 1 && (
-              <CircleMarker center={positions[positions.length-1]} radius={8} pathOptions={{ color:"#f87171",fillColor:"#f87171",fillOpacity:0.9,weight:2 }}>
-                <Popup><span style={{ color:"#f87171",fontWeight:600 }}>Last Ping</span>{trail[trail.length-1]?.recordedAt && <span style={{ fontSize:11,display:"block",color:"rgba(255,255,255,0.5)" }}>{fmtTime(trail[trail.length-1].recordedAt)}</span>}</Popup>
-              </CircleMarker>
-            )}
-            {positions.filter((_,i)=>i%10===0&&i!==0&&i!==positions.length-1).map((p,i)=>(
-              <CircleMarker key={i} center={p} radius={3} pathOptions={{ color:"#D4AF37",fillColor:"#D4AF37",fillOpacity:0.6,weight:1 }}/>
+
+            {/* Colored segments */}
+            {segments.map((seg, i) => (
+              <Polyline key={i} positions={seg.pts}
+                pathOptions={{ color: seg.onDuty ? '#3B82F6' : '#F97316', weight: 5, opacity: 0.85 }}/>
             ))}
+
+            {/* Start pin — green */}
+            {startPin && (
+              <Marker position={startPin} icon={pinIcon('#22c55e')}>
+                <Popup>
+                  <b style={{ color:"#22c55e" }}>Start</b>
+                  {validTrail[0]?.recordedAt && <div style={{ fontSize:11,marginTop:2 }}>{fmtTime(validTrail[0].recordedAt)}</div>}
+                </Popup>
+              </Marker>
+            )}
+
+            {/* End pin — red */}
+            {endPin && (
+              <Marker position={endPin} icon={pinIcon('#f87171')}>
+                <Popup>
+                  <b style={{ color:"#f87171" }}>Last Ping</b>
+                  {validTrail[validTrail.length-1]?.recordedAt && <div style={{ fontSize:11,marginTop:2 }}>{fmtTime(validTrail[validTrail.length-1].recordedAt)}</div>}
+                </Popup>
+              </Marker>
+            )}
           </MapContainer>
         )}
       </div>
