@@ -204,6 +204,9 @@ export const getDriverStats = (from, to) => {
 // ── NCR Driver Stats ──────────────────────────────────────────────────────────
 export const getNcrDriverStats = () => api.get('/admin/drivers/ncr-stats');
 
+export const getNcrDriverDateStats = (from, to) =>
+  api.get('/admin/drivers/ncr-date-stats', { params: { from, to } });
+
 // ── NCR Passenger Stats ───────────────────────────────────────────────────────
 export const getNcrPassengerStats = () => api.get('/admin/passengers/ncr-stats');
 

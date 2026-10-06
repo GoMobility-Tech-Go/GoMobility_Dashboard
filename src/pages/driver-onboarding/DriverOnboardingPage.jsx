@@ -12,7 +12,7 @@ import {
   getDrivers, verifyDriver, updateDriverStatus, getKycQueue,
   approveDocument, rejectDocument, getFraudAlerts, suspendDriver,
   getKycDocument, getDriverById, getDriverKycStatus, getDriverStats,
-  getCities, getNcrDriverStats, updateDriverProfile, sendGroupNotification,
+  getCities, getNcrDriverStats, getNcrDriverDateStats, updateDriverProfile, sendGroupNotification,
 } from "../../api/admin";
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
@@ -951,6 +951,13 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const [ncrStats,   setNcrStats]   = useState(null);
   const [ncrLoading, setNcrLoading] = useState(true);
 
+  // ── NCR date-range stats ───────────────────────────────────────────────────
+  const [ncrDateFrom,    setNcrDateFrom]    = useState('');
+  const [ncrDateTo,      setNcrDateTo]      = useState('');
+  const [ncrDateStats,   setNcrDateStats]   = useState(null);
+  const [ncrDateLoading, setNcrDateLoading] = useState(false);
+  const [ncrDateError,   setNcrDateError]   = useState('');
+
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     try {
@@ -1230,6 +1237,18 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       .catch(() => {})
       .finally(() => setNcrLoading(false));
   }, []);
+
+  const loadNcrDateStats = useCallback(() => {
+    if (!ncrDateFrom || !ncrDateTo) return;
+    const from = new Date(ncrDateFrom).toISOString();
+    const to   = new Date(ncrDateTo + 'T23:59:59').toISOString();
+    setNcrDateLoading(true);
+    setNcrDateError('');
+    getNcrDriverDateStats(from, to)
+      .then(res => setNcrDateStats(res.data?.data || res.data || null))
+      .catch(() => setNcrDateError('Could not load stats. Please try again.'))
+      .finally(() => setNcrDateLoading(false));
+  }, [ncrDateFrom, ncrDateTo]);
 
   // For each in_progress driver, lazily fetch their KYC docs to show pending items
   useEffect(() => {
@@ -1568,6 +1587,134 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
               <div style={{ fontSize:12, color:TEXT_DIM }}>Could not load NCR stats</div>
             )}
           </div>
+
+          {/* NCR Date Range Insights — only in ncrMode */}
+          {ncrMode && (
+            <div style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(212,175,55,0.12)', borderRadius:16, padding:'16px 20px', marginBottom:18 }}>
+              {/* Header */}
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+                <Calendar size={14} color={GOLD} />
+                <span style={{ fontFamily:'Cinzel,serif', fontSize:12, fontWeight:700, color:GOLD, letterSpacing:'0.5px' }}>Date Range Insights</span>
+                <span style={{ fontSize:12, color:TEXT_DIM }}>— verified & joined drivers in NCR</span>
+              </div>
+
+              {/* Date pickers + button */}
+              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:14 }}>
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  <span style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', fontWeight:700 }}>From</span>
+                  <input
+                    type="date"
+                    value={ncrDateFrom}
+                    onChange={e => { setNcrDateFrom(e.target.value); setNcrDateStats(null); setNcrDateError(''); }}
+                    style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(212,175,55,0.2)', borderRadius:8, padding:'7px 10px', color:'#fff', fontFamily:'Outfit,sans-serif', fontSize:13, outline:'none', colorScheme:'dark' }}
+                  />
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  <span style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', fontWeight:700 }}>To</span>
+                  <input
+                    type="date"
+                    value={ncrDateTo}
+                    onChange={e => { setNcrDateTo(e.target.value); setNcrDateStats(null); setNcrDateError(''); }}
+                    style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(212,175,55,0.2)', borderRadius:8, padding:'7px 10px', color:'#fff', fontFamily:'Outfit,sans-serif', fontSize:13, outline:'none', colorScheme:'dark' }}
+                  />
+                </div>
+                <button
+                  onClick={loadNcrDateStats}
+                  disabled={!ncrDateFrom || !ncrDateTo || ncrDateLoading}
+                  style={{ marginTop:18, padding:'8px 18px', borderRadius:8, border:'1px solid rgba(212,175,55,0.4)', background:'rgba(212,175,55,0.12)', color: (!ncrDateFrom||!ncrDateTo) ? TEXT_DIM : GOLD, fontFamily:'Outfit,sans-serif', fontSize:13, fontWeight:700, cursor:(!ncrDateFrom||!ncrDateTo||ncrDateLoading)?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:6, transition:'all .15s' }}
+                >
+                  {ncrDateLoading ? <RefreshCw size={12} className="animate-spin"/> : <Calendar size={12}/>}
+                  {ncrDateLoading ? 'Loading…' : 'Show Stats'}
+                </button>
+                {/* Quick period chips */}
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:18 }}>
+                  {[
+                    { label:'Last 7d',  days:7  },
+                    { label:'Last 30d', days:30 },
+                    { label:'Last 90d', days:90 },
+                    { label:'This Month', fn: () => { const now=new Date(); return { f: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`, t: new Date().toISOString().slice(0,10) }; } },
+                  ].map(({ label, days, fn }) => (
+                    <button key={label}
+                      onClick={() => {
+                        const { f, t } = fn ? fn() : (() => {
+                          const to = new Date(); const from = new Date(to); from.setDate(from.getDate() - days);
+                          return { f: from.toISOString().slice(0,10), t: to.toISOString().slice(0,10) };
+                        })();
+                        setNcrDateFrom(f); setNcrDateTo(t); setNcrDateStats(null); setNcrDateError('');
+                      }}
+                      style={{ padding:'6px 12px', borderRadius:8, border:'1px solid rgba(255,255,255,0.1)', background:'transparent', color:TEXT_MED, fontFamily:'Outfit,sans-serif', fontSize:12, fontWeight:600, cursor:'pointer', transition:'all .15s' }}
+                    >{label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {ncrDateError && (
+                <div style={{ fontSize:13, color:'#f87171', marginBottom:10 }}>{ncrDateError}</div>
+              )}
+
+              {ncrDateStats && !ncrDateLoading && (
+                <>
+                  {/* Summary tiles */}
+                  <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:14 }}>
+                    {[
+                      { label:'Verified in range',      value: ncrDateStats.verifiedTotal, color:'#a78bfa', bg:'rgba(167,139,250,0.08)', border:'rgba(167,139,250,0.2)' },
+                      { label:'Joined (registered)',    value: ncrDateStats.joinedTotal,   color:'#22c55e', bg:'rgba(34,197,94,0.08)',   border:'rgba(34,197,94,0.2)' },
+                    ].map(({ label, value, color, bg, border }) => (
+                      <div key={label} style={{ display:'flex', flexDirection:'column', alignItems:'center', background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 24px', minWidth:130, flex:'1 1 auto', maxWidth:200 }}>
+                        <div style={{ fontSize:30, fontWeight:800, color, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{(value ?? 0).toLocaleString('en-IN')}</div>
+                        <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', marginTop:5, textAlign:'center' }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* City breakdown table */}
+                  {((ncrDateStats.verifiedByCity?.length > 0) || (ncrDateStats.joinedByCity?.length > 0)) && (() => {
+                    const allCities = [...new Set([
+                      ...(ncrDateStats.verifiedByCity || []).map(r => r.city),
+                      ...(ncrDateStats.joinedByCity   || []).map(r => r.city),
+                    ])].sort();
+                    const vMap = Object.fromEntries((ncrDateStats.verifiedByCity || []).map(r => [r.city, r.count]));
+                    const jMap = Object.fromEntries((ncrDateStats.joinedByCity   || []).map(r => [r.city, r.count]));
+                    return (
+                      <div style={{ overflowX:'auto' }}>
+                        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                          <thead>
+                            <tr>
+                              {['City', 'Verified', 'Joined'].map(h => (
+                                <th key={h} style={{ padding:'8px 14px', textAlign: h==='City'?'left':'center', fontSize:10, fontWeight:700, color:'rgba(212,175,55,0.7)', letterSpacing:'1px', textTransform:'uppercase', borderBottom:'1px solid rgba(212,175,55,0.12)' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allCities.map(city => (
+                              <tr key={city}>
+                                <td style={{ padding:'8px 14px', color:'rgba(255,255,255,0.8)', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>{city}</td>
+                                <td style={{ padding:'8px 14px', textAlign:'center', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                                  <span style={{ background:'rgba(167,139,250,0.12)', color:'#a78bfa', borderRadius:8, padding:'2px 10px', fontWeight:700, fontSize:12 }}>{vMap[city] ?? 0}</span>
+                                </td>
+                                <td style={{ padding:'8px 14px', textAlign:'center', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                                  <span style={{ background:'rgba(34,197,94,0.1)', color:'#4ade80', borderRadius:8, padding:'2px 10px', fontWeight:700, fontSize:12 }}>{jMap[city] ?? 0}</span>
+                                </td>
+                              </tr>
+                            ))}
+                            <tr>
+                              <td style={{ padding:'8px 14px', color:GOLD, fontWeight:700, fontSize:12 }}>Total</td>
+                              <td style={{ padding:'8px 14px', textAlign:'center' }}>
+                                <span style={{ color:'#a78bfa', fontWeight:800, fontSize:13 }}>{ncrDateStats.verifiedTotal}</span>
+                              </td>
+                              <td style={{ padding:'8px 14px', textAlign:'center' }}>
+                                <span style={{ color:'#4ade80', fontWeight:800, fontSize:13 }}>{ncrDateStats.joinedTotal}</span>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Status filter + quick filter bar */}
           <div style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(212,175,55,0.1)', borderRadius:14, padding:'14px 18px', marginBottom:14 }}>
