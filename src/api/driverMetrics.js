@@ -38,6 +38,9 @@ export const getDMDriverLocationHistory = (id, params = {}) =>
 export const getDMDriverBreaks = (id, params = {}) =>
   api.get(`${BASE}/drivers/${id}/breaks`, { params });
 
+export const getDMDriverDispatch = (id, params = {}) =>
+  api.get(`${BASE}/drivers/${id}/dispatch`, { params });
+
 // ── Fleet Analytics ───────────────────────────────────────────────────────────
 export const getDMLeaderboard = (params = {}) =>
   api.get(`${BASE}/leaderboard`, { params });

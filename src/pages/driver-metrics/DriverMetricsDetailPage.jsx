@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, AlertTriangle, WifiOff, PowerOff, Clock,
   Star, IndianRupee, Car, Activity, BarChart2, MapPin,
-  Calendar, Coffee, TrendingUp, CheckCircle, XCircle, X,
+  Calendar, Coffee, TrendingUp, CheckCircle, XCircle, X, Bell,
 } from "lucide-react";
 import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
@@ -20,6 +20,7 @@ import {
   getDMDriverTimeline,
   getDMDriverLocationHistory,
   getDMDriverBreaks,
+  getDMDriverDispatch,
   forceOffline,
 } from "../../api/driverMetrics";
 
@@ -79,6 +80,7 @@ const TABS = [
   { id:"timeline",  label:"Timeline",       icon:Calendar   },
   { id:"trail",     label:"Location Trail", icon:MapPin     },
   { id:"breaks",    label:"Breaks",         icon:Coffee     },
+  { id:"dispatch",  label:"Dispatch",       icon:Bell       },
 ];
 
 // ── styles ────────────────────────────────────────────────────────────────────
@@ -188,7 +190,7 @@ const ForceOfflineModal = ({ name, onConfirm, onCancel, loading }) => (
       </p>
       <div style={{ display:"flex",gap:10 }}>
         <button onClick={onCancel} disabled={loading} style={{ flex:1,height:40,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13,fontFamily:"Outfit,sans-serif" }}>Cancel</button>
-        <button onClick={onConfirm} disabled={loading} style={{ flex:1,height:40,background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:10,color:"#f87171",cursor:"pointer",fontSize:13,fontFamily:"Outfit,sans-serif",fontWeight:600,opacity:loading?.6:1 }}>
+        <button onClick={onConfirm} disabled={loading} style={{ flex:1,height:40,background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:10,color:"#f87171",cursor:"pointer",fontSize:13,fontFamily:"Outfit,sans-serif",fontWeight:600,opacity:loading ? 0.6 : 1 }}>
           {loading ? "Forcing…" : "Force Offline"}
         </button>
       </div>
@@ -531,8 +533,8 @@ function StatsTab({ driverId }) {
         {[
           { label:"Total Rides",        value:fmtNum(d.rides?.completed),                                               color:"#fff"    },
           { label:"Total Earnings",     value:fmtRupee(d.rides?.grossFare),                                             color:"#D4AF37" },
-          { label:"Acceptance Rate",    value:fmtRate(ar),   color:ar>=80?"#22c55e":ar>=60?"#D4AF37":"#f87171"                          },
-          { label:"Completion Rate",    value:fmtRate(cr),   color:cr>=90?"#22c55e":cr>=75?"#D4AF37":"#f87171"                          },
+          { label:"Acceptance Rate",    value:fmtRate(ar),   color:ar==null?"rgba(255,255,255,0.3)":ar>=80?"#22c55e":ar>=60?"#D4AF37":"#f87171" },
+          { label:"Completion Rate",    value:fmtRate(cr),   color:cr==null?"rgba(255,255,255,0.3)":cr>=90?"#22c55e":cr>=75?"#D4AF37":"#f87171" },
           { label:"Cancel Rate",        value:fmtRate(dcr),  color:dcr<10?"#22c55e":dcr<25?"#D4AF37":"#f87171"                         },
           { label:"Online Hours",       value:d.online?.totalLabel||(d.online?.totalHours!=null?Number(d.online.totalHours).toFixed(1)+"h":"—"),   color:"#a78bfa" },
           { label:"Avg Ride Duration",  value:d.rides?.avgRideMinutes!=null?fmtMins(d.rides.avgRideMinutes):"—",        color:"#fff"    },
@@ -762,6 +764,157 @@ function LocationTrailTab({ driverId }) {
 //    notifiedChannels, detail }] }
 //  Note: This is a "break alerts" model, not time-range breaks.
 // ─────────────────────────────────────────────────────────────────────────────
+const OUTCOME_CFG = {
+  accepted: { color:"#4ade80", bg:"rgba(74,222,128,0.12)",  border:"rgba(74,222,128,0.28)"  },
+  rejected: { color:"#f87171", bg:"rgba(248,113,113,0.12)", border:"rgba(248,113,113,0.28)" },
+  expired:  { color:"#94a3b8", bg:"rgba(148,163,184,0.10)", border:"rgba(148,163,184,0.22)" },
+  pending:  { color:"#F59E0B", bg:"rgba(245,158,11,0.10)",  border:"rgba(245,158,11,0.25)"  },
+};
+
+const OutcomePill = ({ outcome }) => {
+  const c = OUTCOME_CFG[outcome] || OUTCOME_CFG.pending;
+  return (
+    <span style={{ display:"inline-block",background:c.bg,border:`1px solid ${c.border}`,color:c.color,borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:600,textTransform:"capitalize" }}>
+      {outcome}
+    </span>
+  );
+};
+
+const SOURCE_LABELS = { initial:"Initial", tier_expansion:"Tier Expansion", late_online:"Late Online" };
+
+function DispatchTab({ driverId }) {
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [days,    setDays]    = useState(30);
+  const [offset,  setOffset]  = useState(0);
+  const LIMIT = 50;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await getDMDriverDispatch(driverId, { days, limit: LIMIT, offset });
+      setData(r.data?.data || r.data || {});
+    } catch { setData(null); } finally { setLoading(false); }
+  }, [driverId, days, offset]);
+
+  useEffect(() => { setOffset(0); }, [days]);
+  useEffect(() => { load(); }, [load]);
+
+  const s = data?.summary || {};
+  const items = data?.items || [];
+  const total = data?.total || 0;
+
+  const statTiles = [
+    { label:"Total Notified", value: loading ? null : fmtNum(s.total),    color:"#D4AF37" },
+    { label:"Accepted",       value: loading ? null : fmtNum(s.accepted), color:"#4ade80" },
+    { label:"Rejected",       value: loading ? null : fmtNum(s.rejected), color:"#f87171" },
+    { label:"Expired",        value: loading ? null : fmtNum(s.expired),  color:"#94a3b8" },
+    { label:"Pending",        value: loading ? null : fmtNum(s.pending),  color:"#F59E0B" },
+    { label:"Accept Rate",    value: loading ? null : fmtRate(s.acceptRate), color:"#60a5fa" },
+  ];
+
+  const pages = Math.ceil(total / LIMIT);
+  const page  = Math.floor(offset / LIMIT);
+
+  return (
+    <div>
+      {/* Controls */}
+      <div style={{ display:"flex",gap:8,marginBottom:16,alignItems:"center",flexWrap:"wrap" }}>
+        <select className="dm-inp" value={days} onChange={e=>setDays(Number(e.target.value))} style={{ cursor:"pointer" }}>
+          {[7,14,30,90,180,365].map(d=><option key={d} value={d}>Last {d} days</option>)}
+        </select>
+        {!loading && total > 0 && (
+          <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginLeft:6 }}>
+            {fmtNum(total)} notifications
+          </span>
+        )}
+      </div>
+
+      {/* Stat tiles */}
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:20 }}>
+        {statTiles.map(t => (
+          <div key={t.label} className="dm-card" style={{ padding:"14px 16px" }}>
+            <div style={{ fontSize:11,color:"rgba(255,255,255,0.38)",fontFamily:"'Cinzel',serif",letterSpacing:0.8,textTransform:"uppercase",marginBottom:6 }}>{t.label}</div>
+            <div style={{ fontSize:22,fontWeight:700,color:t.color,fontFamily:"'Outfit',sans-serif" }}>
+              {loading ? <Skel w={50} h={22}/> : (t.value ?? "—")}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="dm-card" style={{ overflow:"hidden" }}>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%",borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ background:"rgba(212,175,55,0.05)",borderBottom:"1px solid rgba(212,175,55,0.1)" }}>
+                {["Notified At","Passenger","Pickup → Drop","Vehicle","Fare","Source / Tier","Distance","Outcome","Outcome At"].map(h=>(
+                  <th key={h} style={thS}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? Array.from({length:8}).map((_,i)=>(
+                <tr key={i} className="dm-tr">
+                  {[100,80,140,60,60,80,60,70,100].map((w,j)=><td key={j} style={tdS}><Skel w={w}/></td>)}
+                </tr>
+              )) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={9} style={{ ...tdS,textAlign:"center",padding:"48px",color:"rgba(255,255,255,0.25)",fontStyle:"italic" }}>
+                    No dispatch notifications found for this period
+                  </td>
+                </tr>
+              ) : items.map((o, i) => (
+                <tr key={o.id || i} className="dm-tr">
+                  <td style={tdS}>{fmtDate(o.notifiedAt)}</td>
+                  <td style={tdS}>
+                    <div style={{ fontWeight:500 }}>{o.passengerName || "—"}</div>
+                    {o.passengerPhone && <div style={{ fontSize:11,color:"rgba(255,255,255,0.38)",marginTop:2 }}>{o.passengerPhone}</div>}
+                  </td>
+                  <td style={{ ...tdS,maxWidth:200 }}>
+                    <div style={{ fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:1 }}>{o.pickupAddress || "—"}</div>
+                    <div style={{ fontSize:11,color:"rgba(255,255,255,0.3)" }}>↓ {o.dropAddress || "—"}</div>
+                  </td>
+                  <td style={tdS}>
+                    <span style={{ background:`${VT_COLORS[o.vehicleType]||"#94a3b8"}22`,border:`1px solid ${VT_COLORS[o.vehicleType]||"#94a3b8"}55`,color:VT_COLORS[o.vehicleType]||"#94a3b8",borderRadius:6,padding:"2px 7px",fontSize:11,fontWeight:600,textTransform:"uppercase" }}>
+                      {o.vehicleType || "—"}
+                    </span>
+                  </td>
+                  <td style={tdS}>{o.fare != null ? fmtRupee(o.fare) : "—"}</td>
+                  <td style={tdS}>
+                    <div>{SOURCE_LABELS[o.source] || o.source || "—"}</div>
+                    {o.tier != null && <div style={{ fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:1 }}>Tier {o.tier}</div>}
+                  </td>
+                  <td style={{ ...tdS,whiteSpace:"nowrap" }}>{o.distanceKm != null ? `${Number(o.distanceKm).toFixed(1)} km` : "—"}</td>
+                  <td style={tdS}><OutcomePill outcome={o.outcome}/></td>
+                  <td style={tdS}>{o.outcomeAt ? fmtDate(o.outcomeAt) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {pages > 1 && (
+          <div style={{ display:"flex",gap:8,alignItems:"center",justifyContent:"flex-end",padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.05)" }}>
+            <button
+              disabled={page === 0}
+              onClick={() => setOffset(Math.max(0, offset - LIMIT))}
+              style={{ padding:"5px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:page===0?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.7)",cursor:page===0?"not-allowed":"pointer",fontSize:12,fontFamily:"Outfit,sans-serif" }}
+            >← Prev</button>
+            <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)" }}>Page {page+1} / {pages}</span>
+            <button
+              disabled={page >= pages - 1}
+              onClick={() => setOffset(offset + LIMIT)}
+              style={{ padding:"5px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:page>=pages-1?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.7)",cursor:page>=pages-1?"not-allowed":"pointer",fontSize:12,fontFamily:"Outfit,sans-serif" }}
+            >Next →</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function BreaksTab({ driverId }) {
   const [breaks,  setBreaks]  = useState([]);
   const [loading, setLoading] = useState(true);
@@ -945,6 +1098,7 @@ export default function DriverMetricsDetailPage() {
         {tab === "timeline"  && <TimelineTab       driverId={driverId}/>}
         {tab === "trail"     && <LocationTrailTab  driverId={driverId}/>}
         {tab === "breaks"    && <BreaksTab         driverId={driverId}/>}
+        {tab === "dispatch"  && <DispatchTab       driverId={driverId}/>}
       </div>
     </div>
   );
