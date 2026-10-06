@@ -880,7 +880,7 @@ function DispatchTab({ driverId }) {
                       {o.vehicleType || "—"}
                     </span>
                   </td>
-                  <td style={tdS}>{o.fare != null ? fmtRupee(o.fare) : "—"}</td>
+                  <td style={tdS}>{o.fare != null ? fmtRupee(o.fare) : <span style={{color:"rgba(255,255,255,0.25)"}}>—</span>}</td>
                   <td style={tdS}>
                     <div>{SOURCE_LABELS[o.source] || o.source || "—"}</div>
                     {o.tier != null && <div style={{ fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:1 }}>Tier {o.tier}</div>}
