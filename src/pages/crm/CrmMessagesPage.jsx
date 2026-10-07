@@ -11,7 +11,8 @@ import {
 const STATUSES = [["", "All statuses"], ["dry_run", "Dry run"], ["queued", "Queued"], ["sent", "Sent"], ["delivered", "Delivered"], ["read", "Read"], ["failed", "Failed"], ["skipped", "Skipped"], ["blocked", "Blocked"]];
 
 export default function CrmMessagesPage() {
-  const [filters, setFilters] = useState({ channel: "", status: "", kind: "" });
+  const [filters, setFilters] = useState({ channel: "", status: "", kind: "", phone: "" });
+  const [phoneText, setPhoneText] = useState("");
   const [items, setItems] = useState([]);
   const [next, setNext] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -48,7 +49,7 @@ export default function CrmMessagesPage() {
   return (
     <CrmPage title="Messages" subtitle="Every message the CRM has sent or received — including dry runs, failures and skips">
       <div style={{ marginBottom: 16 }}>
-        <ChartCard title="Last 14 Days" subtitle={t ? `${num(t.totals.sent)} delivered · ${num(t.totals.failed)} failed` : ""}>
+        <ChartCard title="Last 14 Days" subtitle={t ? `${num(t.totals.sent)} sent or dry run · ${num(t.totals.failed)} failed` : ""}>
           {!t ? <Loading /> : t.totals.sent + t.totals.failed === 0 ? <NoChartData height={150} /> : (
             <>
               <ResponsiveContainer width="100%" height={150}>
@@ -57,12 +58,12 @@ export default function CrmMessagesPage() {
                   <XAxis dataKey="date" tickFormatter={day} tick={axisTick} axisLine={false} tickLine={false} />
                   <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
                   <Tooltip content={<ChartTooltip labelFormatter={day} />} cursor={{ fill: "rgba(212,175,55,0.05)" }} />
-                  <Bar dataKey="sent" name="Delivered" stackId="m" fill={COLORS.gold} />
+                  <Bar dataKey="sent" name="Sent / dry run" stackId="m" fill={COLORS.gold} />
                   <Bar dataKey="skipped" name="Skipped" stackId="m" fill={COLORS.orange} />
                   <Bar dataKey="failed" name="Failed" stackId="m" fill={COLORS.red} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-              <Legend items={[{ name: "Delivered", color: COLORS.gold }, { name: "Skipped", color: COLORS.orange }, { name: "Failed", color: COLORS.red }]} />
+              <Legend items={[{ name: "Sent / dry run", color: COLORS.gold }, { name: "Skipped", color: COLORS.orange }, { name: "Failed", color: COLORS.red }]} />
             </>
           )}
         </ChartCard>
@@ -72,6 +73,10 @@ export default function CrmMessagesPage() {
       <TableCard
         title="Message Log" icon="✉️"
         actions={<>
+          <form onSubmit={(e) => { e.preventDefault(); const d = phoneText.replace(/\D/g, ""); setFilters((p) => ({ ...p, phone: d.length >= 4 ? d : "" })); }}>
+            <input className="gm-input" style={{ width: 170 }} placeholder="Phone (last 4+ digits)" value={phoneText}
+              onChange={(e) => { setPhoneText(e.target.value); if (!e.target.value) setFilters((p) => ({ ...p, phone: "" })); }} />
+          </form>
           {sel("channel", [["", "All channels"], ...Object.entries(CHANNEL)])}
           {sel("status", STATUSES)}
           {sel("kind", [["", "Journeys & campaigns"], ["journey", "Journeys"], ["campaign", "Campaigns"]])}
@@ -85,13 +90,19 @@ export default function CrmMessagesPage() {
               {items.map((m) => (
                 <tr key={m._id}>
                   <td style={{ whiteSpace: "nowrap" }}>{dt(m.createdAt)}</td>
-                  <td style={{ fontSize: 11.5 }}>{m.userId || "—"}<div style={{ color: "rgba(255,255,255,0.35)", textTransform: "capitalize" }}>{m.role}</div></td>
+                  <td style={{ fontSize: 12 }}>
+                    <b style={{ color: "rgba(255,255,255,0.85)" }}>{m.name || "—"}</b>
+                    <div style={{ color: "rgba(255,255,255,0.6)" }}>{m.phone || (m.userId ? `ID ${String(m.userId).slice(0, 8)}` : "")}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", textTransform: "capitalize", fontSize: 11 }}>{m.role}</div>
+                  </td>
                   <td>{CHANNEL[m.channel] || m.channel}{m.direction === "in" && <> <Pill tone="blue">Inbound</Pill></>}</td>
                   <td style={{ fontSize: 12 }}>
                     {m.source?.kind === "campaign" ? "Campaign" : shortKey(m.source?.ref) || "—"}{m.source?.node ? ` · ${m.source.node}` : ""}
                     {m.category === "transactional" && <div style={{ marginTop: 3 }}><CategoryPill category="transactional" /></div>}
                   </td>
-                  <td style={{ fontSize: 12, maxWidth: 360 }}>{m.payload?.title ? <b style={{ color: "rgba(255,255,255,0.85)" }}>{m.payload.title} </b> : null}{m.payload?.body || (m.payload?.templateName ? `Template: ${m.payload.templateName}` : "")}</td>
+                  <td style={{ fontSize: 12, maxWidth: 360 }}>{m.payload?.title ? <b style={{ color: "rgba(255,255,255,0.85)" }}>{m.payload.title} </b> : null}{m.payload?.body || (m.payload?.templateName ? `Template: ${m.payload.templateName}` : "")}
+                    {m.payload?.templateName && m.payload?.params?.length > 0 && <div style={{ color: "rgba(255,255,255,0.6)", marginTop: 2 }}>Values: {m.payload.params.join(" · ")}</div>}
+                  </td>
                   <td><StatusPill status={m.status} />{m.error && <div style={{ fontSize: 10.5, color: "#F87171", marginTop: 3 }}>{m.error.replace(/_/g, " ")}</div>}</td>
                   <td>{m.costInr ? inr(m.costInr) : "—"}</td>
                 </tr>
