@@ -22,6 +22,7 @@ export default function CrmOverviewPage() {
   const o = useCrm("/metrics/overview", { params: { days }, refreshMs: 60000 });
   const a = useCrm("/metrics/analytics", { params: { days }, refreshMs: 120000 });
   const d = o.data;
+  const dry = !!d?.dryRun;   // dry run: counts are "would send", not delivered
 
   const channelPie = useMemo(() => Object.entries(d?.messages?.channels || {}).filter(([, x]) => x.sent > 0)
     .map(([ch, x]) => ({ name: CHANNEL[ch] || ch, value: x.sent, color: CHANNEL_COLOR[ch] || COLORS.gray })), [d]);
@@ -37,16 +38,21 @@ export default function CrmOverviewPage() {
       {d && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(210px,1fr))", gap: 14, marginBottom: 16 }}>
-            <StatCard label={`Messages · ${d.windowD}D`} value={num(d.messages.sent)} icon={Send} />
-            <StatCard label="Sent today" value={num(d.messages.today)} icon={CalendarCheck} iconColor={COLORS.blue} iconBg="rgba(96,165,250,0.1)" />
-            <StatCard label="Spend" value={inr(d.messages.spendInr)} icon={IndianRupee} iconColor={COLORS.green} iconBg="rgba(52,211,153,0.1)" />
+            <StatCard label={`${dry ? "Would send (dry run)" : "Messages"} · ${d.windowD}D`} value={num(d.messages.sent)} icon={Send} />
+            <StatCard label={dry ? "Would send today" : "Sent today"} value={num(d.messages.today)} icon={CalendarCheck} iconColor={COLORS.blue} iconBg="rgba(96,165,250,0.1)" />
+            <StatCard label={dry ? "Cost if sent" : "Spend"} value={inr(d.messages.spendInr)} icon={IndianRupee} iconColor={COLORS.green} iconBg="rgba(52,211,153,0.1)" />
             <StatCard label="Failed" value={num(d.messages.failed)} icon={AlertTriangle} iconColor={COLORS.red} iconBg="rgba(248,113,113,0.1)" />
           </div>
+          {dry && (
+            <div style={{ marginBottom: 16 }}>
+              <Hint>Dry run is ON: these numbers show what the CRM <b>would</b> send. Nothing has been delivered to riders or drivers and nothing has been spent. Check <Link to="/crm/messages" style={{ color: "#D4AF37" }}>Messages</Link> to review, then turn dry run off in CRM Settings.</Hint>
+            </div>
+          )}
 
           <div className="crm-2-1">
             <ChartCard
               title="Activity Trend"
-              subtitle="Messages delivered and journey entries per day"
+              subtitle={`${dry ? "Messages (dry run)" : "Messages sent"} and journey entries per day`}
               right={<Link to="/crm/analytics" className="btn-outline btn-sm">Full analytics <ArrowRight size={13} /></Link>}
             >
               {!a.data ? <Loading /> : a.data.totals.sent + a.data.totals.entered === 0 ? <NoChartData height={220} /> : (
@@ -70,7 +76,7 @@ export default function CrmOverviewPage() {
               )}
             </ChartCard>
 
-            <ChartCard title="Channel Mix" subtitle={`Delivered messages · ${d.windowD} days`}>
+            <ChartCard title="Channel Mix" subtitle={`${dry ? "Dry run messages" : "Messages sent"} · ${d.windowD} days`}>
               {!channelPie.length ? <NoChartData height={220} /> : (
                 <>
                   <ResponsiveContainer width="100%" height={190}>
@@ -126,7 +132,7 @@ export default function CrmOverviewPage() {
           <div className="crm-1-1">
             <TableCard title="Channels" icon="📡">
               <table className="gm-table">
-                <thead><tr><th>Channel</th><th>Delivered</th><th>Failed</th><th>Skipped</th><th>Spend</th></tr></thead>
+                <thead><tr><th>Channel</th><th>{dry ? "Would send" : "Sent"}</th><th>Failed</th><th>Skipped</th><th>{dry ? "Cost if sent" : "Spend"}</th></tr></thead>
                 <tbody>
                   {Object.entries(d.messages.channels).map(([ch, x]) => (
                     <tr key={ch}><td>{CHANNEL[ch] || ch}</td><td>{num(x.sent)}</td><td>{num(x.failed)}</td><td>{num(x.skipped)}</td><td>{inr(x.costInr)}</td></tr>

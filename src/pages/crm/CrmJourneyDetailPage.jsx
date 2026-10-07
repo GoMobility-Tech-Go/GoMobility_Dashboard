@@ -9,6 +9,7 @@ import {
   CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, StatusPill, CategoryPill, Hint, ChartCard, ChartTooltip, Legend,
   NoChartData, RangeButtons, COLORS, CHANNEL, axisTick, gridStroke, inr, num, pct, dt, statusLabel,
 } from "./crmShared";
+import { TimeCell, ContactCell, runAbout, dim, soft } from "./crmMessageParts";
 
 const STATE_COLOR = { active: COLORS.blue, goal_met: COLORS.green, completed: COLORS.gray, exited: "rgba(255,255,255,0.2)", expired: COLORS.orange, failed: COLORS.red };
 const dur = (n) => [n.days && `${n.days} day${n.days > 1 ? "s" : ""}`, n.hours && `${n.hours} h`, n.minutes && `${n.minutes} min`].filter(Boolean).join(" ");
@@ -47,7 +48,8 @@ export default function CrmJourneyDetailPage() {
   const path = `/journeys/${encodeURIComponent(key)}`;
   const j = useCrm(path);
   const f = useCrm(`${path}/funnel`, { params: { days }, refreshMs: 60000 });
-  const runs = useCrm(`${path}/runs`, { refreshMs: 60000 });
+  const [runState, setRunState] = useState("active");   // people list filter
+  const runs = useCrm(`${path}/runs`, { params: { ...(runState ? { state: runState } : {}), limit: 200 }, refreshMs: 60000 });
   const versions = useCrm(`${path}/versions`);
   const [viewing, setViewing] = useState(null);   // { version, def }
   const { busy, run } = useAction();
@@ -247,23 +249,42 @@ export default function CrmJourneyDetailPage() {
             )}
           </Modal>
 
-          <TableCard title="Recent Runs" icon="🏃">
-            <table className="gm-table">
-              <thead><tr><th>Started</th><th>Status</th><th>Current step</th><th>Next action</th><th>Instance</th><th>Goal met</th></tr></thead>
-              <tbody>
-                {(runs.data || []).map((r) => (
-                  <tr key={r._id}>
-                    <td>{dt(r.enteredAt)}</td>
-                    <td><StatusPill status={r.state} /></td>
-                    <td>{r.currentNode || "—"}</td>
-                    <td>{r.state === "active" ? dt(r.nextActionAt) : "—"}</td>
-                    <td style={{ fontSize: 11 }}>{r.instanceKey || "—"}</td>
-                    <td>{r.goalMetAt ? `${dt(r.goalMetAt)}${r.goalWithinWindow ? "" : " (late)"}` : "—"}</td>
-                  </tr>
-                ))}
-                {runs.data && !runs.data.length && <tr><td colSpan={6} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No runs yet</td></tr>}
-              </tbody>
-            </table>
+          <TableCard
+            title={`People in this journey${runs.data ? ` (${num(runs.data.length)}${runs.data.length === 200 ? "+" : ""})` : ""}`} icon="👥"
+            actions={
+              <select className="gm-input" style={{ width: 190 }} value={runState} onChange={(e) => setRunState(e.target.value)}>
+                {[["active", "In the journey now"], ["goal_met", "Goal met"], ["completed", "Completed"], ["exited", "Exited"], ["expired", "Expired"], ["failed", "Failed"], ["", "Everyone"]]
+                  .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            }
+            footer={<span style={{ fontSize: 11.5, color: dim }}>Click a name to open that person's full history · most recently updated first</span>}
+          >
+            {runs.loading && !runs.data ? <Loading /> : (
+              <table className="gm-table">
+                <thead><tr><th>Person</th><th>Started</th><th>Status</th><th>Current step</th><th>Next action</th><th>About</th><th>Goal met</th></tr></thead>
+                <tbody>
+                  {(runs.data || []).map((r) => {
+                    const node = (d.nodes || []).find((n) => n.id === r.currentNode);
+                    const [what, detail] = node ? describe(node) : ["", ""];
+                    return (
+                      <tr key={r._id}>
+                        <td><ContactCell name={r.name} phone={r.phone} userId={r.userId} /></td>
+                        <td><TimeCell at={r.enteredAt} /></td>
+                        <td><StatusPill status={r.state} /></td>
+                        <td style={{ fontSize: 12, maxWidth: 300 }}>
+                          <div style={{ color: "rgba(255,255,255,0.85)" }}>{r.currentNode || "—"}{what ? ` · ${what}` : ""}</div>
+                          {detail && <div style={{ color: dim, fontSize: 10.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={tidy(detail)}>{tidy(detail)}</div>}
+                        </td>
+                        <td>{r.state === "active" ? <TimeCell at={r.nextActionAt} /> : <span style={{ color: dim }}>—</span>}</td>
+                        <td style={{ fontSize: 12, color: soft }}>{runAbout(r)}</td>
+                        <td style={{ fontSize: 12 }}>{r.goalMetAt ? `${dt(r.goalMetAt)}${r.goalWithinWindow ? "" : " (late)"}` : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                  {runs.data && !runs.data.length && <tr><td colSpan={7} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No one {runState === "active" ? "is in this journey right now" : "in this state"}</td></tr>}
+                </tbody>
+              </table>
+            )}
           </TableCard>
           <div style={{ marginTop: 12 }}>
             <Hint>Pause keeps runs where they are and resumes them when turned back on (runs paused for more than 24 hours expire instead of sending late messages). Stop ends all active runs immediately.</Hint>

@@ -68,4 +68,22 @@ export const crmGet = (path, params) => crm.get(path, { params }).then((r) => r.
 export const crmPost = (path, body) => crm.post(path, body ?? {}).then((r) => r.data);
 export const crmPatch = (path, body) => crm.patch(path, body).then((r) => r.data);
 
+// Excel (CSV) download. The file needs the login token, so it is fetched here and handed to the browser as a file.
+export async function crmDownload(path, params, fallbackName = "crm-export.csv") {
+  let res;
+  try { res = await crm.get(path, { params, responseType: "blob", timeout: 120000 }); }
+  catch (e) {
+    // error bodies arrive as a Blob too — turn them back into JSON so crmErrorText can read the code
+    if (e?.response?.data instanceof Blob) { try { e.response.data = JSON.parse(await e.response.data.text()); } catch { /* not JSON */ } }
+    throw e;
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers?.["content-disposition"] || "")?.[1] || fallbackName;
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return name;
+}
+
 export default crm;
