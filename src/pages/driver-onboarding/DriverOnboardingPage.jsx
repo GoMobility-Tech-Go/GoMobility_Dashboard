@@ -1006,6 +1006,8 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const [kycDocs, setKycDocs]           = useState([]);
   const [kycLoading, setKycLoading]     = useState(false);
   const [kycTypeFilter, setKycTypeFilter] = useState("");
+  const [kycDateFrom, setKycDateFrom]   = useState('');
+  const [kycDateTo, setKycDateTo]       = useState('');
 
   // Fraud
   const [fraudAlerts, setFraudAlerts]   = useState([]);
@@ -1196,8 +1198,10 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
 
   const loadKyc = useCallback(() => {
     setKycLoading(true);
-    const params = { limit:50, page:1, status:"all" };
+    const params = { limit:200, page:1, status:"all" };
     if (kycTypeFilter) params.type = kycTypeFilter;
+    if (kycDateFrom)   params.from  = kycDateFrom;
+    if (kycDateTo)     params.to    = kycDateTo;
     getKycQueue(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -1205,7 +1209,24 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       })
       .catch(() => showToast("Failed to load KYC queue.", "error"))
       .finally(() => setKycLoading(false));
-  }, [kycTypeFilter]);
+  }, [kycTypeFilter, kycDateFrom, kycDateTo]);
+
+  // Per-document-type pending/approved/rejected counts derived from loaded queue
+  const kycDocStats = useMemo(() => {
+    const REQUIRED_DOC_TYPES = ['AADHAAR','PAN','DRIVING_LICENCE','VEHICLE_RC','SELFIE','BANK_ACCOUNT'];
+    return REQUIRED_DOC_TYPES.map(type => {
+      const typeDocs = kycDocs.filter(d =>
+        (d.document_type || d.type || '').toUpperCase() === type
+      );
+      return {
+        type,
+        pending:  typeDocs.filter(d => ['pending','manual_review','under_review'].includes((d.status||'').toLowerCase())).length,
+        approved: typeDocs.filter(d => ['approved','auto_verified'].includes((d.status||'').toLowerCase())).length,
+        rejected: typeDocs.filter(d => (d.status||'').toLowerCase() === 'rejected').length,
+        total:    typeDocs.length,
+      };
+    });
+  }, [kycDocs]);
 
   const loadFraud = useCallback(() => {
     setFraudLoading(true);
@@ -2107,8 +2128,8 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       {/* ── KYC QUEUE TAB ── */}
       {tab === "KYC Queue" && (
         <>
-          {/* Summary */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
+          {/* Summary — 3 status totals */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:14 }}>
             {[
               { label:"Pending Review", count:kycDocs.filter(d=>["pending","manual_review"].includes((d.status||"").toLowerCase())).length, color:"#f59e0b", bg:"rgba(245,158,11,0.08)" },
               { label:"Verified",       count:kycDocs.filter(d=>["approved","auto_verified"].includes((d.status||"").toLowerCase())).length, color:"#4ade80", bg:"rgba(34,197,94,0.06)" },
@@ -2121,7 +2142,124 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
             ))}
           </div>
 
+          {/* Per-document-type pending cards */}
+          {(() => {
+            const DOC_META = {
+              AADHAAR:         { label:'Aadhaar',  color:'#a78bfa', icon:'🪪' },
+              PAN:             { label:'PAN Card', color:'#f59e0b', icon:'📄' },
+              DRIVING_LICENCE: { label:'DL',       color:'#38bdf8', icon:'🚗' },
+              VEHICLE_RC:      { label:'RC',       color:'#34d399', icon:'📋' },
+              SELFIE:          { label:'Selfie',   color:'#fb923c', icon:'🤳' },
+              BANK_ACCOUNT:    { label:'Bank',     color:'#e879f9', icon:'🏦' },
+            };
+            return (
+              <div style={{ marginBottom:20 }}>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"1px", fontWeight:700, marginBottom:10 }}>
+                  Document Pending Breakdown
+                </div>
+                <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                  {kycDocStats.map(({ type, pending, approved, rejected, total }) => {
+                    const meta = DOC_META[type] || { label: type, color: GOLD, icon: '📑' };
+                    const isActive = kycTypeFilter === type;
+                    return (
+                      <div
+                        key={type}
+                        onClick={() => setKycTypeFilter(isActive ? '' : type)}
+                        style={{
+                          flex:'1 1 140px', minWidth:130, maxWidth:200,
+                          background: isActive ? `${meta.color}18` : 'rgba(255,255,255,0.025)',
+                          border:`1px solid ${isActive ? meta.color : 'rgba(255,255,255,0.07)'}`,
+                          borderRadius:14, padding:'14px 16px', cursor:'pointer',
+                          transition:'all .15s', position:'relative', overflow:'hidden',
+                        }}
+                      >
+                        <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,${meta.color},transparent)` }} />
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                          <span style={{ fontSize:16 }}>{meta.icon}</span>
+                          <span style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,0.85)', letterSpacing:'0.3px' }}>{meta.label}</span>
+                        </div>
+                        <div style={{ fontSize:28, fontWeight:800, color: pending > 0 ? '#f59e0b' : '#4ade80', lineHeight:1, marginBottom:6, fontVariantNumeric:'tabular-nums' }}>
+                          {kycLoading ? '—' : pending}
+                        </div>
+                        <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:8 }}>
+                          pending review
+                        </div>
+                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                          <span style={{ fontSize:10, background:'rgba(34,197,94,0.12)', color:'#4ade80', borderRadius:6, padding:'2px 7px', fontWeight:600 }}>
+                            ✓ {kycLoading ? '–' : approved}
+                          </span>
+                          <span style={{ fontSize:10, background:'rgba(239,68,68,0.1)', color:'#f87171', borderRadius:6, padding:'2px 7px', fontWeight:600 }}>
+                            ✗ {kycLoading ? '–' : rejected}
+                          </span>
+                        </div>
+                        {isActive && (
+                          <div style={{ position:'absolute', top:8, right:10, fontSize:9, color:meta.color, fontWeight:700, letterSpacing:'0.5px', textTransform:'uppercase' }}>
+                            Active Filter
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(212,175,55,0.1)", borderRadius:16, overflow:"hidden" }}>
+            {/* Date filter bar */}
+            <div style={{ padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.04)", background:"rgba(255,255,255,0.015)" }}>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"1px", fontWeight:700, marginBottom:10 }}>Filter by Date</div>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", textTransform:"uppercase", letterSpacing:"0.8px" }}>From</span>
+                  <input
+                    type="date"
+                    value={kycDateFrom}
+                    onChange={e => setKycDateFrom(e.target.value)}
+                    style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(212,175,55,0.2)', borderRadius:8, padding:'7px 10px', color:'#fff', fontFamily:'Outfit,sans-serif', fontSize:13, outline:'none', colorScheme:'dark' }}
+                  />
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", textTransform:"uppercase", letterSpacing:"0.8px" }}>To</span>
+                  <input
+                    type="date"
+                    value={kycDateTo}
+                    onChange={e => setKycDateTo(e.target.value)}
+                    style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(212,175,55,0.2)', borderRadius:8, padding:'7px 10px', color:'#fff', fontFamily:'Outfit,sans-serif', fontSize:13, outline:'none', colorScheme:'dark' }}
+                  />
+                </div>
+                <button
+                  onClick={loadKyc}
+                  disabled={kycLoading}
+                  style={{ marginTop:18, padding:'7px 16px', borderRadius:8, border:'1px solid rgba(212,175,55,0.35)', background:'rgba(212,175,55,0.1)', color:GOLD, fontFamily:'Outfit,sans-serif', fontSize:12, fontWeight:700, cursor:kycLoading?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:6 }}
+                >
+                  <RefreshCw size={11} className={kycLoading ? "animate-spin" : ""}/> {kycLoading ? 'Loading…' : 'Apply'}
+                </button>
+                {(kycDateFrom || kycDateTo) && (
+                  <button
+                    onClick={() => { setKycDateFrom(''); setKycDateTo(''); }}
+                    style={{ marginTop:18, padding:'7px 14px', borderRadius:8, border:'1px solid rgba(255,255,255,0.1)', background:'transparent', color:'rgba(255,255,255,0.45)', fontFamily:'Outfit,sans-serif', fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}
+                  >
+                    <X size={10}/> Clear
+                  </button>
+                )}
+                {/* Quick chips */}
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:18 }}>
+                  {[
+                    { label:'Today',    fn:() => { const t=new Date().toISOString().slice(0,10); return {f:t,t:t}; } },
+                    { label:'Last 7d',  fn:() => { const to=new Date(); const fr=new Date(to); fr.setDate(fr.getDate()-7); return {f:fr.toISOString().slice(0,10),t:to.toISOString().slice(0,10)}; } },
+                    { label:'Last 30d', fn:() => { const to=new Date(); const fr=new Date(to); fr.setDate(fr.getDate()-30); return {f:fr.toISOString().slice(0,10),t:to.toISOString().slice(0,10)}; } },
+                    { label:'This Month', fn:() => { const now=new Date(); return {f:`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,t:now.toISOString().slice(0,10)}; } },
+                  ].map(({ label, fn }) => (
+                    <button key={label}
+                      onClick={() => { const {f,t}=fn(); setKycDateFrom(f); setKycDateTo(t); }}
+                      style={{ padding:'5px 11px', borderRadius:8, border:'1px solid rgba(255,255,255,0.1)', background:'transparent', color:'rgba(255,255,255,0.5)', fontFamily:'Outfit,sans-serif', fontSize:11, fontWeight:600, cursor:'pointer', transition:'all .15s' }}
+                    >{label}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             <div style={{ padding:"16px 20px", borderBottom:"1px solid rgba(212,175,55,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
               <span style={{ fontFamily:"Cinzel,serif", fontSize:14, color:"#fff", fontWeight:600 }}>Document Queue</span>
               <div style={{ display:"flex", gap:10, alignItems:"center" }}>
