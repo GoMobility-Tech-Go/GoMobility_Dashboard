@@ -41,6 +41,7 @@ const MESSAGES = {
   contact_suppressed_unsuppress_first: "This contact is suppressed. Remove the suppression first.",
   contact_not_found: "Contact not found.",
   query_too_short: "Enter at least 3 characters.",
+  too_many_phones_max_1000: "A phone list can have at most 1,000 numbers. Split it into smaller campaigns.",
   campaign_not_found: "Campaign not found.",
   journey_not_found: "Journey not found.",
 };

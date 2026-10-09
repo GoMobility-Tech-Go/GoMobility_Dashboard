@@ -1,7 +1,7 @@
 // New campaign / edit draft. PRD §3.1: audience → channel → content → schedule. Estimate and approval happen on the detail page.
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Users } from "lucide-react";
+import { ArrowLeft, Users, SlidersHorizontal, ListChecks } from "lucide-react";
 import { FormGroup } from "../../components/ui";
 import { crmGet, crmPatch, crmPost } from "../../api/crm";
 import { CrmPage, useAction, Section, Hint, ErrorNote, Loading, Pill, num, CHANNEL } from "./crmShared";
@@ -28,20 +28,26 @@ const forRole = (role) => ([, , , r]) => !r || r === role;
 const CHANNELS = ["push", "whatsapp_utility", "whatsapp_marketing", "sms"];
 
 const EMPTY = {
+  // audience: "filters" (rules — who matches at send time) or "phones" (a pasted list of numbers)
+  audience: "filters", phonesText: "", phoneRole: "",
   name: "", category: "marketing", role: "passenger", hasPushToken: "", filters: {}, lists: {},
   channel: "push", fallback: "", title: "", body: "", templateName: "", templateParams: "", language: "en",
   smsTemplateId: "", scheduledAt: "", throttlePerHour: "",
 };
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
-function toSpec(f) {
-  const segment = { role: f.role };
+// `phones` = the cleaned list returned by POST /campaigns/check-phones (only used for the phone-list audience)
+function toSpec(f, phones) {
+  const byPhones = f.audience === "phones";
+  const segment = byPhones ? { phones: phones || [], ...(f.phoneRole ? { role: f.phoneRole } : {}) } : { role: f.role };
   // role ke bahar wale filters mat bhejo (driver segment mein "average fare" ka matlab nahi)
-  for (const [k, , scale = 1, role] of NUM_FILTERS) {
-    if ((!role || role === f.role) && f.filters[k] !== "" && f.filters[k] != null) segment[k] = +(Number(f.filters[k]) * scale).toFixed(4);
+  if (!byPhones) {
+    for (const [k, , scale = 1, role] of NUM_FILTERS) {
+      if ((!role || role === f.role) && f.filters[k] !== "" && f.filters[k] != null) segment[k] = +(Number(f.filters[k]) * scale).toFixed(4);
+    }
+    for (const [k, , role] of LIST_FILTERS) if ((!role || role === f.role) && csv(f.lists[k]).length) segment[k] = csv(f.lists[k]);
+    if (f.hasPushToken) segment.hasPushToken = f.hasPushToken === "yes";
   }
-  for (const [k, , role] of LIST_FILTERS) if ((!role || role === f.role) && csv(f.lists[k]).length) segment[k] = csv(f.lists[k]);
-  if (f.hasPushToken) segment.hasPushToken = f.hasPushToken === "yes";
   const content = f.channel === "push" ? { title: f.title, body: f.body }
     : f.channel === "sms" ? { body: f.body, smsTemplateId: f.smsTemplateId }
     : { templateName: f.templateName, templateParams: csv(f.templateParams), language: f.language || "en" };
@@ -59,7 +65,8 @@ function fromCampaign(c) {
   const s = c.segment || {}, ct = c.content || {};
   const local = c.scheduledAt ? new Date(new Date(c.scheduledAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
   return {
-    ...EMPTY, name: c.name || "", category: c.category || "marketing", role: s.role || "passenger",
+    ...EMPTY, name: c.name || "", category: c.category || "marketing", role: s.phones ? "passenger" : s.role || "passenger",
+    audience: s.phones ? "phones" : "filters", phonesText: (s.phones || []).join("\n"), phoneRole: s.phones ? s.role || "" : "",
     hasPushToken: s.hasPushToken == null ? "" : s.hasPushToken ? "yes" : "no",
     filters: Object.fromEntries(NUM_FILTERS.filter(([k]) => s[k] != null).map(([k]) => [k, String(+(s[k] / scaleOf(k)).toFixed(2))])),
     lists: Object.fromEntries(LIST_FILTERS.filter(([k]) => s[k]).map(([k]) => [k, s[k].join(", ")])),
@@ -69,12 +76,53 @@ function fromCampaign(c) {
   };
 }
 
+// Result of "Check numbers": totals, then every matched contact, then what could not be used
+function PhoneCheckResult({ r, category }) {
+  const c = r.counts;
+  const cell = { padding: "6px 10px", fontSize: 12 };
+  const why = (x) => (x.reachable ? null : x.suppressed ? "Suppressed" : category === "marketing" && !x.marketingConsent ? "No marketing consent" : "Not reachable");
+  return (
+    <div style={{ border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: 12, marginBottom: 12, background: "rgba(255,255,255,0.02)" }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        <Pill tone="gold">{num(c.valid)} valid number{c.valid === 1 ? "" : "s"}</Pill>
+        <Pill tone="blue">{num(c.contacts)} contact{c.contacts === 1 ? "" : "s"} found ({num(c.drivers)} driver{c.drivers === 1 ? "" : "s"}, {num(c.passengers)} passenger{c.passengers === 1 ? "" : "s"})</Pill>
+        <Pill tone="green">{num(c.reachable)} can receive this {category} message</Pill>
+        {c.notFound > 0 && <Pill tone="orange">{num(c.notFound)} not on the platform</Pill>}
+        {c.invalid > 0 && <Pill tone="red">{num(c.invalid)} not a valid number</Pill>}
+        {c.duplicates > 0 && <Pill>{num(c.duplicates)} duplicate{c.duplicates === 1 ? "" : "s"} removed</Pill>}
+        {c.bothRoles > 0 && <Pill tone="purple">{num(c.bothRoles)} number{c.bothRoles === 1 ? " is" : "s are"} both driver and passenger</Pill>}
+      </div>
+      {r.found.length > 0 && (
+        <div style={{ maxHeight: 240, overflowY: "auto", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr style={{ textAlign: "left", color: "rgba(255,255,255,0.4)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.6px" }}>
+              <th style={cell}>Name</th><th style={cell}>Phone</th><th style={cell}>Type</th><th style={cell}>Push</th><th style={cell}>Will receive</th>
+            </tr></thead>
+            <tbody>
+              {r.found.map((x) => (
+                <tr key={x.userId} style={{ borderTop: "1px solid rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.85)" }}>
+                  <td style={cell}>{x.name || "—"}</td><td style={cell}>{x.phone}</td><td style={{ ...cell, textTransform: "capitalize" }}>{x.role}</td>
+                  <td style={cell}>{x.hasPushToken ? "Yes" : "No token"}</td>
+                  <td style={cell}>{x.reachable ? <span style={{ color: "#34D399" }}>Yes</span> : <span style={{ color: "#F59E0B" }}>No — {why(x)}</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {r.notFound.length > 0 && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 10 }}><b style={{ color: "#F59E0B" }}>Not on the platform (will be skipped):</b> {r.notFound.join(", ")}</div>}
+      {r.invalid.length > 0 && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 6 }}><b style={{ color: "#F87171" }}>Not a valid mobile number:</b> {r.invalid.join(", ")}</div>}
+    </div>
+  );
+}
+
 export default function CrmCampaignFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [f, setF] = useState(id ? null : EMPTY);
   const [loadErr, setLoadErr] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [phoneCheck, setPhoneCheck] = useState(null);
   const [formErr, setFormErr] = useState(null);
   const { busy, run } = useAction();
 
@@ -86,7 +134,11 @@ export default function CrmCampaignFormPage() {
   if (loadErr) return <CrmPage title="Edit Campaign"><ErrorNote error={loadErr} /></CrmPage>;
   if (!f) return <CrmPage title="Edit Campaign"><Loading /></CrmPage>;
 
-  const set = (k, v) => { setF((p) => ({ ...p, [k]: v })); setPreview(null); };
+  const set = (k, v) => {
+    setF((p) => ({ ...p, [k]: v })); setPreview(null);
+    if (["audience", "phonesText", "phoneRole", "category"].includes(k)) setPhoneCheck(null);   // the check is for exactly this list
+  };
+  const byPhones = f.audience === "phones";
   const setIn = (group, k, v) => { setF((p) => ({ ...p, [group]: { ...p[group], [k]: v } })); setPreview(null); };
   const needsSms = f.channel === "sms" || f.fallback === "sms";
   const needsPush = f.channel === "push" || f.fallback === "push";
@@ -97,10 +149,25 @@ export default function CrmCampaignFormPage() {
     const r = await run("preview", () => crmPost("/campaigns/preview-segment", { segment: spec.segment, category: spec.category }));
     if (r) setPreview(r);
   }
+  // Phone-list audience: the server cleans the pasted text and says who was found, who was not, and who can be reached
+  async function checkPhones() {
+    setFormErr(null);
+    if (!f.phonesText.trim()) { setFormErr("Paste at least one phone number."); return null; }
+    const r = await run("phones", () => crmPost("/campaigns/check-phones", { text: f.phonesText, role: f.phoneRole || undefined, category: f.category }));
+    if (r) setPhoneCheck(r);
+    return r;
+  }
   async function save() {
     setFormErr(null);
-    const spec = toSpec(f);
-    if (!spec.name.trim()) return setFormErr("Please give the campaign a name.");
+    if (!f.name.trim()) return setFormErr("Please give the campaign a name.");
+    let phones;
+    if (byPhones) {
+      const r = phoneCheck || await checkPhones();
+      if (!r) return;
+      if (!r.counts.contacts) return setFormErr("None of these numbers belong to a rider or driver in the CRM, so there is no one to send to.");
+      phones = r.phones;
+    }
+    const spec = toSpec(f, phones);
     const r = await run("save", () => (id ? crmPatch(`/campaigns/${id}`, spec) : crmPost("/campaigns", spec)),
       id ? "Campaign updated — run the estimate again" : "Draft created — next, run the cost estimate");
     if (r?._id) navigate(`/crm/campaigns/${r._id}`);
@@ -119,6 +186,40 @@ export default function CrmCampaignFormPage() {
         <div>
           <Section title="1. Audience" subtitle="Evaluated again at send time, so the audience is always current">
             <FormGroup label="Campaign name">{input("name", { placeholder: "e.g. Gurugram drivers — weekend demand" })}</FormGroup>
+            <FormGroup label="Who should receive it">
+              <div style={{ display: "flex", gap: 8 }}>
+                {[["filters", "Everyone matching filters", SlidersHorizontal], ["phones", "Specific phone numbers", ListChecks]].map(([v, label, Icon]) => (
+                  <button key={v} type="button" onClick={() => set("audience", v)} className={f.audience === v ? "btn-gold" : "btn-outline"} style={{ flex: 1, justifyContent: "center" }}>
+                    <Icon size={14} /> {label}
+                  </button>
+                ))}
+              </div>
+            </FormGroup>
+
+            {byPhones && (
+              <>
+                <FormGroup label="Phone numbers" hint="One per line, or separated by commas — you can paste a column straight from Excel. Up to 1,000. +91 and spaces are fine.">
+                  <textarea className="gm-input" rows={8} value={f.phonesText} onChange={(e) => set("phonesText", e.target.value)}
+                    placeholder={"9876543210\n9876543211\n+91 98765 43212"} style={{ fontFamily: "monospace", fontSize: 13 }} />
+                </FormGroup>
+                <FormGroup label="Send to" hint="A person can be both a driver and a passenger with the same number — choose which app's contact to use.">
+                  <select className="gm-input" value={f.phoneRole} onChange={(e) => set("phoneRole", e.target.value)}>
+                    <option value="">Everyone with these numbers (drivers and passengers)</option>
+                    <option value="driver">Drivers only</option>
+                    <option value="passenger">Passengers only</option>
+                  </select>
+                </FormGroup>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+                  <button className="btn-outline" type="button" disabled={!!busy} onClick={checkPhones}><Users size={14} /> {busy === "phones" ? "Checking…" : "Check numbers"}</button>
+                  {!phoneCheck && <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>Shows who was found before you save</span>}
+                </div>
+                {phoneCheck && <PhoneCheckResult r={phoneCheck} category={f.category} />}
+                <Hint>Only numbers that belong to a rider or driver on the platform can be messaged. Consent, suppression and frequency caps still apply.</Hint>
+              </>
+            )}
+
+            {!byPhones && (
+            <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormGroup label="Audience">
                 <select className="gm-input" value={f.role} onChange={(e) => set("role", e.target.value)}>
@@ -149,6 +250,8 @@ export default function CrmCampaignFormPage() {
                 <b style={{ color: "#D4AF37" }}>{num(preview.matched)}</b> matched · <b style={{ color: "#34D399" }}>{num(preview.reachable)}</b> reachable after consent and suppression
               </span>}
             </div>
+            </>
+            )}
           </Section>
         </div>
 

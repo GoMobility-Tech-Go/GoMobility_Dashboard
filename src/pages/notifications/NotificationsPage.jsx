@@ -770,6 +770,93 @@ function SendNowTab({ showToast }) {
   );
 }
 
+// ── CampaignCard — defined at module scope so React never remounts it on
+//    AutomatedTab re-renders (toggling, saving, editing all caused full DOM remounts
+//    and broke the inline message editor: every keystroke lost focus).
+const CampaignCard = ({
+  c, editing, editTitle, editBody, saving, toggling, running,
+  onToggle, onEdit, onRunNow, onSaveMessage, onCancelEdit,
+  onEditTitleChange, onEditBodyChange,
+}) => {
+  const isEditing = editing === c.key;
+  return (
+    <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${c.is_enabled ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.06)"}`, borderRadius:14, padding:18, marginBottom:10 }}>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12 }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+            <div style={{ fontSize:13, fontWeight:600, color: c.is_enabled ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)" }}>{c.name}</div>
+            <span style={{ fontSize:10, padding:"2px 8px", borderRadius:20, background: c.is_enabled ? "rgba(52,211,153,0.1)" : "rgba(255,255,255,0.05)", color: c.is_enabled ? "#34D399" : "rgba(255,255,255,0.3)", border:`1px solid ${c.is_enabled ? "rgba(52,211,153,0.25)" : "rgba(255,255,255,0.08)"}` }}>
+              {c.is_enabled ? "Active" : "Paused"}
+            </span>
+          </div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:8 }}>{c.description}</div>
+
+          {isEditing ? (
+            <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
+              <input value={editTitle} onChange={e => onEditTitleChange(e.target.value)}
+                placeholder="Notification title…"
+                style={{ ...inputStyle, height:36, fontSize:12 }}
+                onFocus={e=>e.target.style.borderColor="#D4AF37"}
+                onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.15)"}/>
+              <textarea value={editBody} onChange={e => onEditBodyChange(e.target.value)}
+                placeholder="Message body…" rows={2}
+                style={{ ...inputStyle, height:"auto", padding:"8px 12px", fontSize:12, resize:"vertical" }}
+                onFocus={e=>e.target.style.borderColor="#D4AF37"}
+                onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.15)"}/>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={onSaveMessage} disabled={saving} style={{ flex:1, height:32, background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.35)", borderRadius:8, color:"#D4AF37", fontSize:12, fontFamily:"Cinzel,serif", cursor:"pointer" }}>
+                  <Check size={11} style={{ marginRight:4 }}/>{saving ? "Saving…" : "Save"}
+                </button>
+                <button onClick={onCancelEdit} style={{ flex:1, height:32, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.5)", fontSize:12, cursor:"pointer" }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:9, padding:"9px 12px", marginBottom:10 }}>
+              <div style={{ fontSize:12, fontWeight:600, color:"rgba(255,255,255,0.75)", marginBottom:3 }}>{c.title}</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", lineHeight:1.4 }}>{c.body}</div>
+            </div>
+          )}
+
+          <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:10, color:"rgba(255,255,255,0.3)" }}>
+            <span>⏱ {SCHEDULE_LABEL[c.schedule_type] || c.schedule_type}</span>
+            {c.last_run_at ? (
+              <>
+                <span>Last: {fmtRelative(c.last_run_at)}</span>
+                <span style={{ color:"#34D399" }}>✓ {c.last_run_sent} sent</span>
+                {c.last_run_failed > 0 && <span style={{ color:"#ef4444" }}>✗ {c.last_run_failed} failed</span>}
+              </>
+            ) : (
+              <span>Never run</span>
+            )}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10, flexShrink:0 }}>
+          <button onClick={() => onToggle(c.key, c.is_enabled)} disabled={!!toggling[c.key]}
+            title={c.is_enabled ? "Disable" : "Enable"}
+            style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
+            {c.is_enabled
+              ? <ToggleRight size={30} color="#34D399"/>
+              : <ToggleLeft  size={30} color="rgba(255,255,255,0.25)"/>
+            }
+          </button>
+          {!isEditing && (
+            <button onClick={() => onEdit(c)} title="Edit message"
+              style={{ width:30, height:30, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <Edit2 size={13} color="rgba(255,255,255,0.5)"/>
+            </button>
+          )}
+          <button onClick={() => onRunNow(c.key)} disabled={!!running[c.key]} title="Run now"
+            style={{ width:30, height:30, background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:7, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            {running[c.key] ? <span style={{ fontSize:10 }}>…</span> : <Play size={12} color="#D4AF37"/>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Tab 2 — Automated Campaigns ───────────────────────────────────────────────
 function AutomatedTab({ showToast }) {
   const [campaigns, setCampaigns]   = useState([]);
@@ -841,86 +928,6 @@ function AutomatedTab({ showToast }) {
   const daily  = campaigns.filter(c => c.schedule_type === 'daily');
   const weekly = campaigns.filter(c => c.schedule_type === 'weekly');
 
-  const CampaignCard = ({ c }) => {
-    const isEditing = editing === c.key;
-    return (
-      <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${c.is_enabled ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.06)"}`, borderRadius:14, padding:18, marginBottom:10 }}>
-        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12 }}>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-              <div style={{ fontSize:13, fontWeight:600, color: c.is_enabled ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.4)" }}>{c.name}</div>
-              <span style={{ fontSize:10, padding:"2px 8px", borderRadius:20, background: c.is_enabled ? "rgba(52,211,153,0.1)" : "rgba(255,255,255,0.05)", color: c.is_enabled ? "#34D399" : "rgba(255,255,255,0.3)", border:`1px solid ${c.is_enabled ? "rgba(52,211,153,0.25)" : "rgba(255,255,255,0.08)"}` }}>
-                {c.is_enabled ? "Active" : "Paused"}
-              </span>
-            </div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:8 }}>{c.description}</div>
-
-            {isEditing ? (
-              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
-                <input value={editTitle} onChange={e=>setEditTitle(e.target.value)}
-                  placeholder="Notification title…"
-                  style={{ ...inputStyle, height:36, fontSize:12 }}
-                  onFocus={e=>e.target.style.borderColor="#D4AF37"}
-                  onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.15)"}/>
-                <textarea value={editBody} onChange={e=>setEditBody(e.target.value)}
-                  placeholder="Message body…" rows={2}
-                  style={{ ...inputStyle, height:"auto", padding:"8px 12px", fontSize:12, resize:"vertical" }}
-                  onFocus={e=>e.target.style.borderColor="#D4AF37"}
-                  onBlur={e=>e.target.style.borderColor="rgba(212,175,55,0.15)"}/>
-                <div style={{ display:"flex", gap:8 }}>
-                  <button onClick={handleSaveMessage} disabled={saving} style={{ flex:1, height:32, background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.35)", borderRadius:8, color:"#D4AF37", fontSize:12, fontFamily:"Cinzel,serif", cursor:"pointer" }}>
-                    <Check size={11} style={{ marginRight:4 }}/>{saving ? "Saving…" : "Save"}
-                  </button>
-                  <button onClick={cancelEdit} style={{ flex:1, height:32, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"rgba(255,255,255,0.5)", fontSize:12, cursor:"pointer" }}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:9, padding:"9px 12px", marginBottom:10 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:"rgba(255,255,255,0.75)", marginBottom:3 }}>{c.title}</div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", lineHeight:1.4 }}>{c.body}</div>
-              </div>
-            )}
-
-            <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:10, color:"rgba(255,255,255,0.3)" }}>
-              <span>⏱ {SCHEDULE_LABEL[c.schedule_type] || c.schedule_type}</span>
-              {c.last_run_at ? (
-                <>
-                  <span>Last: {fmtRelative(c.last_run_at)}</span>
-                  <span style={{ color:"#34D399" }}>✓ {c.last_run_sent} sent</span>
-                  {c.last_run_failed > 0 && <span style={{ color:"#ef4444" }}>✗ {c.last_run_failed} failed</span>}
-                </>
-              ) : (
-                <span>Never run</span>
-              )}
-            </div>
-          </div>
-
-          {/* Controls */}
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10, flexShrink:0 }}>
-            <button onClick={() => handleToggle(c.key, c.is_enabled)} disabled={!!toggling[c.key]}
-              title={c.is_enabled ? "Disable" : "Enable"}
-              style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
-              {c.is_enabled
-                ? <ToggleRight size={30} color="#34D399"/>
-                : <ToggleLeft  size={30} color="rgba(255,255,255,0.25)"/>
-              }
-            </button>
-            {!isEditing && (
-              <button onClick={() => startEdit(c)} title="Edit message"
-                style={{ width:30, height:30, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:7, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <Edit2 size={13} color="rgba(255,255,255,0.5)"/>
-              </button>
-            )}
-            <button onClick={() => handleRunNow(c.key)} disabled={!!running[c.key]} title="Run now"
-              style={{ width:30, height:30, background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.2)", borderRadius:7, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              {running[c.key] ? <span style={{ fontSize:10 }}>…</span> : <Play size={12} color="#D4AF37"/>}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   if (loading) return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {Array(6).fill(0).map((_,i) => (
@@ -946,7 +953,15 @@ function AutomatedTab({ showToast }) {
             <div style={{ height:1, flex:1, background:"rgba(212,175,55,0.1)" }}/>Daily Campaigns
             <div style={{ height:1, flex:1, background:"rgba(212,175,55,0.1)" }}/>
           </div>
-          {daily.map(c => <CampaignCard key={c.key} c={c}/>)}
+          {daily.map(c => (
+            <CampaignCard key={c.key} c={c}
+              editing={editing} editTitle={editTitle} editBody={editBody}
+              saving={saving} toggling={toggling} running={running}
+              onToggle={handleToggle} onEdit={startEdit} onRunNow={handleRunNow}
+              onSaveMessage={handleSaveMessage} onCancelEdit={cancelEdit}
+              onEditTitleChange={setEditTitle} onEditBodyChange={setEditBody}
+            />
+          ))}
         </div>
       )}
 
@@ -956,7 +971,15 @@ function AutomatedTab({ showToast }) {
             <div style={{ height:1, flex:1, background:"rgba(212,175,55,0.1)" }}/>Weekly Campaigns
             <div style={{ height:1, flex:1, background:"rgba(212,175,55,0.1)" }}/>
           </div>
-          {weekly.map(c => <CampaignCard key={c.key} c={c}/>)}
+          {weekly.map(c => (
+            <CampaignCard key={c.key} c={c}
+              editing={editing} editTitle={editTitle} editBody={editBody}
+              saving={saving} toggling={toggling} running={running}
+              onToggle={handleToggle} onEdit={startEdit} onRunNow={handleRunNow}
+              onSaveMessage={handleSaveMessage} onCancelEdit={cancelEdit}
+              onEditTitleChange={setEditTitle} onEditBodyChange={setEditBody}
+            />
+          ))}
         </div>
       )}
     </div>

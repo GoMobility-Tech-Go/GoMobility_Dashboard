@@ -53,7 +53,7 @@ export default function CrmCampaignsPage() {
               {rows.map((c) => (
                 <tr key={c._id} style={{ cursor: "pointer" }} onClick={() => navigate(`/crm/campaigns/${c._id}`)}>
                   <td>{c.name || "Untitled"}</td>
-                  <td><span style={{ textTransform: "capitalize" }}>{c.segment?.role || "—"}</span> {c.category === "transactional" && <CategoryPill category="transactional" />}</td>
+                  <td><span style={{ textTransform: "capitalize" }}>{c.segment?.phones ? `${c.segment.phones.length} phone number${c.segment.phones.length === 1 ? "" : "s"}` : c.segment?.role || "—"}</span> {c.category === "transactional" && <CategoryPill category="transactional" />}</td>
                   <td>{CHANNEL[c.channel] || c.channel}{c.fallback ? ` → ${CHANNEL[c.fallback] || c.fallback}` : ""}</td>
                   <td><StatusPill status={c.status} /></td>
                   <td>{c.estimate?.at ? num(c.estimate.recipients) : "—"}</td>

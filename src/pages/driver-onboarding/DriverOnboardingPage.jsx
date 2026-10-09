@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Pagination } from "../../components/ui/index.jsx";
 import {
-  getDrivers, verifyDriver, updateDriverStatus, getKycQueue,
+  getDrivers, verifyDriver, updateDriverStatus, getKycQueue, getKycMissingDocsSummary,
   approveDocument, rejectDocument, getFraudAlerts, suspendDriver,
   getKycDocument, getDriverById, getDriverKycStatus, getDriverStats,
   getCities, getNcrDriverStats, getNcrDriverDateStats, updateDriverProfile, sendGroupNotification,
@@ -1012,6 +1012,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const [kycHeaderStats, setKycHeaderStats]   = useState(null);
   const [kycHeaderLoading, setKycHeaderLoading] = useState(false);
   const kycHeaderRef = useRef(null);
+  const [missingDocFilter, setMissingDocFilter] = useState('');
 
   // Fraud
   const [fraudAlerts, setFraudAlerts]   = useState([]);
@@ -1040,6 +1041,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
     if (showOnlyOnDuty)      params.is_on_duty   = 'true';
     if (showOnlyTestDrivers) params.is_test_user = 'true';
     if (showPending7Days) { const d7 = new Date(); d7.setDate(d7.getDate() - 7); params.registered_before = d7.toISOString(); params.onboarding_status = params.onboarding_status || 'in_progress,not_started'; }
+    if (missingDocFilter) params.missing_doc_type = missingDocFilter;
     getDrivers(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -1049,7 +1051,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       })
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
-  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates, onboardingStatus, vehicleTypeFilter, cityFilter, driverAccountStatus, showOnlyOnDuty, showOnlyTestDrivers, showPending7Days]);
+  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates, onboardingStatus, vehicleTypeFilter, cityFilter, driverAccountStatus, showOnlyOnDuty, showOnlyTestDrivers, showPending7Days, missingDocFilter]);
 
   const handleExportDrivers = async () => {
     setExporting(true);
@@ -1234,21 +1236,11 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
 
   const loadKycHeaderStats = useCallback(() => {
     setKycHeaderLoading(true);
-    getKycQueue({ limit: 500, page: 1, status: 'all' })
+    getKycMissingDocsSummary()
       .then(res => {
-        const d = res.data?.data || res.data || {};
-        const allDocs = d.documents || d.items || d.queue || (Array.isArray(d) ? d : []);
-        const KYC_TYPES = ['AADHAAR','PAN','DRIVING_LICENCE','VEHICLE_RC','SELFIE','BANK_ACCOUNT'];
-        const stats = KYC_TYPES.map(type => {
-          const td = allDocs.filter(doc => (doc.document_type||doc.type||'').toUpperCase() === type);
-          return {
-            type,
-            pending:  td.filter(doc => ['pending','manual_review','under_review'].includes((doc.status||'').toLowerCase())).length,
-            approved: td.filter(doc => ['approved','auto_verified'].includes((doc.status||'').toLowerCase())).length,
-            rejected: td.filter(doc => (doc.status||'').toLowerCase() === 'rejected').length,
-          };
-        });
-        setKycHeaderStats(stats);
+        const rows = res.data?.data || res.data || [];
+        const arr = Array.isArray(rows) ? rows : [];
+        setKycHeaderStats(arr);
       })
       .catch(() => {})
       .finally(() => setKycHeaderLoading(false));
@@ -1861,7 +1853,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
           </div>
 
           {/* Active filter chips */}
-          {(period !== 'all' || onboardingStatus.length > 0 || vehicleTypeFilter !== 'all' || cityFilter || driverAccountStatus.length > 0 || showOnlyOnDuty || showOnlyTestDrivers || activeDriverFilters.length > 0) && (
+          {(period !== 'all' || onboardingStatus.length > 0 || vehicleTypeFilter !== 'all' || cityFilter || driverAccountStatus.length > 0 || showOnlyOnDuty || showOnlyTestDrivers || activeDriverFilters.length > 0 || missingDocFilter) && (
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14, alignItems:"center" }}>
               <FilterIcon size={13} color="#D4AF37" style={{ marginRight:2 }} />
               {period !== 'all' && (
@@ -1893,6 +1885,12 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
               )}
               {showOnlyTestDrivers && (
                 <DrvPeriodChip label="Test Users Only" onRemove={() => { setShowOnlyTestDrivers(false); setOffset(0); }} />
+              )}
+              {missingDocFilter && (
+                <DrvPeriodChip
+                  label={`Missing Doc: ${{ AADHAAR:'Aadhaar', PAN:'PAN', DRIVING_LICENCE:'DL', VEHICLE_RC:'RC', SELFIE:'Selfie', BANK_ACCOUNT:'Bank' }[missingDocFilter] || missingDocFilter}`}
+                  onRemove={() => { setMissingDocFilter(''); setOffset(0); }}
+                />
               )}
               {activeDriverFilters.map(({ key, filter, meta }) => (
                 <FilterChip
@@ -1958,21 +1956,33 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                                     SELFIE:          { label:'Selfie',            color:'#fb923c', icon:'🤳' },
                                     BANK_ACCOUNT:    { label:'Bank Account',      color:'#e879f9', icon:'🏦' },
                                   };
-                                  return kycHeaderStats.map(({ type, pending, approved, rejected }) => {
-                                    const m = KYC_DOC_META[type] || { label: type, color: GOLD, icon: '📑' };
+                                  return kycHeaderStats.map(({ doc_type, not_uploaded, uploaded, total_drivers }) => {
+                                    const m = KYC_DOC_META[doc_type] || { label: doc_type, color: GOLD, icon: '📑' };
+                                    const missing = not_uploaded ?? 0;
+                                    const isFiltered = missingDocFilter === doc_type;
                                     return (
-                                      <div key={type} style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(255,255,255,0.025)', border:`1px solid ${pending > 0 ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)'}`, borderRadius:10, padding:'9px 12px' }}>
+                                      <div
+                                        key={doc_type}
+                                        onClick={() => {
+                                          setMissingDocFilter(isFiltered ? '' : doc_type);
+                                          setOffset(0);
+                                          setKycHeaderOpen(false);
+                                        }}
+                                        style={{ display:'flex', alignItems:'center', gap:10, background: isFiltered ? `${m.color}12` : 'rgba(255,255,255,0.025)', border:`1px solid ${isFiltered ? m.color : missing > 0 ? 'rgba(245,158,11,0.15)' : 'rgba(34,197,94,0.15)'}`, borderRadius:10, padding:'9px 12px', cursor:'pointer', transition:'all .15s' }}>
                                         <span style={{ fontSize:17, flexShrink:0 }}>{m.icon}</span>
                                         <div style={{ flex:1, minWidth:0 }}>
-                                          <div style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,0.85)', marginBottom:4 }}>{m.label}</div>
+                                          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                                            <span style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,0.85)' }}>{m.label}</span>
+                                            {isFiltered && <span style={{ fontSize:9, fontWeight:800, color:m.color, textTransform:'uppercase', letterSpacing:'0.5px', background:`${m.color}18`, borderRadius:4, padding:'1px 6px' }}>Filtering</span>}
+                                          </div>
                                           <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                                            <span style={{ fontSize:10, background:'rgba(245,158,11,0.12)', color:'#f59e0b', borderRadius:5, padding:'2px 7px', fontWeight:700 }}>⏳ {pending} pending</span>
-                                            <span style={{ fontSize:10, background:'rgba(34,197,94,0.1)', color:'#4ade80', borderRadius:5, padding:'2px 7px', fontWeight:700 }}>✓ {approved}</span>
-                                            <span style={{ fontSize:10, background:'rgba(239,68,68,0.1)', color:'#f87171', borderRadius:5, padding:'2px 7px', fontWeight:700 }}>✗ {rejected}</span>
+                                            <span style={{ fontSize:10, background:'rgba(245,158,11,0.12)', color:'#f59e0b', borderRadius:5, padding:'2px 7px', fontWeight:700 }}>✗ {missing} not uploaded</span>
+                                            <span style={{ fontSize:10, background:'rgba(34,197,94,0.1)', color:'#4ade80', borderRadius:5, padding:'2px 7px', fontWeight:700 }}>✓ {uploaded ?? 0} uploaded</span>
+                                            <span style={{ fontSize:10, background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.4)', borderRadius:5, padding:'2px 7px', fontWeight:600 }}>{total_drivers ?? 0} in KYC process</span>
                                           </div>
                                         </div>
-                                        <div style={{ fontSize:22, fontWeight:800, color: pending > 0 ? '#f59e0b' : '#4ade80', fontVariantNumeric:'tabular-nums', flexShrink:0, minWidth:28, textAlign:'right' }}>
-                                          {pending}
+                                        <div style={{ fontSize:22, fontWeight:800, color: missing > 0 ? '#f59e0b' : '#4ade80', fontVariantNumeric:'tabular-nums', flexShrink:0, minWidth:28, textAlign:'right' }}>
+                                          {missing}
                                         </div>
                                       </div>
                                     );

@@ -88,7 +88,9 @@ export default function CrmCampaignDetailPage() {
 
       <div className="crm-1-1" style={{ alignItems: "start" }}>
         <Section title="Campaign Details">
-          <Row k="Audience"><span style={{ textTransform: "capitalize" }}>{d.segment?.role}s</span> — {segmentText(d.segment)}</Row>
+          <Row k="Audience">{d.segment?.phones
+            ? <span title={d.segment.phones.join(", ")}>{d.segment.phones.length} specific phone number{d.segment.phones.length === 1 ? "" : "s"}{d.segment.role ? ` — ${d.segment.role}s only` : " — drivers and passengers"}</span>
+            : <><span style={{ textTransform: "capitalize" }}>{d.segment?.role}s</span> — {segmentText(d.segment)}</>}</Row>
           <Row k="Channel">{CHANNEL[d.channel] || d.channel}{d.fallback ? ` → fallback ${CHANNEL[d.fallback] || d.fallback}` : ""}</Row>
           {ct.title && <Row k="Title">{ct.title}</Row>}
           {ct.body && <Row k="Message">{ct.body}</Row>}

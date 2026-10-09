@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   AlertCircle, RefreshCw, MessageCircle, CheckCircle2,
   XCircle, Clock, TrendingUp, Wifi, WifiOff, ChevronDown, ChevronUp,
@@ -66,13 +66,15 @@ function PaymentAlertsPanel() {
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius:16, overflow:"hidden", marginBottom:28 }}>
       <SectionHeader title="Payment Alerts Log" onRefresh={load} loading={loading} />
 
-      {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, padding:16 }}>
-        <StatTile label="Total Alerts"   value={total}               color="#f59e0b" />
-        <StatTile label="Emails Sent"    value={total - suppressed}  color="#4ade80" />
-        <StatTile label="Suppressed"     value={suppressed}          color="#f87171"
-                  sub="(5-min dedupe)" />
-      </div>
+      {/* Stats — only show when data is available, not during error */}
+      {!error && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, padding:16 }}>
+          <StatTile label="Total Alerts"   value={loading ? "—" : total}              color="#f59e0b" />
+          <StatTile label="Emails Sent"    value={loading ? "—" : total - suppressed} color="#4ade80" />
+          <StatTile label="Suppressed"     value={loading ? "—" : suppressed}         color="#f87171"
+                    sub="(5-min dedupe)" />
+        </div>
+      )}
 
       {/* List */}
       {error ? (
@@ -138,11 +140,11 @@ function PaymentAlertsPanel() {
                       ["Email sent", a.email_sent ? "Yes" : "No (dedupe)"],
                       ["Time (IST)", fmtDate(a.created_at)],
                     ].map(([k, v]) => (
-                      <>
-                        <span key={k+"k"} style={{ fontSize:11, color: TEXT_DIM }}>{k}</span>
-                        <span key={k+"v"} style={{ fontSize:11, color:"rgba(255,255,255,0.75)",
+                      <Fragment key={k}>
+                        <span style={{ fontSize:11, color: TEXT_DIM }}>{k}</span>
+                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.75)",
                           fontFamily:"monospace", wordBreak:"break-all" }}>{v}</span>
-                      </>
+                      </Fragment>
                     ))}
                     {Object.keys(a.meta || {}).length > 0 && (
                       <>
@@ -248,26 +250,28 @@ function WhatsappActivityPanel() {
               <div style={{ fontSize:12, color: TEXT_DIM, textAlign:"center", padding:"20px 0" }}>No sessions</div>
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {states.map((s) => {
+                {(() => {
                   const maxCnt = Math.max(...states.map(x => x.cnt));
-                  const pct = Math.round((s.cnt / maxCnt) * 100);
-                  return (
-                    <div key={s.state}>
-                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                        <span style={{ fontSize:12, color:"rgba(255,255,255,0.7)" }}>
-                          {WA_STATE_LABELS[s.state] || s.state}
-                        </span>
-                        <span style={{ fontSize:12, color: GOLD, fontVariantNumeric:"tabular-nums" }}>
-                          {s.cnt}
-                        </span>
+                  return states.map((s) => {
+                    const pct = maxCnt > 0 ? Math.round((s.cnt / maxCnt) * 100) : 0;
+                    return (
+                      <div key={s.state}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                          <span style={{ fontSize:12, color:"rgba(255,255,255,0.7)" }}>
+                            {WA_STATE_LABELS[s.state] || s.state}
+                          </span>
+                          <span style={{ fontSize:12, color: GOLD, fontVariantNumeric:"tabular-nums" }}>
+                            {s.cnt}
+                          </span>
+                        </div>
+                        <div style={{ height:4, background:"rgba(255,255,255,0.06)", borderRadius:4 }}>
+                          <div style={{ height:"100%", width:`${pct}%`, background: GOLD,
+                            borderRadius:4, opacity:0.6 }} />
+                        </div>
                       </div>
-                      <div style={{ height:4, background:"rgba(255,255,255,0.06)", borderRadius:4 }}>
-                        <div style={{ height:"100%", width:`${pct}%`, background: GOLD,
-                          borderRadius:4, opacity:0.6 }} />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
