@@ -1008,6 +1008,10 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const [kycTypeFilter, setKycTypeFilter] = useState("");
   const [kycDateFrom, setKycDateFrom]   = useState('');
   const [kycDateTo, setKycDateTo]       = useState('');
+  const [kycHeaderOpen, setKycHeaderOpen]     = useState(false);
+  const [kycHeaderStats, setKycHeaderStats]   = useState(null);
+  const [kycHeaderLoading, setKycHeaderLoading] = useState(false);
+  const kycHeaderRef = useRef(null);
 
   // Fraud
   const [fraudAlerts, setFraudAlerts]   = useState([]);
@@ -1227,6 +1231,35 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       };
     });
   }, [kycDocs]);
+
+  const loadKycHeaderStats = useCallback(() => {
+    setKycHeaderLoading(true);
+    getKycQueue({ limit: 500, page: 1, status: 'all' })
+      .then(res => {
+        const d = res.data?.data || res.data || {};
+        const allDocs = d.documents || d.items || d.queue || (Array.isArray(d) ? d : []);
+        const KYC_TYPES = ['AADHAAR','PAN','DRIVING_LICENCE','VEHICLE_RC','SELFIE','BANK_ACCOUNT'];
+        const stats = KYC_TYPES.map(type => {
+          const td = allDocs.filter(doc => (doc.document_type||doc.type||'').toUpperCase() === type);
+          return {
+            type,
+            pending:  td.filter(doc => ['pending','manual_review','under_review'].includes((doc.status||'').toLowerCase())).length,
+            approved: td.filter(doc => ['approved','auto_verified'].includes((doc.status||'').toLowerCase())).length,
+            rejected: td.filter(doc => (doc.status||'').toLowerCase() === 'rejected').length,
+          };
+        });
+        setKycHeaderStats(stats);
+      })
+      .catch(() => {})
+      .finally(() => setKycHeaderLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!kycHeaderOpen) return;
+    const handler = (e) => { if (kycHeaderRef.current && !kycHeaderRef.current.contains(e.target)) setKycHeaderOpen(false); };
+    window.addEventListener('mousedown', handler);
+    return () => window.removeEventListener('mousedown', handler);
+  }, [kycHeaderOpen]);
 
   const loadFraud = useCallback(() => {
     setFraudLoading(true);
@@ -1896,8 +1929,65 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                         onChange={v => setFilter("is_available", v)} onClear={() => clearFilter("is_available")} />
                     </th>
                     <th style={drvTh(false)}>
-                      <FilterHead label="KYC" meta={fMeta("is_verified")} filter={filters.is_verified}
-                        onChange={v => setFilter("is_verified", v)} onClear={() => clearFilter("is_verified")} />
+                      <div ref={kycHeaderRef} style={{ display:'inline-flex', alignItems:'center', gap:5, position:'relative' }}>
+                        <FilterHead label="KYC" meta={fMeta("is_verified")} filter={filters.is_verified}
+                          onChange={v => setFilter("is_verified", v)} onClear={() => clearFilter("is_verified")} />
+                        <button
+                          onClick={() => { setKycHeaderOpen(o => !o); if (!kycHeaderStats && !kycHeaderLoading) loadKycHeaderStats(); }}
+                          title="View document breakdown"
+                          style={{ width:20, height:20, borderRadius:5, padding:0, display:'flex', alignItems:'center', justifyContent:'center', background: kycHeaderOpen ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.04)', border:`1px solid ${kycHeaderOpen ? GOLD : 'rgba(255,255,255,0.08)'}`, color: kycHeaderOpen ? GOLD : 'rgba(255,255,255,0.3)', cursor:'pointer', transition:'all .15s' }}
+                        >
+                          <CreditCard size={10} />
+                        </button>
+                        {kycHeaderOpen && (
+                          <div style={{ position:'absolute', top:'calc(100% + 8px)', left:0, zIndex:80, width:340, background:'#020d26', border:'1px solid rgba(212,175,55,0.18)', borderRadius:14, padding:16, boxShadow:'0 16px 48px rgba(0,0,0,0.65)', fontFamily:'Outfit,sans-serif' }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                              <span style={{ fontSize:10.5, fontWeight:700, color:'rgba(212,175,55,0.7)', textTransform:'uppercase', letterSpacing:'1px' }}>Document Breakdown</span>
+                              <button onClick={() => setKycHeaderOpen(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.35)', padding:0, display:'flex' }}><X size={12}/></button>
+                            </div>
+                            {kycHeaderLoading ? (
+                              <div style={{ padding:'20px 0', textAlign:'center', color:'rgba(255,255,255,0.3)', fontSize:12 }}>Loading…</div>
+                            ) : kycHeaderStats ? (
+                              <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+                                {(() => {
+                                  const KYC_DOC_META = {
+                                    AADHAAR:         { label:'Aadhaar',          color:'#a78bfa', icon:'🪪' },
+                                    PAN:             { label:'PAN Card',          color:'#f59e0b', icon:'📄' },
+                                    DRIVING_LICENCE: { label:'Driving Licence',  color:'#38bdf8', icon:'🚗' },
+                                    VEHICLE_RC:      { label:'Vehicle RC',        color:'#34d399', icon:'📋' },
+                                    SELFIE:          { label:'Selfie',            color:'#fb923c', icon:'🤳' },
+                                    BANK_ACCOUNT:    { label:'Bank Account',      color:'#e879f9', icon:'🏦' },
+                                  };
+                                  return kycHeaderStats.map(({ type, pending, approved, rejected }) => {
+                                    const m = KYC_DOC_META[type] || { label: type, color: GOLD, icon: '📑' };
+                                    return (
+                                      <div key={type} style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(255,255,255,0.025)', border:`1px solid ${pending > 0 ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)'}`, borderRadius:10, padding:'9px 12px' }}>
+                                        <span style={{ fontSize:17, flexShrink:0 }}>{m.icon}</span>
+                                        <div style={{ flex:1, minWidth:0 }}>
+                                          <div style={{ fontSize:12, fontWeight:700, color:'rgba(255,255,255,0.85)', marginBottom:4 }}>{m.label}</div>
+                                          <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                                            <span style={{ fontSize:10, background:'rgba(245,158,11,0.12)', color:'#f59e0b', borderRadius:5, padding:'2px 7px', fontWeight:700 }}>⏳ {pending} pending</span>
+                                            <span style={{ fontSize:10, background:'rgba(34,197,94,0.1)', color:'#4ade80', borderRadius:5, padding:'2px 7px', fontWeight:700 }}>✓ {approved}</span>
+                                            <span style={{ fontSize:10, background:'rgba(239,68,68,0.1)', color:'#f87171', borderRadius:5, padding:'2px 7px', fontWeight:700 }}>✗ {rejected}</span>
+                                          </div>
+                                        </div>
+                                        <div style={{ fontSize:22, fontWeight:800, color: pending > 0 ? '#f59e0b' : '#4ade80', fontVariantNumeric:'tabular-nums', flexShrink:0, minWidth:28, textAlign:'right' }}>
+                                          {pending}
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            ) : (
+                              <div style={{ padding:'20px 0', textAlign:'center', color:'rgba(239,68,68,0.5)', fontSize:12 }}>Failed to load</div>
+                            )}
+                            <button onClick={loadKycHeaderStats} disabled={kycHeaderLoading} style={{ width:'100%', marginTop:12, padding:'8px', borderRadius:8, border:'1px solid rgba(212,175,55,0.2)', background:'rgba(212,175,55,0.06)', color:'rgba(212,175,55,0.65)', fontSize:11, cursor:kycHeaderLoading?'not-allowed':'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6, fontWeight:600, fontFamily:'Outfit,sans-serif' }}>
+                              <RefreshCw size={10} className={kycHeaderLoading ? 'animate-spin' : ''}/> Refresh
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </th>
                     <th style={{ ...drvTh(false), cursor: 'default' }}>Pending Docs</th>
                     <th style={drvTh(sort.col==="rides")} onClick={()=>toggleDriverSort("rides")}>
