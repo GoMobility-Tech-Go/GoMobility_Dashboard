@@ -1041,7 +1041,11 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
     if (showOnlyOnDuty)      params.is_on_duty   = 'true';
     if (showOnlyTestDrivers) params.is_test_user = 'true';
     if (showPending7Days) { const d7 = new Date(); d7.setDate(d7.getDate() - 7); params.registered_before = d7.toISOString(); params.onboarding_status = params.onboarding_status || 'in_progress,not_started'; }
-    if (missingDocFilter) params.missing_doc_type = missingDocFilter;
+    if (missingDocFilter) {
+      params.missing_doc_type = missingDocFilter;
+      // scope to same base as popup (in_progress + rejected) — so counts match
+      if (!params.onboarding_status) params.onboarding_status = 'in_progress,rejected';
+    }
     getDrivers(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
