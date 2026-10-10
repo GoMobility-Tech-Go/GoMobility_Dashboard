@@ -1013,6 +1013,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const [kycHeaderLoading, setKycHeaderLoading] = useState(false);
   const kycHeaderRef = useRef(null);
   const [missingDocFilter, setMissingDocFilter] = useState('');
+  const [docDateRange, setDocDateRange] = useState('all'); // 'all'|'7'|'30'|'90'
 
   // Fraud
   const [fraudAlerts, setFraudAlerts]   = useState([]);
@@ -1043,8 +1044,14 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
     if (showPending7Days) { const d7 = new Date(); d7.setDate(d7.getDate() - 7); params.registered_before = d7.toISOString(); params.onboarding_status = params.onboarding_status || 'in_progress,not_started'; }
     if (missingDocFilter) {
       params.missing_doc_type = missingDocFilter;
-      // scope to same base as popup (in_progress + rejected) — so counts match
       if (!params.onboarding_status) params.onboarding_status = 'in_progress,rejected';
+      // apply same date range as popup
+      if (docDateRange !== 'all') {
+        const to   = new Date().toISOString();
+        const from = new Date(Date.now() - parseInt(docDateRange) * 24 * 60 * 60 * 1000).toISOString();
+        if (!params.joined_from) params.joined_from = from;
+        if (!params.joined_to)   params.joined_to   = to;
+      }
     }
     getDrivers(params)
       .then((res) => {
@@ -1055,7 +1062,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       })
       .catch(() => showToast("Failed to load drivers.", "error"))
       .finally(() => setLoading(false));
-  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates, onboardingStatus, vehicleTypeFilter, cityFilter, driverAccountStatus, showOnlyOnDuty, showOnlyTestDrivers, showPending7Days, missingDocFilter]);
+  }, [filters, offset, sort, includeInactive, includeUnverifiedUsers, includeUnverifiedDrivers, periodDates, onboardingStatus, vehicleTypeFilter, cityFilter, driverAccountStatus, showOnlyOnDuty, showOnlyTestDrivers, showPending7Days, missingDocFilter, docDateRange]);
 
   const handleExportDrivers = async () => {
     setExporting(true);
@@ -1238,17 +1245,21 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
     });
   }, [kycDocs]);
 
-  const loadKycHeaderStats = useCallback(() => {
+  const loadKycHeaderStats = useCallback((range = docDateRange) => {
     setKycHeaderLoading(true);
-    getKycMissingDocsSummary()
+    let from = null, to = null;
+    if (range !== 'all') {
+      to   = new Date().toISOString();
+      from = new Date(Date.now() - parseInt(range) * 24 * 60 * 60 * 1000).toISOString();
+    }
+    getKycMissingDocsSummary(from, to)
       .then(res => {
         const rows = res.data?.data || res.data || [];
-        const arr = Array.isArray(rows) ? rows : [];
-        setKycHeaderStats(arr);
+        setKycHeaderStats(Array.isArray(rows) ? rows : []);
       })
       .catch(() => {})
       .finally(() => setKycHeaderLoading(false));
-  }, []);
+  }, [docDateRange]);
 
   useEffect(() => {
     if (!kycHeaderOpen) return;
@@ -1944,12 +1955,22 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                         {kycHeaderOpen && (
                           <div style={{ position:'absolute', top:'calc(100% + 8px)', left:0, zIndex:80, width:272, background:'#020d26', border:'1px solid rgba(212,175,55,0.18)', borderRadius:12, padding:12, boxShadow:'0 16px 48px rgba(0,0,0,0.65)', fontFamily:'Outfit,sans-serif' }}>
                             {/* header */}
-                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
                               <span style={{ fontSize:10, fontWeight:700, color:'rgba(212,175,55,0.65)', textTransform:'uppercase', letterSpacing:'1.2px' }}>Missing Docs</span>
                               <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                                <button onClick={loadKycHeaderStats} disabled={kycHeaderLoading} title="Refresh" style={{ background:'none', border:'none', cursor:kycHeaderLoading?'not-allowed':'pointer', color:'rgba(255,255,255,0.25)', padding:0, display:'flex' }}><RefreshCw size={10} className={kycHeaderLoading?'animate-spin':''}/></button>
+                                <button onClick={() => loadKycHeaderStats()} disabled={kycHeaderLoading} title="Refresh" style={{ background:'none', border:'none', cursor:kycHeaderLoading?'not-allowed':'pointer', color:'rgba(255,255,255,0.25)', padding:0, display:'flex' }}><RefreshCw size={10} className={kycHeaderLoading?'animate-spin':''}/></button>
                                 <button onClick={() => setKycHeaderOpen(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.25)', padding:0, display:'flex' }}><X size={11}/></button>
                               </div>
+                            </div>
+                            {/* date range chips */}
+                            <div style={{ display:'flex', gap:4, marginBottom:10 }}>
+                              {[['all','All'],['7','7d'],['30','30d'],['90','90d']].map(([val, lbl]) => (
+                                <button
+                                  key={val}
+                                  onClick={() => { setDocDateRange(val); loadKycHeaderStats(val); }}
+                                  style={{ flex:1, padding:'3px 0', borderRadius:6, border:`1px solid ${docDateRange===val ? GOLD : 'rgba(255,255,255,0.08)'}`, background: docDateRange===val ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.03)', color: docDateRange===val ? GOLD : 'rgba(255,255,255,0.35)', fontSize:10, fontWeight:700, cursor:'pointer', transition:'all .15s', fontFamily:'Outfit,sans-serif' }}
+                                >{lbl}</button>
+                              ))}
                             </div>
                             {kycHeaderLoading ? (
                               <div style={{ padding:'24px 0', textAlign:'center', color:'rgba(255,255,255,0.25)', fontSize:11 }}>Loading…</div>
