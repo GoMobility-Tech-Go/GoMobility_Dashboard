@@ -27,7 +27,7 @@ const FILTER_LABEL = {
   lifetimeSpendLte: "Spend ≤ ₹{}", cityIds: "Cities: {}", kycStatus: "KYC: {}", subscriptionTier: "Plan: {}", hasPushToken: "Push token: {}",
   states: "States: {}", vehicleTypes: "Vehicles: {}", rides90dGte: "Rides (90d) ≥ {}", rides90dLte: "Rides (90d) ≤ {}",
   avgFareGte: "Avg fare ≥ ₹{}", avgFareLte: "Avg fare ≤ ₹{}", onlineHours7dGte: "Online (7d) ≥ {} h", onlineHours7dLte: "Online (7d) ≤ {} h",
-  acceptanceRate7dGte: "Acceptance ≥ {}", acceptanceRate7dLte: "Acceptance ≤ {}", earningsTotalGte: "Earnings ≥ ₹{}", earningsTotalLte: "Earnings ≤ ₹{}",
+  acceptanceRate7dGte: "Acceptance ≥ {}", acceptanceRate7dLte: "Acceptance ≤ {}", earningsTotalGte: "Earnings ≥ ₹{}", earningsTotalLte: "Earnings ≤ ₹{}", missedTodayGte: "Missed today ≥ {}",
 };
 const segmentText = (s = {}) => Object.entries(s).filter(([k]) => k !== "role")
   .map(([k, v]) => (FILTER_LABEL[k] || `${k}: {}`).replace("{}", Array.isArray(v) ? v.join(", ") : typeof v === "boolean" ? (v ? "yes" : "no") : k.startsWith("acceptanceRate") ? `${Math.round(v * 100)}%` : v)).join(" · ") || "Everyone";

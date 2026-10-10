@@ -18,6 +18,7 @@ const NUM_FILTERS = [
   ["onlineHours7dGte", "Online hours (7 days) ≥", 1, "driver"], ["onlineHours7dLte", "Online hours (7 days) ≤", 1, "driver"],
   ["acceptanceRate7dGte", "Acceptance rate (7 days) ≥ %", 0.01, "driver"], ["acceptanceRate7dLte", "Acceptance rate (7 days) ≤ %", 0.01, "driver"],
   ["earningsTotalGte", "Lifetime earnings ≥ ₹", 1, "driver"], ["earningsTotalLte", "Lifetime earnings ≤ ₹", 1, "driver"],
+  ["missedTodayGte", "Ride requests missed today ≥", 1, "driver"],
 ];
 const scaleOf = (k) => NUM_FILTERS.find(([x]) => x === k)?.[2] || 1;
 const LIST_FILTERS = [
