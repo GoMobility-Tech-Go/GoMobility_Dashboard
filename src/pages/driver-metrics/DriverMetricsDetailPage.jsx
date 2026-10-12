@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, AlertTriangle, WifiOff, PowerOff, Clock,
@@ -783,39 +783,49 @@ const OutcomePill = ({ outcome }) => {
 
 const SOURCE_LABELS = { initial:"Initial", tier_expansion:"Tier Expansion", late_online:"Late Online" };
 
-// Today's date string for date input max
-const todayStr = () => new Date().toISOString().slice(0, 10);
-// Default dateFrom: 30 days ago
-const defaultFrom = () => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+const toISODate = (d) => d instanceof Date ? d.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+const todayISO  = () => toISODate(new Date());
+const daysAgoISO = (n) => toISODate(new Date(Date.now() - n * 86400000));
 
 function DispatchTab({ driverId }) {
   const [data,        setData]        = useState(null);
   const [loading,     setLoading]     = useState(true);
-  const [dateFrom,    setDateFrom]    = useState(defaultFrom);
-  const [dateTo,      setDateTo]      = useState(todayStr);
+  const [dateFrom,    setDateFrom]    = useState(() => daysAgoISO(30));
+  const [dateTo,      setDateTo]      = useState(() => todayISO());
   const [outcome,     setOutcome]     = useState("all");
   const [vehicleType, setVehicleType] = useState("all");
   const [offset,      setOffset]      = useState(0);
   const LIMIT = 50;
 
-  const load = useCallback(async () => {
+  // Single effect — re-runs whenever any filter or page changes.
+  // Cancellation flag prevents a slow in-flight request from overwriting newer results.
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    try {
-      const params = {
-        dateFrom,
-        dateTo,
-        limit: LIMIT,
-        offset,
-        ...(outcome     !== "all" && { outcome }),
-        ...(vehicleType !== "all" && { vehicleType }),
-      };
-      const r = await getDMDriverDispatch(driverId, params);
-      setData(r.data?.data || r.data || {});
-    } catch { setData(null); } finally { setLoading(false); }
+    const params = {
+      dateFrom,
+      dateTo,
+      limit: LIMIT,
+      offset,
+      ...(outcome     !== "all" && { outcome }),
+      ...(vehicleType !== "all" && { vehicleType }),
+    };
+    getDMDriverDispatch(driverId, params)
+      .then(r => { if (!cancelled) setData(r.data?.data || r.data || {}); })
+      .catch(() => { if (!cancelled) setData(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [driverId, dateFrom, dateTo, outcome, vehicleType, offset]);
 
-  useEffect(() => { setOffset(0); }, [dateFrom, dateTo, outcome, vehicleType]);
-  useEffect(() => { load(); }, [load]);
+  // Reset to page 1 whenever filters change (not offset itself)
+  const prevFilters = useRef(null);
+  useEffect(() => {
+    const key = `${dateFrom}|${dateTo}|${outcome}|${vehicleType}`;
+    if (prevFilters.current !== null && prevFilters.current !== key) {
+      setOffset(0);
+    }
+    prevFilters.current = key;
+  }, [dateFrom, dateTo, outcome, vehicleType]);
 
   const s     = data?.summary || {};
   const items = data?.items   || [];
@@ -836,7 +846,7 @@ function DispatchTab({ driverId }) {
 
   const hasFilters = outcome !== "all" || vehicleType !== "all";
 
-  const inpStyle = { background:"rgba(255,255,255,0.06)",border:"1px solid rgba(212,175,55,0.15)",borderRadius:10,padding:"0 10px",color:"#fff",fontSize:13,outline:"none",fontFamily:"'Outfit',sans-serif",height:38,colorScheme:"dark" };
+  const inpStyle = { background:"rgba(255,255,255,0.06)",border:"1px solid rgba(212,175,55,0.15)",borderRadius:10,padding:"7px 10px",color:"#fff",fontSize:13,outline:"none",fontFamily:"'Outfit',sans-serif",height:38,minWidth:140,cursor:"pointer",colorScheme:"dark",transition:"border-color .2s" };
 
   return (
     <div>
