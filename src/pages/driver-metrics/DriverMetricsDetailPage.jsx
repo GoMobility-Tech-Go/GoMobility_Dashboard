@@ -856,7 +856,7 @@ function DispatchTab({ driverId }) {
         <div style={{ display:"flex",alignItems:"center",gap:6 }}>
           <span style={{ fontSize:11,color:"rgba(212,175,55,0.6)",fontFamily:"'Cinzel',serif",letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap" }}>From</span>
           <input
-            type="date" value={dateFrom} max={dateTo || todayStr()}
+            type="date" value={dateFrom} max={dateTo || todayISO()}
             onChange={e => setDateFrom(e.target.value)}
             style={inpStyle}
           />
@@ -864,7 +864,7 @@ function DispatchTab({ driverId }) {
         <div style={{ display:"flex",alignItems:"center",gap:6 }}>
           <span style={{ fontSize:11,color:"rgba(212,175,55,0.6)",fontFamily:"'Cinzel',serif",letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap" }}>To</span>
           <input
-            type="date" value={dateTo} min={dateFrom} max={todayStr()}
+            type="date" value={dateTo} min={dateFrom} max={todayISO()}
             onChange={e => setDateTo(e.target.value)}
             style={inpStyle}
           />
