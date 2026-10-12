@@ -1586,7 +1586,7 @@ export default function DriverOnboardingPage({ ncrMode = false, chdMode = false 
           )}
 
           {/* NCR Driver Stats — redesigned */}
-          <div style={{ background:'linear-gradient(135deg,rgba(212,175,55,0.06) 0%,rgba(212,175,55,0.02) 100%)', border:'1px solid rgba(212,175,55,0.2)', borderRadius:18, padding:'18px 20px', marginBottom:20, position:'relative', overflow:'hidden' }}>
+          {!chdMode && <div style={{ background:'linear-gradient(135deg,rgba(212,175,55,0.06) 0%,rgba(212,175,55,0.02) 100%)', border:'1px solid rgba(212,175,55,0.2)', borderRadius:18, padding:'18px 20px', marginBottom:20, position:'relative', overflow:'hidden' }}>
             {/* Gold glow accent */}
             <div style={{ position:'absolute', top:-40, right:-40, width:160, height:160, borderRadius:'50%', background:'radial-gradient(circle,rgba(212,175,55,0.08) 0%,transparent 70%)', pointerEvents:'none' }}/>
 
@@ -1680,7 +1680,7 @@ export default function DriverOnboardingPage({ ncrMode = false, chdMode = false 
             ) : (
               <div style={{ fontSize:12, color:TEXT_DIM }}>Could not load NCR stats</div>
             )}
-          </div>
+          </div>}
 
           {/* NCR Date Range Insights — only in ncrMode */}
           {ncrMode && (
