@@ -1546,8 +1546,8 @@ export default function DriverOnboardingPage({ ncrMode = false, chdMode = false 
       {/* ── DRIVERS TAB ── */}
       {tab === "Drivers" && (
         <>
-          {/* Period filter bar */}
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(212,175,55,0.12)', borderRadius: 14, padding: '13px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          {/* Period filter bar — hidden in chdMode */}
+          {!chdMode && <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(212,175,55,0.12)', borderRadius: 14, padding: '13px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
               <Calendar size={13} color={GOLD} />
               <span style={{ fontSize: 11, fontWeight: 700, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Period Filter</span>
@@ -1573,10 +1573,10 @@ export default function DriverOnboardingPage({ ncrMode = false, chdMode = false 
             <button onClick={() => { loadStats(); loadDrivers(); }} title="Refresh" style={{ marginLeft: 'auto', width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: TEXT_DIM, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <RefreshCw size={13} />
             </button>
-          </div>
+          </div>}
 
-          {/* Stat cards — hidden in ncrMode (global stats, not NCR-filtered) */}
-          {!ncrMode && (
+          {/* Stat cards — hidden in ncrMode / chdMode (global stats, not region-filtered) */}
+          {!ncrMode && !chdMode && (
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
             <DrvStatCard icon={UserPlus}  label={`Signups — ${periodLabel}`} value={stats.signups}  color={GOLD}      loading={statsLoading} />
             <DrvStatCard icon={UserCheck} label={`Active — ${periodLabel}`}  value={stats.active}   color="#22c55e"   loading={statsLoading} />
