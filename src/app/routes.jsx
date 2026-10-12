@@ -41,6 +41,7 @@ import DriverMetricsDetailPage from "../pages/driver-metrics/DriverMetricsDetail
 import SettlementsPage from "../pages/settlements/SettlementsPage";
 import NcrDriversPage from "../pages/ncr-drivers/NcrDriversPage";
 import NcrPassengersPage from "../pages/ncr-passengers/NcrPassengersPage";
+import ChdDriversPage from "../pages/chd-drivers/ChdDriversPage";
 import LiveMapPage from "../pages/live-map/LiveMapPage";
 // GoMobility CRM (separate backend) — screens live inside the admin dashboard
 import { CrmLayout } from "../pages/crm/crmShared";
@@ -72,6 +73,7 @@ const routes = [
         { path:"driver-onboarding/:driverId", element:<DriverDetailPage/> },
         { path:"ncr-drivers",     element:<NcrDriversPage/> },
         { path:"ncr-passengers",  element:<NcrPassengersPage/> },
+        { path:"chd-drivers",     element:<ChdDriversPage/> },
         { path:"live-map",        element:<LiveMapPage/> },
         { path:"passenger-onboarding", element:<PassengerOnboardingPage/> },
         { path:"passenger-onboarding/:passengerId", element:<PassengerDetailPage/> },

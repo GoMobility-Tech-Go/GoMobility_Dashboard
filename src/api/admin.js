@@ -212,6 +212,12 @@ export const getNcrDriverDateStats = (from, to) =>
 // ── NCR Passenger Stats ───────────────────────────────────────────────────────
 export const getNcrPassengerStats = () => api.get('/admin/passengers/ncr-stats');
 
+// ── CHD (Chandigarh Tricity) Driver Stats ─────────────────────────────────────
+export const getChdDriverStats = () => api.get('/admin/drivers/chd-stats');
+
+export const getChdDriverDateStats = (from, to) =>
+  api.get('/admin/drivers/chd-date-stats', { params: { from, to } });
+
 // ── Passenger KYC Detail (admin) ──────────────────────────────────────────────
 export const getPassengerKycDetail = (userId) => api.get(`/kyc/passenger/admin/${userId}`);
 

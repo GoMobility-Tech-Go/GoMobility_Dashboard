@@ -12,7 +12,8 @@ import {
   getDrivers, verifyDriver, updateDriverStatus, getKycQueue, getKycMissingDocsSummary,
   approveDocument, rejectDocument, getFraudAlerts, suspendDriver,
   getKycDocument, getDriverById, getDriverKycStatus, getDriverStats,
-  getCities, getNcrDriverStats, getNcrDriverDateStats, updateDriverProfile, sendGroupNotification,
+  getCities, getNcrDriverStats, getNcrDriverDateStats, getChdDriverStats, getChdDriverDateStats,
+  updateDriverProfile, sendGroupNotification,
 } from "../../api/admin";
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
@@ -889,7 +890,7 @@ const DriverDetailPanel = ({ driverId, userId, onClose, onAction, showToast }) =
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const TABS = ["Drivers", "KYC Queue", "Fraud Alerts"];
 
-export default function DriverOnboardingPage({ ncrMode = false }) {
+export default function DriverOnboardingPage({ ncrMode = false, chdMode = false }) {
   const navigate = useNavigate();
   const [tab, setTab]           = useState("Drivers");
   const [drivers, setDrivers]   = useState([]);
@@ -913,7 +914,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
 
   // ── Additional quick filters ──────────────────────────────────────────
   const [vehicleTypeFilter, setVehicleTypeFilter]     = useState('all');
-  const [cityFilter, setCityFilter]                   = useState(ncrMode ? 'NCR' : '');
+  const [cityFilter, setCityFilter]                   = useState(ncrMode ? 'NCR' : chdMode ? 'CHD' : '');
   const [ncrViewMode, setNcrViewMode]                 = useState('registered'); // 'registered' | 'last_seen'
   const [cityOptions, setCityOptions]                 = useState([]);
   const [driverAccountStatus, setDriverAccountStatus] = useState([]);
@@ -958,6 +959,17 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const [ncrDateLoading, setNcrDateLoading] = useState(false);
   const [ncrDateError,   setNcrDateError]   = useState('');
 
+  // ── CHD stats ─────────────────────────────────────────────────────────────
+  const [chdStats,   setChdStats]   = useState(null);
+  const [chdLoading, setChdLoading] = useState(true);
+
+  // ── CHD date-range stats ───────────────────────────────────────────────────
+  const [chdDateFrom,    setChdDateFrom]    = useState('');
+  const [chdDateTo,      setChdDateTo]      = useState('');
+  const [chdDateStats,   setChdDateStats]   = useState(null);
+  const [chdDateLoading, setChdDateLoading] = useState(false);
+  const [chdDateError,   setChdDateError]   = useState('');
+
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     try {
@@ -989,7 +1001,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
   const clearAllFilters = ()       => {
     setFilters({}); setOffset(0); setSort({ col:null, dir:"desc" });
     setOnboardingStatus([]);
-    setVehicleTypeFilter('all'); if (!ncrMode) setCityFilter(''); setDriverAccountStatus([]);
+    setVehicleTypeFilter('all'); if (!ncrMode && !chdMode) setCityFilter(''); setDriverAccountStatus([]);
     setShowOnlyOnDuty(false); setShowOnlyTestDrivers(false); setShowPending7Days(false);
   };
 
@@ -1311,6 +1323,26 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       .finally(() => setNcrDateLoading(false));
   }, [ncrDateFrom, ncrDateTo]);
 
+  useEffect(() => {
+    setChdLoading(true);
+    getChdDriverStats()
+      .then(res => setChdStats(res.data?.data || res.data || null))
+      .catch(() => {})
+      .finally(() => setChdLoading(false));
+  }, []);
+
+  const loadChdDateStats = useCallback(() => {
+    if (!chdDateFrom || !chdDateTo) return;
+    const from = new Date(chdDateFrom).toISOString();
+    const to   = new Date(chdDateTo + 'T23:59:59').toISOString();
+    setChdDateLoading(true);
+    setChdDateError('');
+    getChdDriverDateStats(from, to)
+      .then(res => setChdDateStats(res.data?.data || res.data || null))
+      .catch(() => setChdDateError('Could not load stats. Please try again.'))
+      .finally(() => setChdDateLoading(false));
+  }, [chdDateFrom, chdDateTo]);
+
   // For each in_progress driver, lazily fetch their KYC docs to show pending items
   useEffect(() => {
     drivers.forEach((d) => {
@@ -1419,11 +1451,12 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
       <div style={{ marginBottom:24, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
         <div>
           <h1 style={{ fontFamily:"Cinzel,serif", fontSize:22, fontWeight:700, color:"#fff", margin:0 }}>
-            {ncrMode ? "Delhi NCR Drivers" : "Driver Management"}
+            {ncrMode ? "Delhi NCR Drivers" : chdMode ? "Chandigarh Tricity Drivers" : "Driver Management"}
             {ncrMode && <span style={{ marginLeft:10, fontSize:13, fontWeight:600, color:"#D4AF37", fontFamily:"Outfit,sans-serif", background:"rgba(212,175,55,0.12)", border:"1px solid rgba(212,175,55,0.3)", borderRadius:8, padding:"2px 10px", verticalAlign:"middle" }}>NCR</span>}
+            {chdMode && <span style={{ marginLeft:10, fontSize:13, fontWeight:600, color:"#60a5fa", fontFamily:"Outfit,sans-serif", background:"rgba(96,165,250,0.12)", border:"1px solid rgba(96,165,250,0.3)", borderRadius:8, padding:"2px 10px", verticalAlign:"middle" }}>CHD</span>}
           </h1>
           <p style={{ color:"rgba(255,255,255,0.4)", fontSize:13, marginTop:4 }}>
-            {ncrMode ? `Delhi · New Delhi · Noida · Greater Noida · Gurgaon · Gurugram · Ghaziabad · Faridabad · Total: ${total} drivers` : `Total: ${total} drivers · Manage onboarding, KYC verification and fraud alerts`}
+            {ncrMode ? `Delhi · New Delhi · Noida · Greater Noida · Gurgaon · Gurugram · Ghaziabad · Faridabad · Total: ${total} drivers` : chdMode ? `Chandigarh · Mohali (SAS Nagar) · Panchkula · Total: ${total} drivers` : `Total: ${total} drivers · Manage onboarding, KYC verification and fraud alerts`}
           </p>
         </div>
         {ncrMode && (
@@ -1777,6 +1810,164 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
             </div>
           )}
 
+          {/* CHD Driver Stats */}
+          <div style={{ background:'linear-gradient(135deg,rgba(96,165,250,0.06) 0%,rgba(96,165,250,0.02) 100%)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:18, padding:'18px 20px', marginBottom:20, position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:-40, right:-40, width:160, height:160, borderRadius:'50%', background:'radial-gradient(circle,rgba(96,165,250,0.07) 0%,transparent 70%)', pointerEvents:'none' }}/>
+
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, flexWrap:'wrap', gap:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ width:28, height:28, borderRadius:8, background:'rgba(96,165,250,0.15)', border:'1px solid rgba(96,165,250,0.3)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <MapPin size={14} color="#60a5fa"/>
+                </div>
+                <span style={{ fontFamily:'Cinzel,serif', fontSize:13, fontWeight:700, color:'#60a5fa', letterSpacing:'0.5px' }}>Chandigarh Tricity</span>
+                <span style={{ fontSize:11, color:TEXT_MED }}>Chandigarh · Mohali (SAS Nagar) · Panchkula</span>
+              </div>
+            </div>
+
+            {chdLoading ? (
+              <div style={{ height:70, background:'rgba(255,255,255,0.04)', borderRadius:12, animation:'gmPulse 1.5s ease-in-out infinite' }} />
+            ) : chdStats ? (
+              <>
+                <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:14 }}>
+                  {[
+                    { label:'Total CHD',  value: chdStats.total,    color:'#60a5fa', bg:'rgba(96,165,250,0.08)',  border:'rgba(96,165,250,0.2)' },
+                    { label:'Active',     value: chdStats.active,   color:'#22c55e', bg:'rgba(34,197,94,0.08)',   border:'rgba(34,197,94,0.2)' },
+                    { label:'Online Now', value: chdStats.online,   color:'#f59e0b', bg:'rgba(245,158,11,0.08)',  border:'rgba(245,158,11,0.2)' },
+                    { label:'Verified',   value: chdStats.verified, color:'#a78bfa', bg:'rgba(167,139,250,0.08)', border:'rgba(167,139,250,0.2)' },
+                    ...(chdStats.potentialCount > 0 ? [{ label:'Potential', value: chdStats.potentialCount, color:'#fb923c', bg:'rgba(251,146,60,0.08)', border:'rgba(251,146,60,0.2)' }] : []),
+                    ...(chdStats.driftingCount  > 0 ? [{ label:'Drifting',  value: chdStats.driftingCount,  color:'#f87171', bg:'rgba(248,113,113,0.08)', border:'rgba(248,113,113,0.2)' }] : []),
+                  ].map(({ label, value, color, bg, border }) => (
+                    <div key={label} style={{ display:'flex', flexDirection:'column', alignItems:'center', background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 20px', minWidth:90, flex:'1 1 auto', maxWidth:160 }}>
+                      <div style={{ fontSize:26, fontWeight:800, color, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{(value ?? 0).toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', marginTop:5, textAlign:'center' }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {(chdStats.byCity || []).map(row => (
+                    <div key={row.city} style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.09)', borderRadius:20, padding:'5px 14px', fontSize:12, color:TEXT_MED, display:'flex', alignItems:'center', gap:7 }}>
+                      <span style={{ color:TEXT_BRI, fontWeight:600 }}>{row.city}</span>
+                      <span style={{ background:'rgba(96,165,250,0.15)', color:'#60a5fa', borderRadius:10, padding:'1px 7px', fontSize:11, fontWeight:700 }}>{row.total}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize:12, color:TEXT_DIM }}>Could not load CHD stats</div>
+            )}
+          </div>
+
+          {/* CHD Date Range Insights — only in chdMode */}
+          {chdMode && (
+            <div style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(96,165,250,0.12)', borderRadius:16, padding:'16px 20px', marginBottom:18 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+                <Calendar size={14} color="#60a5fa" />
+                <span style={{ fontFamily:'Cinzel,serif', fontSize:12, fontWeight:700, color:'#60a5fa', letterSpacing:'0.5px' }}>Date Range Insights</span>
+                <span style={{ fontSize:12, color:TEXT_DIM }}>— verified & joined drivers in Chandigarh Tricity</span>
+              </div>
+
+              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:14 }}>
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  <span style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', fontWeight:700 }}>From</span>
+                  <input type="date" value={chdDateFrom}
+                    onChange={e => { setChdDateFrom(e.target.value); setChdDateStats(null); setChdDateError(''); }}
+                    style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:8, padding:'7px 10px', color:'#fff', fontFamily:'Outfit,sans-serif', fontSize:13, outline:'none', colorScheme:'dark' }}
+                  />
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  <span style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', fontWeight:700 }}>To</span>
+                  <input type="date" value={chdDateTo}
+                    onChange={e => { setChdDateTo(e.target.value); setChdDateStats(null); setChdDateError(''); }}
+                    style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:8, padding:'7px 10px', color:'#fff', fontFamily:'Outfit,sans-serif', fontSize:13, outline:'none', colorScheme:'dark' }}
+                  />
+                </div>
+                <button onClick={loadChdDateStats} disabled={!chdDateFrom || !chdDateTo || chdDateLoading}
+                  style={{ marginTop:18, padding:'8px 18px', borderRadius:8, border:'1px solid rgba(96,165,250,0.4)', background:'rgba(96,165,250,0.12)', color:(!chdDateFrom||!chdDateTo)?TEXT_DIM:'#60a5fa', fontFamily:'Outfit,sans-serif', fontSize:13, fontWeight:700, cursor:(!chdDateFrom||!chdDateTo||chdDateLoading)?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:6, transition:'all .15s' }}
+                >
+                  {chdDateLoading ? <RefreshCw size={12} className="animate-spin"/> : <Calendar size={12}/>}
+                  {chdDateLoading ? 'Loading…' : 'Show Stats'}
+                </button>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:18 }}>
+                  {[
+                    { label:'Last 7d',  days:7  },
+                    { label:'Last 30d', days:30 },
+                    { label:'Last 90d', days:90 },
+                    { label:'This Month', fn: () => { const now=new Date(); return { f: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`, t: new Date().toISOString().slice(0,10) }; } },
+                  ].map(({ label, days, fn }) => (
+                    <button key={label}
+                      onClick={() => {
+                        const { f, t } = fn ? fn() : (() => { const to=new Date(); const from=new Date(to); from.setDate(from.getDate()-days); return { f:from.toISOString().slice(0,10), t:to.toISOString().slice(0,10) }; })();
+                        setChdDateFrom(f); setChdDateTo(t); setChdDateStats(null); setChdDateError('');
+                      }}
+                      style={{ padding:'6px 12px', borderRadius:8, border:'1px solid rgba(255,255,255,0.1)', background:'transparent', color:TEXT_MED, fontFamily:'Outfit,sans-serif', fontSize:12, fontWeight:600, cursor:'pointer', transition:'all .15s' }}
+                    >{label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {chdDateError && <div style={{ fontSize:13, color:'#f87171', marginBottom:10 }}>{chdDateError}</div>}
+
+              {chdDateStats && !chdDateLoading && (
+                <>
+                  <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:14 }}>
+                    {[
+                      { label:'Verified in range', value: chdDateStats.verifiedTotal, color:'#a78bfa', bg:'rgba(167,139,250,0.08)', border:'rgba(167,139,250,0.2)' },
+                      { label:'Joined (registered)', value: chdDateStats.joinedTotal, color:'#22c55e', bg:'rgba(34,197,94,0.08)', border:'rgba(34,197,94,0.2)' },
+                    ].map(({ label, value, color, bg, border }) => (
+                      <div key={label} style={{ display:'flex', flexDirection:'column', alignItems:'center', background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 24px', minWidth:130, flex:'1 1 auto', maxWidth:200 }}>
+                        <div style={{ fontSize:30, fontWeight:800, color, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{(value ?? 0).toLocaleString('en-IN')}</div>
+                        <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', marginTop:5, textAlign:'center' }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {((chdDateStats.verifiedByCity?.length > 0) || (chdDateStats.joinedByCity?.length > 0)) && (() => {
+                    const allCities = [...new Set([
+                      ...(chdDateStats.verifiedByCity || []).map(r => r.city),
+                      ...(chdDateStats.joinedByCity   || []).map(r => r.city),
+                    ])].sort();
+                    const vMap = Object.fromEntries((chdDateStats.verifiedByCity || []).map(r => [r.city, r.count]));
+                    const jMap = Object.fromEntries((chdDateStats.joinedByCity   || []).map(r => [r.city, r.count]));
+                    return (
+                      <div style={{ overflowX:'auto' }}>
+                        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                          <thead>
+                            <tr>
+                              {['City', 'Verified', 'Joined'].map(h => (
+                                <th key={h} style={{ padding:'8px 14px', textAlign:h==='City'?'left':'center', fontSize:10, fontWeight:700, color:'rgba(96,165,250,0.7)', letterSpacing:'1px', textTransform:'uppercase', borderBottom:'1px solid rgba(96,165,250,0.12)' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allCities.map(city => (
+                              <tr key={city}>
+                                <td style={{ padding:'8px 14px', color:'rgba(255,255,255,0.8)', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>{city}</td>
+                                <td style={{ padding:'8px 14px', textAlign:'center', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                                  <span style={{ background:'rgba(167,139,250,0.12)', color:'#a78bfa', borderRadius:8, padding:'2px 10px', fontWeight:700, fontSize:12 }}>{vMap[city] ?? 0}</span>
+                                </td>
+                                <td style={{ padding:'8px 14px', textAlign:'center', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                                  <span style={{ background:'rgba(34,197,94,0.1)', color:'#4ade80', borderRadius:8, padding:'2px 10px', fontWeight:700, fontSize:12 }}>{jMap[city] ?? 0}</span>
+                                </td>
+                              </tr>
+                            ))}
+                            <tr>
+                              <td style={{ padding:'8px 14px', color:'#60a5fa', fontWeight:700, fontSize:12 }}>Total</td>
+                              <td style={{ padding:'8px 14px', textAlign:'center' }}>
+                                <span style={{ color:'#a78bfa', fontWeight:800, fontSize:13 }}>{chdDateStats.verifiedTotal}</span>
+                              </td>
+                              <td style={{ padding:'8px 14px', textAlign:'center' }}>
+                                <span style={{ color:'#4ade80', fontWeight:800, fontSize:13 }}>{chdDateStats.joinedTotal}</span>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Status filter + quick filter bar */}
           <div style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(212,175,55,0.1)', borderRadius:14, padding:'14px 18px', marginBottom:14 }}>
             {/* Row 1: Onboarding Status + Account Status + City */}
@@ -1789,7 +1980,7 @@ export default function DriverOnboardingPage({ ncrMode = false }) {
                 <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:5, fontWeight:700 }}>Account</div>
                 <DriverAccountStatusFilter value={driverAccountStatus} onChange={(v) => { setDriverAccountStatus(v); setOffset(0); }} />
               </div>
-              {!ncrMode && (
+              {!ncrMode && !chdMode && (
               <div>
                 <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', marginBottom:5, fontWeight:700 }}>City</div>
                 <CityFilter value={cityFilter} options={cityOptions} onChange={v => { setCityFilter(v); setOffset(0); }} />
