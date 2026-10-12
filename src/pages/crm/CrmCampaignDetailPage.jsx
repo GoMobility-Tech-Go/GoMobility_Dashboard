@@ -96,6 +96,7 @@ export default function CrmCampaignDetailPage() {
           {ct.body && <Row k="Message">{ct.body}</Row>}
           {ct.templateName && <Row k="WhatsApp template">{ct.templateName}{ct.templateParams?.length ? ` (${ct.templateParams.join(", ")})` : ""}</Row>}
           {ct.smsTemplateId && <Row k="SMS template ID">{ct.smsTemplateId}</Row>}
+          {ct.card && <Row k="Picture card">{ct.card === "missed_week" ? "Missed rides — today + last 7 days" : "Missed rides — today"} (each driver's own numbers)</Row>}
           <Row k="Send at">{d.scheduledAt ? dt(d.scheduledAt) : "As soon as approved"}</Row>
           <Row k="Pacing">{d.throttlePerHour ? `${num(d.throttlePerHour)} per hour` : "Global limit"}</Row>
           {d.stats?.queued > 0 && <Row k="Progress">{num(d.stats.sent)} sent · {num(d.stats.failed)} failed · {num(d.stats.skipped)} skipped · {num(d.stats.queued)} queued</Row>}

@@ -40,6 +40,7 @@ export const MessageContent = ({ m }) => (
     {m.payload?.title ? <b style={{ color: "rgba(255,255,255,0.85)" }}>{m.payload.title} </b> : null}
     {m.payload?.body || m.payload?.text?.body || (m.payload?.templateName ? `Template: ${m.payload.templateName}` : "")}
     {m.payload?.templateName && m.payload?.params?.length > 0 && <div style={{ color: soft, marginTop: 2 }}>Values: {m.payload.params.join(" · ")}</div>}
+    {m.payload?.imageUrl && <div style={{ color: COLORS.gold, marginTop: 2, fontSize: 11 }}>+ picture card</div>}
   </>
 );
 
@@ -83,6 +84,14 @@ export function MessageDetails({ m, journeyName, contact = true }) {
         <Field label="Direction">{m.direction === "in" ? "Inbound (from the contact)" : "Outbound"}</Field>
       </Block>
       <Block title="Message">
+        {/* the driver's own picture card — exactly what was (or would be) attached */}
+        <Field label="Picture sent with it">
+          {p.imageUrl && (
+            <a href={p.imageUrl} target="_blank" rel="noreferrer" title="Open full size">
+              <img src={p.imageUrl} alt="Picture card" loading="lazy" style={{ width: "100%", maxWidth: 420, borderRadius: 8, display: "block", border: "1px solid rgba(255,255,255,0.08)" }} />
+            </a>
+          )}
+        </Field>
         <Field label="Title">{p.title}</Field>
         <Field label={m.channel === "sms" ? "SMS text" : "Body"}>{p.body || p.text?.body}</Field>
         <Field label="WhatsApp template">{p.templateName}</Field>

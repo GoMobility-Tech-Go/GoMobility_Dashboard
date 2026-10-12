@@ -33,8 +33,11 @@ const EMPTY = {
   audience: "filters", phonesText: "", phoneRole: "",
   name: "", category: "marketing", role: "passenger", hasPushToken: "", filters: {}, lists: {},
   channel: "push", fallback: "", title: "", body: "", templateName: "", templateParams: "", language: "en",
-  smsTemplateId: "", scheduledAt: "", throttlePerHour: "",
+  smsTemplateId: "", scheduledAt: "", throttlePerHour: "", card: "",
 };
+// Picture card: each driver's own numbers drawn as an image and attached to the message (push / WhatsApp only)
+const CARDS = [["", "No picture"], ["missed_today", "Missed rides — today"], ["missed_week", "Missed rides — today + last 7 days"]];
+const usesSms = (f) => f.channel === "sms" || f.fallback === "sms";
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
 // `phones` = the cleaned list returned by POST /campaigns/check-phones (only used for the phone-list audience)
@@ -55,6 +58,7 @@ function toSpec(f, phones) {
   if (f.fallback === "sms") Object.assign(content, { body: content.body || f.body, smsTemplateId: f.smsTemplateId });
   if (f.fallback === "push") Object.assign(content, { title: f.title, body: content.body || f.body });
   if (f.fallback.startsWith("whatsapp_")) Object.assign(content, { templateName: f.templateName, templateParams: csv(f.templateParams), language: f.language || "en" });
+  if (f.card && !usesSms(f)) content.card = f.card;
   const spec = { name: f.name, category: f.category, segment, channel: f.channel, content };
   spec.fallback = f.fallback || undefined;
   if (f.scheduledAt) spec.scheduledAt = new Date(f.scheduledAt).toISOString();
@@ -72,7 +76,7 @@ function fromCampaign(c) {
     filters: Object.fromEntries(NUM_FILTERS.filter(([k]) => s[k] != null).map(([k]) => [k, String(+(s[k] / scaleOf(k)).toFixed(2))])),
     lists: Object.fromEntries(LIST_FILTERS.filter(([k]) => s[k]).map(([k]) => [k, s[k].join(", ")])),
     channel: c.channel, fallback: c.fallback || "", title: ct.title || "", body: ct.body || "",
-    templateName: ct.templateName || "", templateParams: (ct.templateParams || []).join(", "), language: ct.language || "en",
+    templateName: ct.templateName || "", templateParams: (ct.templateParams || []).join(", "), language: ct.language || "en", card: ct.card || "",
     smsTemplateId: ct.smsTemplateId || "", scheduledAt: local, throttlePerHour: c.throttlePerHour ? String(c.throttlePerHour) : "",
   };
 }
@@ -292,6 +296,16 @@ export default function CrmCampaignFormPage() {
                   <FormGroup label="Language">{input("language")}</FormGroup>
                 </div>
               </>
+            )}
+            {!needsSms && (
+              <FormGroup label="Picture card (drivers)"
+                hint={f.card
+                  ? `Each driver gets a picture of their own numbers above the text. Drivers who missed no rides today are skipped.${needsWa ? " The WhatsApp template must have an Image header (e.g. driver_missed_rides_card_v1)." : ""}`
+                  : "Attach a picture of each driver's own missed-ride numbers"}>
+                <select className="gm-input" value={f.card} onChange={(e) => set("card", e.target.value)}>
+                  {CARDS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+                </select>
+              </FormGroup>
             )}
             {f.channel === "whatsapp_marketing" && <Pill tone="orange">WhatsApp marketing costs about ₹1.02 per message — the most expensive channel</Pill>}
           </Section>
