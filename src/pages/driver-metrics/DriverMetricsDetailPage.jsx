@@ -795,9 +795,10 @@ function DispatchTab({ driverId }) {
   const [outcome,     setOutcome]     = useState("all");
   const [vehicleType, setVehicleType] = useState("all");
   const [offset,      setOffset]      = useState(0);
+  const [tick,        setTick]        = useState(0);
   const LIMIT = 50;
 
-  // Single effect — re-runs whenever any filter or page changes.
+  // Single effect — re-runs whenever any filter, page, or manual refresh changes.
   // Cancellation flag prevents a slow in-flight request from overwriting newer results.
   useEffect(() => {
     let cancelled = false;
@@ -815,7 +816,7 @@ function DispatchTab({ driverId }) {
       .catch(() => { if (!cancelled) setData(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [driverId, dateFrom, dateTo, outcome, vehicleType, offset]);
+  }, [driverId, dateFrom, dateTo, outcome, vehicleType, offset, tick]);
 
   // Reset to page 1 whenever filters change (not offset itself)
   const prevFilters = useRef(null);
@@ -882,7 +883,7 @@ function DispatchTab({ driverId }) {
           <option value="all">All Types</option>
           {VT_LIST.map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}
         </select>
-        <button onClick={load} style={{ height:38,padding:"0 12px",background:"rgba(212,175,55,0.08)",border:"1px solid rgba(212,175,55,0.25)",borderRadius:10,color:"#D4AF37",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontSize:13,fontFamily:"Outfit,sans-serif" }}>
+        <button onClick={() => setTick(t => t + 1)} style={{ height:38,padding:"0 12px",background:"rgba(212,175,55,0.08)",border:"1px solid rgba(212,175,55,0.25)",borderRadius:10,color:"#D4AF37",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontSize:13,fontFamily:"Outfit,sans-serif" }}>
           <RefreshCw size={12}/>
         </button>
         {hasFilters && (
