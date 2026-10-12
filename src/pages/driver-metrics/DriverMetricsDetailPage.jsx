@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, AlertTriangle, WifiOff, PowerOff, Clock,
   Star, IndianRupee, Car, Activity, BarChart2, MapPin,
-  Calendar, Coffee, TrendingUp, CheckCircle, XCircle, X, Bell,
+  Calendar, Coffee, TrendingUp, CheckCircle, XCircle, X, Bell, RefreshCw,
 } from "lucide-react";
 import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
@@ -48,6 +48,7 @@ const periodToRange = (period) => {
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const VT_COLORS = { bike:"#60a5fa",auto:"#D4AF37",car:"#4ade80",xl:"#a78bfa",premium:"#f59e0b",luxury:"#f87171" };
+const VT_LIST   = ["bike","auto","car","xl","premium","luxury"];
 // Backend returns 'available' for online drivers
 const STATUS_CFG = {
   available: { dot:"#22c55e", bg:"rgba(34,197,94,0.1)",  border:"rgba(34,197,94,0.28)",  label:"Online"  },
@@ -782,55 +783,111 @@ const OutcomePill = ({ outcome }) => {
 
 const SOURCE_LABELS = { initial:"Initial", tier_expansion:"Tier Expansion", late_online:"Late Online" };
 
+// Today's date string for date input max
+const todayStr = () => new Date().toISOString().slice(0, 10);
+// Default dateFrom: 30 days ago
+const defaultFrom = () => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
 function DispatchTab({ driverId }) {
-  const [data,    setData]    = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [days,    setDays]    = useState(30);
-  const [offset,  setOffset]  = useState(0);
+  const [data,        setData]        = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [dateFrom,    setDateFrom]    = useState(defaultFrom);
+  const [dateTo,      setDateTo]      = useState(todayStr);
+  const [outcome,     setOutcome]     = useState("all");
+  const [vehicleType, setVehicleType] = useState("all");
+  const [offset,      setOffset]      = useState(0);
   const LIMIT = 50;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await getDMDriverDispatch(driverId, { days, limit: LIMIT, offset });
+      const params = {
+        dateFrom,
+        dateTo,
+        limit: LIMIT,
+        offset,
+        ...(outcome     !== "all" && { outcome }),
+        ...(vehicleType !== "all" && { vehicleType }),
+      };
+      const r = await getDMDriverDispatch(driverId, params);
       setData(r.data?.data || r.data || {});
     } catch { setData(null); } finally { setLoading(false); }
-  }, [driverId, days, offset]);
+  }, [driverId, dateFrom, dateTo, outcome, vehicleType, offset]);
 
-  useEffect(() => { setOffset(0); }, [days]);
+  useEffect(() => { setOffset(0); }, [dateFrom, dateTo, outcome, vehicleType]);
   useEffect(() => { load(); }, [load]);
 
-  const s = data?.summary || {};
-  const items = data?.items || [];
-  const total = data?.total || 0;
+  const s     = data?.summary || {};
+  const items = data?.items   || [];
+  const daily = data?.daily   || [];
+  const total = data?.total   || 0;
 
   const statTiles = [
-    { label:"Total Notified", value: loading ? null : fmtNum(s.total),    color:"#D4AF37" },
-    { label:"Accepted",       value: loading ? null : fmtNum(s.accepted), color:"#4ade80" },
-    { label:"Rejected",       value: loading ? null : fmtNum(s.rejected), color:"#f87171" },
-    { label:"Expired",        value: loading ? null : fmtNum(s.expired),  color:"#94a3b8" },
-    { label:"Pending",        value: loading ? null : fmtNum(s.pending),  color:"#F59E0B" },
+    { label:"Total Notified", value: loading ? null : fmtNum(s.total),       color:"#D4AF37" },
+    { label:"Accepted",       value: loading ? null : fmtNum(s.accepted),    color:"#4ade80" },
+    { label:"Rejected",       value: loading ? null : fmtNum(s.rejected),    color:"#f87171" },
+    { label:"Expired",        value: loading ? null : fmtNum(s.expired),     color:"#94a3b8" },
+    { label:"Pending",        value: loading ? null : fmtNum(s.pending),     color:"#F59E0B" },
     { label:"Accept Rate",    value: loading ? null : fmtRate(s.acceptRate), color:"#60a5fa" },
   ];
 
   const pages = Math.ceil(total / LIMIT);
   const page  = Math.floor(offset / LIMIT);
 
+  const hasFilters = outcome !== "all" || vehicleType !== "all";
+
+  const inpStyle = { background:"rgba(255,255,255,0.06)",border:"1px solid rgba(212,175,55,0.15)",borderRadius:10,padding:"0 10px",color:"#fff",fontSize:13,outline:"none",fontFamily:"'Outfit',sans-serif",height:38,colorScheme:"dark" };
+
   return (
     <div>
-      {/* Controls */}
+      {/* ── Filter bar ── */}
       <div style={{ display:"flex",gap:8,marginBottom:16,alignItems:"center",flexWrap:"wrap" }}>
-        <select className="dm-inp" value={days} onChange={e=>setDays(Number(e.target.value))} style={{ cursor:"pointer" }}>
-          {[7,14,30,90,180,365].map(d=><option key={d} value={d}>Last {d} days</option>)}
+        {/* Date range */}
+        <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+          <span style={{ fontSize:11,color:"rgba(212,175,55,0.6)",fontFamily:"'Cinzel',serif",letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap" }}>From</span>
+          <input
+            type="date" value={dateFrom} max={dateTo || todayStr()}
+            onChange={e => setDateFrom(e.target.value)}
+            style={inpStyle}
+          />
+        </div>
+        <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+          <span style={{ fontSize:11,color:"rgba(212,175,55,0.6)",fontFamily:"'Cinzel',serif",letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap" }}>To</span>
+          <input
+            type="date" value={dateTo} min={dateFrom} max={todayStr()}
+            onChange={e => setDateTo(e.target.value)}
+            style={inpStyle}
+          />
+        </div>
+        {/* Outcome filter */}
+        <select className="dm-inp" value={outcome} onChange={e=>setOutcome(e.target.value)} style={{ flex:"0 0 130px",cursor:"pointer" }}>
+          <option value="all">All Outcomes</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+          <option value="expired">Expired</option>
+          <option value="pending">Pending</option>
         </select>
+        {/* Vehicle type filter */}
+        <select className="dm-inp" value={vehicleType} onChange={e=>setVehicleType(e.target.value)} style={{ flex:"0 0 128px",cursor:"pointer" }}>
+          <option value="all">All Types</option>
+          {VT_LIST.map(v=><option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}
+        </select>
+        <button onClick={load} style={{ height:38,padding:"0 12px",background:"rgba(212,175,55,0.08)",border:"1px solid rgba(212,175,55,0.25)",borderRadius:10,color:"#D4AF37",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontSize:13,fontFamily:"Outfit,sans-serif" }}>
+          <RefreshCw size={12}/>
+        </button>
+        {hasFilters && (
+          <button onClick={()=>{setOutcome("all");setVehicleType("all");}} style={{ height:38,padding:"0 12px",background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:10,color:"#f87171",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontSize:13,fontFamily:"Outfit,sans-serif" }}>
+            <X size={11}/> Clear
+          </button>
+        )}
         {!loading && total > 0 && (
-          <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginLeft:6 }}>
+          <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginLeft:4 }}>
             {fmtNum(total)} notifications
           </span>
         )}
       </div>
 
-      {/* Stat tiles */}
+      {/* ── Stat tiles ── */}
       <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:20 }}>
         {statTiles.map(t => (
           <div key={t.label} className="dm-card" style={{ padding:"14px 16px" }}>
@@ -842,7 +899,54 @@ function DispatchTab({ driverId }) {
         ))}
       </div>
 
-      {/* Table */}
+      {/* ── Daily Breakdown ── */}
+      {!loading && daily.length > 0 && (
+        <div className="dm-card" style={{ marginBottom:20,overflow:"hidden" }}>
+          <div style={{ padding:"14px 16px",borderBottom:"1px solid rgba(212,175,55,0.08)" }}>
+            <span style={{ fontFamily:"'Cinzel',serif",fontSize:10,letterSpacing:1.2,color:"rgba(212,175,55,0.6)",textTransform:"uppercase" }}>
+              Daily Breakdown — Notified At
+            </span>
+          </div>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%",borderCollapse:"collapse",minWidth:420 }}>
+              <thead>
+                <tr style={{ background:"rgba(212,175,55,0.04)" }}>
+                  {["Date","Total","Accepted","Rejected","Expired"].map(h=>(
+                    <th key={h} style={{ ...thS,padding:"8px 14px" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {daily.map((d, i) => {
+                  const dateLabel = new Date(d.date).toLocaleDateString("en-IN",{
+                    timeZone:"Asia/Kolkata", day:"2-digit", month:"short", year:"numeric",
+                  });
+                  const maxTotal = Math.max(...daily.map(x => x.total), 1);
+                  const pct = Math.round((d.total / maxTotal) * 100);
+                  return (
+                    <tr key={i} style={{ borderBottom:"1px solid rgba(255,255,255,0.04)" }}>
+                      <td style={{ ...tdS,fontWeight:600,whiteSpace:"nowrap" }}>{dateLabel}</td>
+                      <td style={{ ...tdS,fontVariantNumeric:"tabular-nums" }}>
+                        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                          <span style={{ color:"#D4AF37",fontWeight:700 }}>{d.total}</span>
+                          <div style={{ flex:1,minWidth:60,height:5,background:"rgba(255,255,255,0.06)",borderRadius:999 }}>
+                            <div style={{ width:`${pct}%`,height:"100%",background:"rgba(212,175,55,0.55)",borderRadius:999 }}/>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ ...tdS,color:"#4ade80",fontVariantNumeric:"tabular-nums" }}>{d.accepted}</td>
+                      <td style={{ ...tdS,color:"#f87171",fontVariantNumeric:"tabular-nums" }}>{d.rejected}</td>
+                      <td style={{ ...tdS,color:"#94a3b8",fontVariantNumeric:"tabular-nums" }}>{d.expired}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Notifications Table ── */}
       <div className="dm-card" style={{ overflow:"hidden" }}>
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%",borderCollapse:"collapse" }}>
