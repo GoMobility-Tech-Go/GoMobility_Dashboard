@@ -54,6 +54,11 @@ export default function CrmJourneyDetailPage() {
   const [viewing, setViewing] = useState(null);   // { version, def }
   const { busy, run } = useAction();
   const d = j.data, fn = f.data;
+  // dry run: counts are "would send", not sent, and the money is "cost if sent" (same wording as the overview)
+  const dry = !!useCrm("/settings").data?.dryRun;
+  const sentWord = dry ? "would send" : "sent";
+  const sentTitle = dry ? "Would send" : "Sent";
+  const spendTitle = dry ? "Cost if sent" : "Spend";
 
   const sendNodes = useMemo(() => (d?.nodes || []).filter((n) => n.type === "send" || n.type === "notify_ops").map((n) => ({
     step: n.id, label: `${n.id} · ${n.type === "send" ? (CHANNEL[n.channel] || n.channel) : "Ops alert"}`,
@@ -64,10 +69,10 @@ export default function CrmJourneyDetailPage() {
     const firstSend = sendNodes[0]?.sent || 0;
     return [
       { stage: "Entered", value: fn.entered, color: COLORS.blue },
-      { stage: "Messaged", value: Math.min(firstSend, fn.entered), color: COLORS.gold },
+      { stage: dry ? "Would message" : "Messaged", value: Math.min(firstSend, fn.entered), color: COLORS.gold },
       { stage: "Goal met", value: fn.goalWithin, color: COLORS.green },
     ];
-  }, [fn, sendNodes]);
+  }, [fn, sendNodes, dry]);
   const statePie = useMemo(() => Object.entries(fn?.states || {}).filter(([, v]) => v > 0)
     .map(([s, v]) => ({ name: statusLabel(s), value: v, color: STATE_COLOR[s] || COLORS.gray })), [fn]);
 
@@ -123,7 +128,7 @@ export default function CrmJourneyDetailPage() {
               <StatCard label="Entered" value={num(fn.entered)} icon={Users} />
               <StatCard label="Goal met in window" value={num(fn.goalWithin)} icon={Target} iconColor={COLORS.green} iconBg="rgba(52,211,153,0.1)" />
               <StatCard label="Conversion" value={pct(fn.conversion)} icon={Percent} iconColor={COLORS.blue} iconBg="rgba(96,165,250,0.1)" />
-              <StatCard label={fn.costPerGoal == null ? "Spend" : "Cost per goal"} value={inr(fn.costPerGoal == null ? fn.costInr : fn.costPerGoal)} icon={IndianRupee} iconColor={COLORS.purple} iconBg="rgba(167,139,250,0.1)" />
+              <StatCard label={fn.costPerGoal == null ? spendTitle : "Cost per goal"} value={inr(fn.costPerGoal == null ? fn.costInr : fn.costPerGoal)} icon={IndianRupee} iconColor={COLORS.purple} iconBg="rgba(167,139,250,0.1)" />
             </div>
           )}
 
@@ -166,7 +171,7 @@ export default function CrmJourneyDetailPage() {
 
           {sendNodes.length > 0 && fn && (
             <div style={{ marginBottom: 16 }}>
-              <ChartCard title="Messages per Step" subtitle="Delivered, failed and skipped at each send step">
+              <ChartCard title="Messages per Step" subtitle={`${sentTitle}, failed and skipped at each send step`}>
                 {sendNodes.every((s) => !s.sent && !s.failed && !s.skipped) ? <NoChartData height={180}>No messages sent in this period</NoChartData> : (
                   <>
                     <ResponsiveContainer width="100%" height={200}>
@@ -175,12 +180,12 @@ export default function CrmJourneyDetailPage() {
                         <XAxis dataKey="label" tick={{ ...axisTick, fontSize: 10.5 }} axisLine={false} tickLine={false} />
                         <YAxis tick={axisTick} axisLine={false} tickLine={false} width={40} allowDecimals={false} />
                         <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(212,175,55,0.05)" }} />
-                        <Bar dataKey="sent" name="Delivered" stackId="s" fill={COLORS.gold} />
+                        <Bar dataKey="sent" name={sentTitle} stackId="s" fill={COLORS.gold} />
                         <Bar dataKey="skipped" name="Skipped" stackId="s" fill={COLORS.orange} />
                         <Bar dataKey="failed" name="Failed" stackId="s" fill={COLORS.red} radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                    <Legend items={[{ name: "Delivered", color: COLORS.gold }, { name: "Skipped", color: COLORS.orange }, { name: "Failed", color: COLORS.red }]} />
+                    <Legend items={[{ name: sentTitle, color: COLORS.gold }, { name: "Skipped", color: COLORS.orange }, { name: "Failed", color: COLORS.red }]} />
                   </>
                 )}
               </ChartCard>
@@ -190,7 +195,7 @@ export default function CrmJourneyDetailPage() {
           <div style={{ marginBottom: 16 }}>
             <TableCard title="Journey Flow" icon="🧭">
               <table className="gm-table">
-                <thead><tr><th>Step</th><th>Action</th><th>Details</th><th>Messages ({days}D)</th><th>Spend</th></tr></thead>
+                <thead><tr><th>Step</th><th>Action</th><th>Details</th><th>Messages ({days}D)</th><th>{spendTitle}</th></tr></thead>
                 <tbody>
                   {(d.nodes || []).map((n) => {
                     const Icon = ICON[n.type] || GitBranch;
@@ -202,7 +207,7 @@ export default function CrmJourneyDetailPage() {
                         <td style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><Icon size={14} color="#D4AF37" /> {n.id}</span></td>
                         <td style={{ whiteSpace: "nowrap" }}>{what}</td>
                         <td style={{ fontSize: 12, maxWidth: 480 }}>{detail}</td>
-                        <td>{st ? <>{num(st.sent)} delivered{st.failed ? ` · ${st.failed} failed` : ""}{st.skipped ? ` · ${st.skipped} skipped` : ""}</> : n.type === "send" ? "0" : ""}</td>
+                        <td>{st ? <>{num(st.sent)} {sentWord}{st.failed ? ` · ${st.failed} failed` : ""}{st.skipped ? ` · ${st.skipped} skipped` : ""}</> : n.type === "send" ? "0" : ""}</td>
                         <td>{st?.costInr ? inr(st.costInr) : ""}</td>
                       </tr>
                     );
