@@ -1231,6 +1231,7 @@ export default function DriverOnboardingPage({ ncrMode = false, chdMode = false 
     if (kycTypeFilter) params.type = kycTypeFilter;
     if (kycDateFrom)   params.from  = kycDateFrom;
     if (kycDateTo)     params.to    = kycDateTo;
+    if (chdMode)       params.region = 'CHD';
     getKycQueue(params)
       .then((res) => {
         const d = res.data?.data || res.data || {};
@@ -1238,7 +1239,7 @@ export default function DriverOnboardingPage({ ncrMode = false, chdMode = false 
       })
       .catch(() => showToast("Failed to load KYC queue.", "error"))
       .finally(() => setKycLoading(false));
-  }, [kycTypeFilter, kycDateFrom, kycDateTo]);
+  }, [kycTypeFilter, kycDateFrom, kycDateTo, chdMode]);
 
   // Per-document-type pending/approved/rejected counts derived from loaded queue
   const kycDocStats = useMemo(() => {
@@ -1282,14 +1283,16 @@ export default function DriverOnboardingPage({ ncrMode = false, chdMode = false 
 
   const loadFraud = useCallback(() => {
     setFraudLoading(true);
-    getFraudAlerts({ severity })
+    const fraudParams = { severity };
+    if (chdMode) fraudParams.region = 'CHD';
+    getFraudAlerts(fraudParams)
       .then((res) => {
         const d = res.data?.data || res.data || {};
         setFraudAlerts(d.alerts || d.items || (Array.isArray(d) ? d : []));
       })
       .catch(() => showToast("Failed to load fraud alerts.", "error"))
       .finally(() => setFraudLoading(false));
-  }, [severity]);
+  }, [severity, chdMode]);
 
   useEffect(() => { loadDrivers(); }, [loadDrivers]);
 
@@ -1843,7 +1846,7 @@ export default function DriverOnboardingPage({ ncrMode = false, chdMode = false 
                     </div>
                   ))}
                 </div>
-                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:14 }}>
                   {(chdStats.byCity || []).map(row => (
                     <div key={row.city} style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.09)', borderRadius:20, padding:'5px 14px', fontSize:12, color:TEXT_MED, display:'flex', alignItems:'center', gap:7 }}>
                       <span style={{ color:TEXT_BRI, fontWeight:600 }}>{row.city}</span>
@@ -1851,6 +1854,39 @@ export default function DriverOnboardingPage({ ncrMode = false, chdMode = false 
                     </div>
                   ))}
                 </div>
+
+                {/* Onboarding Funnel */}
+                {chdStats.funnel && (() => {
+                  const f = chdStats.funnel;
+                  const funnelItems = [
+                    { key:'not_started', label:'Not Started', color:'#6b7280', bg:'rgba(107,114,128,0.08)', border:'rgba(107,114,128,0.2)' },
+                    { key:'in_progress', label:'In Progress', color:'#f59e0b', bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)' },
+                    { key:'rejected',    label:'Rejected',    color:'#f87171', bg:'rgba(248,113,113,0.08)', border:'rgba(248,113,113,0.2)' },
+                    { key:'verified',    label:'Verified',    color:'#22c55e', bg:'rgba(34,197,94,0.08)',   border:'rgba(34,197,94,0.2)' },
+                    { key:'suspended',   label:'Suspended',   color:'#a78bfa', bg:'rgba(167,139,250,0.08)', border:'rgba(167,139,250,0.2)' },
+                  ].filter(item => (f[item.key] || 0) > 0);
+                  const funnelTotal = funnelItems.reduce((s, item) => s + (f[item.key] || 0), 0);
+                  return (
+                    <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:14 }}>
+                      <div style={{ fontSize:10, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'1px', fontWeight:700, marginBottom:10 }}>Onboarding Funnel</div>
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+                        {funnelItems.map(item => (
+                          <div key={item.key} style={{ display:'flex', flexDirection:'column', alignItems:'center', background:item.bg, border:`1px solid ${item.border}`, borderRadius:10, padding:'10px 16px', minWidth:80, flex:'1 1 auto' }}>
+                            <div style={{ fontSize:22, fontWeight:800, color:item.color, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>{(f[item.key] || 0).toLocaleString('en-IN')}</div>
+                            <div style={{ fontSize:9, color:TEXT_DIM, textTransform:'uppercase', letterSpacing:'0.8px', marginTop:4 }}>{item.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Progress bar */}
+                      <div style={{ display:'flex', borderRadius:6, overflow:'hidden', height:6, gap:1 }}>
+                        {funnelItems.map(item => {
+                          const pct = funnelTotal > 0 ? ((f[item.key] || 0) / funnelTotal * 100) : 0;
+                          return pct > 0 ? <div key={item.key} style={{ height:6, width:`${pct}%`, background:item.color, opacity:0.7 }} title={`${item.label}: ${Math.round(pct)}%`} /> : null;
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             ) : (
               <div style={{ fontSize:12, color:TEXT_DIM }}>Could not load CHD stats</div>

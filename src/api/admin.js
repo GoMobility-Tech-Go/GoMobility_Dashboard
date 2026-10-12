@@ -75,6 +75,8 @@ export const unflagReview = (reviewId) =>
 // ── KYC ───────────────────────────────────────────────────────────────────────
 export const getKycQueue = (params = {}) =>
   api.get('/kyc/admin/queue', { params: { limit: 20, page: 1, ...params } });
+export const getKycDriversList = (params = {}) =>
+  api.get('/kyc/admin/drivers', { params: { limit: 20, page: 1, ...params } });
 export const getKycMissingDocsSummary = (from, to) =>
   api.get('/kyc/admin/missing-docs-summary', { params: { ...(from && { from }), ...(to && { to }) } });
 export const approveDocument = (docId) =>
