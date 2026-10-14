@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Users, SlidersHorizontal, ListChecks } from "lucide-react";
 import { FormGroup } from "../../components/ui";
 import { crmGet, crmPatch, crmPost } from "../../api/crm";
-import { CrmPage, useAction, Section, Hint, ErrorNote, Loading, Pill, num, CHANNEL } from "./crmShared";
+import { CrmPage, useAction, useCrmMe, can, Section, Hint, ErrorNote, Loading, Pill, num, CHANNEL } from "./crmShared";
 
 const NUM_FILTERS = [
   ["lastRideDaysAgoGte", "Last ride at least (days ago)"], ["lastRideDaysAgoLte", "Last ride at most (days ago)"],
@@ -19,6 +19,7 @@ const NUM_FILTERS = [
   ["acceptanceRate7dGte", "Acceptance rate (7 days) ≥ %", 0.01, "driver"], ["acceptanceRate7dLte", "Acceptance rate (7 days) ≤ %", 0.01, "driver"],
   ["earningsTotalGte", "Lifetime earnings ≥ ₹", 1, "driver"], ["earningsTotalLte", "Lifetime earnings ≤ ₹", 1, "driver"],
   ["missedTodayGte", "Ride requests missed today ≥", 1, "driver"],
+  ["missed7dGte", "Ride requests missed in last 7 days ≥", 1, "driver"],
 ];
 const scaleOf = (k) => NUM_FILTERS.find(([x]) => x === k)?.[2] || 1;
 const LIST_FILTERS = [
@@ -34,9 +35,11 @@ const EMPTY = {
   name: "", category: "marketing", role: "passenger", hasPushToken: "", filters: {}, lists: {},
   channel: "push", fallback: "", title: "", body: "", templateName: "", templateParams: "", language: "en",
   smsTemplateId: "", scheduledAt: "", throttlePerHour: "", card: "",
+  // admin only — company decisions: send to everyone who has not pressed Stop, and send for real while dry run is ON
+  consentMode: "opt_in", liveInDryRun: false,
 };
 // Picture card: each driver's own numbers drawn as an image and attached to the message (push / WhatsApp only)
-const CARDS = [["", "No picture"], ["missed_today", "Missed rides — today"], ["missed_week", "Missed rides — today + last 7 days"]];
+const CARDS = [["", "No picture"], ["missed_today", "Missed rides — today"], ["missed_week", "Missed rides — today + last 7 days"], ["missed_last7", "Missed rides — last 7 days (one-off)"]];
 const usesSms = (f) => f.channel === "sms" || f.fallback === "sms";
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
@@ -59,7 +62,7 @@ function toSpec(f, phones) {
   if (f.fallback === "push") Object.assign(content, { title: f.title, body: content.body || f.body });
   if (f.fallback.startsWith("whatsapp_")) Object.assign(content, { templateName: f.templateName, templateParams: csv(f.templateParams), language: f.language || "en" });
   if (f.card && !usesSms(f)) content.card = f.card;
-  const spec = { name: f.name, category: f.category, segment, channel: f.channel, content };
+  const spec = { name: f.name, category: f.category, segment, channel: f.channel, content, consentMode: f.consentMode, liveInDryRun: !!f.liveInDryRun };
   spec.fallback = f.fallback || undefined;
   if (f.scheduledAt) spec.scheduledAt = new Date(f.scheduledAt).toISOString();
   if (f.throttlePerHour) spec.throttlePerHour = Number(f.throttlePerHour);
@@ -76,7 +79,7 @@ function fromCampaign(c) {
     filters: Object.fromEntries(NUM_FILTERS.filter(([k]) => s[k] != null).map(([k]) => [k, String(+(s[k] / scaleOf(k)).toFixed(2))])),
     lists: Object.fromEntries(LIST_FILTERS.filter(([k]) => s[k]).map(([k]) => [k, s[k].join(", ")])),
     channel: c.channel, fallback: c.fallback || "", title: ct.title || "", body: ct.body || "",
-    templateName: ct.templateName || "", templateParams: (ct.templateParams || []).join(", "), language: ct.language || "en", card: ct.card || "",
+    templateName: ct.templateName || "", templateParams: (ct.templateParams || []).join(", "), language: ct.language || "en", card: ct.card || "", consentMode: c.consentMode || "opt_in", liveInDryRun: !!c.liveInDryRun,
     smsTemplateId: ct.smsTemplateId || "", scheduledAt: local, throttlePerHour: c.throttlePerHour ? String(c.throttlePerHour) : "",
   };
 }
@@ -130,6 +133,7 @@ export default function CrmCampaignFormPage() {
   const [phoneCheck, setPhoneCheck] = useState(null);
   const [formErr, setFormErr] = useState(null);
   const { busy, run } = useAction();
+  const me = useCrmMe();
 
   useEffect(() => {
     if (!id) return;
@@ -141,7 +145,7 @@ export default function CrmCampaignFormPage() {
 
   const set = (k, v) => {
     setF((p) => ({ ...p, [k]: v })); setPreview(null);
-    if (["audience", "phonesText", "phoneRole", "category"].includes(k)) setPhoneCheck(null);   // the check is for exactly this list
+    if (["audience", "phonesText", "phoneRole", "category", "consentMode"].includes(k)) setPhoneCheck(null);   // the check is for exactly this list
   };
   const byPhones = f.audience === "phones";
   const setIn = (group, k, v) => { setF((p) => ({ ...p, [group]: { ...p[group], [k]: v } })); setPreview(null); };
@@ -151,14 +155,14 @@ export default function CrmCampaignFormPage() {
 
   async function doPreview() {
     const spec = toSpec(f);
-    const r = await run("preview", () => crmPost("/campaigns/preview-segment", { segment: spec.segment, category: spec.category }));
+    const r = await run("preview", () => crmPost("/campaigns/preview-segment", { segment: spec.segment, category: spec.category, consentMode: spec.consentMode }));
     if (r) setPreview(r);
   }
   // Phone-list audience: the server cleans the pasted text and says who was found, who was not, and who can be reached
   async function checkPhones() {
     setFormErr(null);
     if (!f.phonesText.trim()) { setFormErr("Paste at least one phone number."); return null; }
-    const r = await run("phones", () => crmPost("/campaigns/check-phones", { text: f.phonesText, role: f.phoneRole || undefined, category: f.category }));
+    const r = await run("phones", () => crmPost("/campaigns/check-phones", { text: f.phonesText, role: f.phoneRole || undefined, category: f.category, consentMode: f.consentMode }));
     if (r) setPhoneCheck(r);
     return r;
   }
@@ -274,6 +278,18 @@ export default function CrmCampaignFormPage() {
                 </select>
               </FormGroup>
             </div>
+            {f.category === "marketing" && can(me, "admin") && (
+              <div style={{ display: "grid", gap: 8, margin: "4px 0 12px" }}>
+                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
+                  <input type="checkbox" checked={f.consentMode === "opt_out"} onChange={(e) => set("consentMode", e.target.checked ? "opt_out" : "opt_in")} style={{ marginTop: 2 }} />
+                  <span><b>Send to everyone except those who pressed Stop</b><br /><span style={{ opacity: 0.6 }}>Company decision — otherwise marketing goes only to contacts who said yes.</span></span>
+                </label>
+                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
+                  <input type="checkbox" checked={!!f.liveInDryRun} onChange={(e) => set("liveInDryRun", e.target.checked)} style={{ marginTop: 2 }} />
+                  <span><b>Send for real even though dry run is ON</b><br /><span style={{ opacity: 0.6 }}>Only this campaign goes out — every journey stays in dry run.</span></span>
+                </label>
+              </div>
+            )}
             <FormGroup label="Fallback channel" hint="Used when the first channel is not available for a contact">
               <select className="gm-input" value={f.fallback} onChange={(e) => set("fallback", e.target.value)}>
                 <option value="">None</option>
