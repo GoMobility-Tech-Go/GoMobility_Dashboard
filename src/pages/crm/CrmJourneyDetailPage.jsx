@@ -132,6 +132,7 @@ export default function CrmJourneyDetailPage() {
             <Pill tone={d.enabled ? "green" : "gray"}>{d.enabled ? "On" : "Off"}</Pill>
             {d.liveInDryRun && globalDry && <Pill tone="red" title="Dry run is ON, but this journey sends real messages">Live — real messages</Pill>}
             <CategoryPill category={d.category} />
+            {d.category === "marketing" && d.consentMode === "opt_out" && <Pill tone="orange" title="Company decision: marketing goes to everyone who has not pressed Stop or turned updates off">Sends to all except Stop</Pill>}
             {d.trigger?.event && <Pill tone="blue">Trigger: {d.trigger.event}</Pill>}
             {d.trigger?.type === "schedule" && <Pill tone="blue">Trigger: daily schedule</Pill>}
             {d.goal && <Pill tone="gold">Goal: {d.goal.event} within {d.goal.windowH} h</Pill>}
