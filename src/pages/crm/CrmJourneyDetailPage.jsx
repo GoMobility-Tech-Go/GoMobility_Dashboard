@@ -55,7 +55,8 @@ export default function CrmJourneyDetailPage() {
   const { busy, run } = useAction();
   const d = j.data, fn = f.data;
   // dry run: counts are "would send", not sent, and the money is "cost if sent" (same wording as the overview)
-  const dry = !!useCrm("/settings").data?.dryRun;
+  const globalDry = !!useCrm("/settings").data?.dryRun;
+  const dry = globalDry && !d?.liveInDryRun;   // is journey ke liye: live switch ON ho to asli bhejti hai
   const sentWord = dry ? "would send" : "sent";
   const sentTitle = dry ? "Would send" : "Sent";
   const spendTitle = dry ? "Cost if sent" : "Spend";
@@ -81,6 +82,15 @@ export default function CrmJourneyDetailPage() {
     await run("toggle", () => crmPost(`${path}/toggle`, { enabled: !d.enabled }), d.enabled ? "Journey paused" : "Journey turned on");
     j.reload();
   }
+  // Dry run ON rehte hue sirf is journey ko asli mein chalana (ek-ek journey live karna)
+  async function toggleLive() {
+    const on = !d.liveInDryRun;
+    if (!window.confirm(on
+      ? "Send this journey's messages for REAL even though dry run is ON?\n\nOnly this journey goes live — every other journey stays in dry run. Consent, quiet hours, caps and the kill switch still apply."
+      : "Put this journey back into dry run? Its messages will only be logged again.")) return;
+    await run("live", () => crmPost(`${path}/live`, { live: on }), on ? "This journey now sends for real" : "Back to dry run");
+    j.reload();
+  }
   async function viewVersion(v) {
     try { setViewing(await crmGet(`${path}/versions/${v}`)); } catch { window.alert("Could not load that version."); }
   }
@@ -104,6 +114,12 @@ export default function CrmJourneyDetailPage() {
           <Link to="/crm/journeys" className="btn-outline"><ArrowLeft size={14} /> Journeys</Link>
           {d && can(me, "admin") && <Link to={`/crm/journeys/${encodeURIComponent(key)}/edit`} className="btn-outline"><Pencil size={14} /> Edit</Link>}
           {d && can(me, "admin") && <button className={d.enabled ? "btn-outline" : "btn-gold"} disabled={!!busy} onClick={toggle}>{d.enabled ? "Pause" : "Turn on"}</button>}
+          {d && can(me, "admin") && globalDry && (
+            <button className={d.liveInDryRun ? "btn-outline" : "btn-gold"} disabled={!!busy} onClick={toggleLive}
+              title="Dry run is ON for the whole CRM. This sends only THIS journey's messages for real.">
+              {d.liveInDryRun ? "Back to dry run" : "Go live (this journey only)"}
+            </button>
+          )}
           {d && can(me, "admin") && <button className="btn-danger" disabled={!!busy} onClick={stop}>Stop active runs</button>}
         </>
       }
@@ -114,6 +130,7 @@ export default function CrmJourneyDetailPage() {
         <>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
             <Pill tone={d.enabled ? "green" : "gray"}>{d.enabled ? "On" : "Off"}</Pill>
+            {d.liveInDryRun && globalDry && <Pill tone="red" title="Dry run is ON, but this journey sends real messages">Live — real messages</Pill>}
             <CategoryPill category={d.category} />
             {d.trigger?.event && <Pill tone="blue">Trigger: {d.trigger.event}</Pill>}
             {d.trigger?.type === "schedule" && <Pill tone="blue">Trigger: daily schedule</Pill>}
