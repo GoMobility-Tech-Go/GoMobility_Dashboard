@@ -5,7 +5,7 @@ import { Search, Send, Route, IndianRupee, Clock, ChevronDown, ChevronRight } fr
 import { StatCard, TableCard, Card } from "../../components/ui";
 import { crmGet, crmPost, crmErrorText } from "../../api/crm";
 import {
-  CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, StatusPill, CategoryPill, Section, Empty, Grid,
+  CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, StatusPill, CategoryPill, Section, Empty, Grid, Paged,
   CHANNEL, CHANNEL_COLOR, COLORS, inr, num, dt, shortKey,
 } from "./crmShared";
 import { TimeCell, MessageContent, MessageDetails, DownloadButton, runAbout, dim, soft, bright } from "./crmMessageParts";
@@ -99,10 +99,11 @@ function Detail({ userId, journeyNames, onChanged }) {
 
       <div style={{ marginBottom: 16 }}>
         <TableCard title={`Journeys (${d.runs.length})`} icon="🧭">
+          <Paged rows={d.runs}>{(pageRows) => (
           <table className="gm-table">
             <thead><tr><th>Journey</th><th>Started</th><th>Status</th><th>Current step</th><th>Next action</th><th>About</th><th>Goal met</th></tr></thead>
             <tbody>
-              {d.runs.map((r) => (
+              {pageRows.map((r) => (
                 <tr key={r._id}>
                   <td style={{ fontSize: 12 }}>
                     <Link to={`/crm/journeys/${r.journeyKey}`} style={{ color: bright, fontWeight: 600, textDecoration: "none" }}>{journeyNames[r.journeyKey] || r.journeyKey.split("_").slice(1).join(" ")}</Link>
@@ -119,15 +120,17 @@ function Detail({ userId, journeyNames, onChanged }) {
               {!d.runs.length && <tr><td colSpan={7}><Empty>Not in any journey</Empty></td></tr>}
             </tbody>
           </table>
+          )}</Paged>
         </TableCard>
       </div>
 
       <TableCard title={`Messages (${st.total > d.messages.length ? `latest ${d.messages.length} of ${num(st.total)}` : d.messages.length})`} icon="✉️"
         footer={<span style={{ fontSize: 11.5, color: dim }}>Click a row for full details</span>}>
+        <Paged rows={d.messages}>{(pageRows) => (
         <table className="gm-table">
           <thead><tr><th style={{ width: 24 }} /><th>Time</th><th>Channel</th><th>Source</th><th>Content</th><th>Status</th><th>Cost</th></tr></thead>
           <tbody>
-            {d.messages.map((m) => {
+            {pageRows.map((m) => {
               const isOpen = open === m._id;
               const jName = journeyNames[m.source?.ref];
               return (
@@ -155,6 +158,7 @@ function Detail({ userId, journeyNames, onChanged }) {
             {!d.messages.length && <tr><td colSpan={7}><Empty>No messages yet</Empty></td></tr>}
           </tbody>
         </table>
+        )}</Paged>
       </TableCard>
     </>
   );
@@ -203,10 +207,11 @@ export default function CrmContactsPage() {
       {results && results.length !== 1 && (
         <div style={{ marginBottom: 16 }}>
           <TableCard title={`${results.length} result${results.length === 1 ? "" : "s"}${results.length === 20 ? " (first 20 — refine the search)" : ""}`} icon="🔎">
+            <Paged rows={results}>{(pageRows) => (
             <table className="gm-table">
               <thead><tr><th>Name</th><th>Phone</th><th>Type</th><th>City</th><th>Rides</th><th>Consent</th></tr></thead>
               <tbody>
-                {results.map((c) => (
+                {pageRows.map((c) => (
                   <tr key={c.userId} style={{ cursor: "pointer", background: selected === c.userId ? "rgba(212,175,55,0.06)" : undefined }} onClick={() => pick(c.userId)}>
                     <td style={{ fontWeight: 600, color: bright }}>{c.name || "—"}</td>
                     <td>{c.phone || c.userId}</td><td style={{ textTransform: "capitalize" }}>{c.role}</td><td>{c.cityId || "—"}</td><td>{num(c.profile?.ridesTotal)}</td>
@@ -216,6 +221,7 @@ export default function CrmContactsPage() {
                 {!results.length && <tr><td colSpan={6}><Empty>No matching contact. Contacts sync from the ride platform every 10 minutes.</Empty></td></tr>}
               </tbody>
             </table>
+            )}</Paged>
           </TableCard>
         </div>
       )}

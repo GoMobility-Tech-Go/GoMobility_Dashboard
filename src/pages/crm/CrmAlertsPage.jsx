@@ -1,6 +1,6 @@
 // Alerts raised by journey "notify ops" steps — e.g. J-16: a driver document stuck in manual review for 3+ days.
 import { TableCard } from "../../components/ui";
-import { CrmPage, useCrm, Loading, ErrorNote, Pill, Hint, dt, shortKey } from "./crmShared";
+import { CrmPage, useCrm, Loading, ErrorNote, Pill, Hint, Paged, dt, shortKey } from "./crmShared";
 
 export default function CrmAlertsPage() {
   const { data, error, loading } = useCrm("/ops/notifications", { params: { limit: 200 }, refreshMs: 30000 });
@@ -9,10 +9,11 @@ export default function CrmAlertsPage() {
       <ErrorNote error={error} />
       <TableCard title="Alerts (newest first)" icon="🔔">
         {loading && !data ? <Loading /> : (
+          <Paged rows={data}>{(pageRows) => (
           <table className="gm-table">
             <thead><tr><th>Raised</th><th>Journey</th><th>Details</th><th>User ID</th></tr></thead>
             <tbody>
-              {(data || []).map((a) => (
+              {pageRows.map((a) => (
                 <tr key={a._id}>
                   <td style={{ whiteSpace: "nowrap" }}>{dt(a.occurredAt || a.createdAt)}</td>
                   <td><Pill tone="gold">{shortKey(a.payload?.journey) || "—"}</Pill></td>
@@ -23,6 +24,7 @@ export default function CrmAlertsPage() {
               {data && !data.length && <tr><td colSpan={4} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No alerts</td></tr>}
             </tbody>
           </table>
+          )}</Paged>
         )}
       </TableCard>
       <div style={{ marginTop: 12 }}><Hint>To receive these alerts in Slack as well, set OPS_ALERT_WEBHOOK_URL on the CRM service.</Hint></div>

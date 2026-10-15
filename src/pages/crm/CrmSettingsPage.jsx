@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
 import { FormGroup, Toggle, TableCard } from "../../components/ui";
 import { crmPatch } from "../../api/crm";
-import { CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, Section, Hint, ago } from "./crmShared";
+import { CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, Section, Hint, Paged, ago } from "./crmShared";
 
 const NUMS = [
   ["frequencyCap.marketingPerWeek", "Marketing messages per week (per contact)", "PRD recommendation: 2"],
@@ -45,14 +45,16 @@ function Health() {
   );
   return (
     <TableCard title={h.ok ? "System Health — all systems operational" : "System Health — attention needed"} icon="🩺">
+      <Paged rows={[
+        ...Object.entries(h.deps || {}).map(([k, x]) => row("Dependency", k, x, `${x.ms} ms`)),
+        ...Object.entries(h.processes || {}).map(([k, x]) => row("Process", k, x, x.ok ? `Heartbeat ${ago(x.lastBeatSecAgo)}` : "")),
+        ...Object.entries(h.loops || {}).map(([k, x]) => row("Background job", k, x, x.lastOkSecAgo != null ? `Last run ${ago(x.lastOkSecAgo)}` : "Has not run yet")),
+      ]}>{(pageRows) => (
       <table className="gm-table">
         <thead><tr><th>Component</th><th>Status</th><th>Details</th></tr></thead>
-        <tbody>
-          {Object.entries(h.deps || {}).map(([k, x]) => row("Dependency", k, x, `${x.ms} ms`))}
-          {Object.entries(h.processes || {}).map(([k, x]) => row("Process", k, x, x.ok ? `Heartbeat ${ago(x.lastBeatSecAgo)}` : ""))}
-          {Object.entries(h.loops || {}).map(([k, x]) => row("Background job", k, x, x.lastOkSecAgo != null ? `Last run ${ago(x.lastOkSecAgo)}` : "Has not run yet"))}
-        </tbody>
+        <tbody>{pageRows}</tbody>
       </table>
+      )}</Paged>
     </TableCard>
   );
 }

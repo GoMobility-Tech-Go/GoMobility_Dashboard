@@ -171,6 +171,46 @@ export const ErrorNote = ({ error }) => error ? (
 export const Hint = ({ children }) => (
   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.42)", fontFamily: "Outfit,sans-serif", lineHeight: 1.6 }}>{children}</div>
 );
+// ── Pagination ───────────────────────────────────────────────────────────────
+// Every CRM table shows 10 rows at a time:
+//   <Paged rows={list}>{(pageRows) => <table>…{pageRows.map(…)}</table>}</Paged>
+// The pager appears only when there are more rows than one page. Going back to page 1 when the list changes
+// (a new filter / search) — resetKey, or the list length.
+export function Paged({ rows, size = 10, resetKey, children }) {
+  const list = rows || [];
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(list.length / size));
+  useEffect(() => { setPage(0); }, [resetKey, list.length]);
+  const p = Math.min(page, pages - 1);
+  return (
+    <>
+      {children(list.slice(p * size, p * size + size), p * size)}
+      {list.length > size && <Pager page={p} pages={pages} total={list.length} size={size} onChange={setPage} />}
+    </>
+  );
+}
+
+export function Pager({ page, pages, total, size, onChange }) {
+  const from = page * size + 1, to = Math.min(total, (page + 1) * size);
+  // up to 5 page numbers around the current one
+  const start = Math.max(0, Math.min(page - 2, pages - 5));
+  const nums = Array.from({ length: Math.min(5, pages) }, (_, i) => start + i);
+  const btn = (label, target, { active = false, disabled = false, title } = {}) => (
+    <button key={`${label}-${target}`} type="button" title={title} disabled={disabled} onClick={() => onChange(target)}
+      className={active ? "btn-gold btn-sm" : "btn-outline btn-sm"} style={{ minWidth: 34, padding: "4px 10px" }}>{label}</button>
+  );
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "12px 4px 4px", fontFamily: "Outfit,sans-serif" }}>
+      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>Showing {from}–{to} of {total.toLocaleString("en-IN")}</span>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {btn("‹ Prev", page - 1, { disabled: page === 0 })}
+        {nums.map((n) => btn(String(n + 1), n, { active: n === page }))}
+        {btn("Next ›", page + 1, { disabled: page >= pages - 1 })}
+      </div>
+    </div>
+  );
+}
+
 export const Empty = ({ children }) => (
   <div style={{ padding: "28px 20px", textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 13, fontFamily: "Outfit,sans-serif" }}>{children}</div>
 );

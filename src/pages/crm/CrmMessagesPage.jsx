@@ -21,6 +21,7 @@ export default function CrmMessagesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(null);
+  const [page, setPage] = useState(0);   // 10 rows a page; the server sends 50 at a time, more are fetched on Next
   const trend = useCrm("/metrics/analytics", { params: { days: 14 }, refreshMs: 120000 });
   const journeys = useCrm("/journeys");
   const settings = useCrm("/settings");
@@ -37,7 +38,7 @@ export default function CrmMessagesPage() {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true); setError(null); setOpen(null);
+    setLoading(true); setError(null); setOpen(null); setPage(0);
     crmGet("/messages", params())
       .then((r) => { if (alive) { setItems(r.items); setNext(r.nextBefore); } })
       .catch((e) => alive && setError(crmErrorText(e)))
@@ -48,9 +49,16 @@ export default function CrmMessagesPage() {
 
   async function more() {
     setLoading(true);
-    try { const r = await crmGet("/messages", params(next)); setItems((p) => [...p, ...r.items]); setNext(r.nextBefore); }
-    catch (e) { setError(crmErrorText(e)); }
+    try { const r = await crmGet("/messages", params(next)); setItems((p) => [...p, ...r.items]); setNext(r.nextBefore); return true; }
+    catch (e) { setError(crmErrorText(e)); return false; }
     finally { setLoading(false); }
+  }
+  const PAGE = 10;
+  const pageRows = items.slice(page * PAGE, page * PAGE + PAGE);
+  const hasNext = (page + 1) * PAGE < items.length || !!next;
+  async function goNext() {
+    if ((page + 1) * PAGE >= items.length && next && !(await more())) return;
+    setOpen(null); setPage((p) => p + 1);
   }
 
   const sel = (k, opts, width = 160) => (
@@ -119,9 +127,15 @@ export default function CrmMessagesPage() {
       <TableCard
         title="Message Log" icon="✉️"
         actions={<DownloadButton path="/messages/export" params={apiFilters} title="Downloads the messages matching the filters below (up to 10,000)" />}
-        footer={<div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 11.5, color: dim }}>Showing {num(items.length)} message{items.length === 1 ? "" : "s"} · click a row for full details</span>
-          {next && <button className="btn-outline btn-sm" disabled={loading} onClick={more}>{loading ? "Loading…" : "Load more"}</button>}
+        footer={<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11.5, color: dim }}>
+            {items.length ? `Showing ${num(page * PAGE + 1)}–${num(page * PAGE + pageRows.length)} of ${num(items.length)}${next ? "+" : ""}` : "No messages"} · click a row for full details
+          </span>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button className="btn-outline btn-sm" disabled={page === 0 || loading} onClick={() => { setOpen(null); setPage((p) => p - 1); }}>‹ Prev</button>
+            <span style={{ fontSize: 12, color: soft, minWidth: 60, textAlign: "center" }}>Page {page + 1}</span>
+            <button className="btn-outline btn-sm" disabled={!hasNext || loading} onClick={goNext}>{loading && items.length ? "Loading…" : "Next ›"}</button>
+          </div>
         </div>}
       >
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
@@ -141,7 +155,7 @@ export default function CrmMessagesPage() {
           <table className="gm-table">
             <thead><tr><th style={{ width: 24 }} /><th>Time</th><th>Contact</th><th>Channel</th><th>Source</th><th>Content</th><th>Status</th><th>Cost</th></tr></thead>
             <tbody>
-              {items.map((m) => {
+              {pageRows.map((m) => {
                 const isOpen = open === m._id;
                 const jName = journeyNames[m.source?.ref];
                 return (

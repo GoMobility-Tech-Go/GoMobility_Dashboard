@@ -1,7 +1,7 @@
 // Approval queue — PRD §3.1 step 6: expensive (above the approval limit) or transactional campaigns need a second person.
 import { useNavigate } from "react-router-dom";
 import { TableCard } from "../../components/ui";
-import { CrmPage, useCrm, useCrmMe, can, Loading, ErrorNote, Pill, CategoryPill, Hint, CHANNEL, inr, num, dt } from "./crmShared";
+import { CrmPage, useCrm, useCrmMe, can, Loading, ErrorNote, Pill, CategoryPill, Hint, Paged, CHANNEL, inr, num, dt } from "./crmShared";
 
 export default function CrmApprovalsPage() {
   const navigate = useNavigate();
@@ -14,10 +14,11 @@ export default function CrmApprovalsPage() {
       {me && !can(me, "approver") && <div style={{ marginBottom: 12 }}><Hint>You can view this queue. Approving requires the Approver or CRM Admin role.</Hint></div>}
       <TableCard title="Pending Approval" icon="✅">
         {loading && !data ? <Loading /> : (
+          <Paged rows={data}>{(pageRows) => (
           <table className="gm-table">
             <thead><tr><th>Campaign</th><th>Audience</th><th>Channel</th><th>Recipients</th><th>Est. cost</th><th>Submitted by</th><th></th></tr></thead>
             <tbody>
-              {(data || []).map((c) => {
+              {pageRows.map((c) => {
                 const mine = me?.email && [c.createdBy, c.submittedBy].includes(me.email);
                 return (
                   <tr key={c._id} style={{ cursor: "pointer" }} onClick={() => navigate(`/crm/campaigns/${c._id}`)}>
@@ -34,6 +35,7 @@ export default function CrmApprovalsPage() {
               {data && !data.length && <tr><td colSpan={7} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>Nothing waiting for approval</td></tr>}
             </tbody>
           </table>
+          )}</Paged>
         )}
       </TableCard>
     </CrmPage>

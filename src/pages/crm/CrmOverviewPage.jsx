@@ -5,7 +5,7 @@ import { ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis
 import { Send, CalendarCheck, IndianRupee, AlertTriangle, ArrowRight } from "lucide-react";
 import { StatCard, TableCard } from "../../components/ui";
 import {
-  CrmPage, useCrm, Loading, ErrorNote, Pill, Hint, ChartCard, ChartTooltip, Legend, NoChartData, RangeButtons,
+  CrmPage, useCrm, Loading, ErrorNote, Pill, Hint, ChartCard, ChartTooltip, Legend, NoChartData, RangeButtons, Paged,
   COLORS, CHANNEL, CHANNEL_COLOR, axisTick, gridStroke, inr, num, pct, day, shortKey,
 } from "./crmShared";
 
@@ -95,10 +95,11 @@ export default function CrmOverviewPage() {
 
           <div style={{ marginBottom: 16 }}>
             <TableCard title="Success Targets (PRD §7)" icon="🎯">
+              <Paged rows={d.success}>{(pageRows) => (
               <table className="gm-table">
                 <thead><tr><th>Metric</th><th>Journey</th><th>Entered</th><th>Goal within window</th><th>Rate</th><th>Target</th><th>Status</th></tr></thead>
                 <tbody>
-                  {d.success.map((r) => (
+                  {pageRows.map((r) => (
                     <tr key={r.journey}>
                       <td>{r.metric}</td>
                       <td><Link to={`/crm/journeys/${encodeURIComponent(r.journey)}`} style={{ color: "#D4AF37", textDecoration: "none" }}>{shortKey(r.journey)}</Link></td>
@@ -123,6 +124,7 @@ export default function CrmOverviewPage() {
                   </tr>
                 </tbody>
               </table>
+              )}</Paged>
               <div style={{ padding: "10px 16px" }}>
                 <Hint>Journeys only (campaigns have their own reports). A ride within the journey's goal window counts as attributed — without a holdout group this is correlation, not proof.</Hint>
               </div>
@@ -131,15 +133,17 @@ export default function CrmOverviewPage() {
 
           <div className="crm-1-1">
             <TableCard title="Channels" icon="📡">
+              <Paged rows={Object.entries(d.messages.channels)}>{(pageRows) => (
               <table className="gm-table">
                 <thead><tr><th>Channel</th><th>{dry ? "Would send" : "Sent"}</th><th>Failed</th><th>Skipped</th><th>{dry ? "Cost if sent" : "Spend"}</th></tr></thead>
                 <tbody>
-                  {Object.entries(d.messages.channels).map(([ch, x]) => (
+                  {pageRows.map(([ch, x]) => (
                     <tr key={ch}><td>{CHANNEL[ch] || ch}</td><td>{num(x.sent)}</td><td>{num(x.failed)}</td><td>{num(x.skipped)}</td><td>{inr(x.costInr)}</td></tr>
                   ))}
                   {!Object.keys(d.messages.channels).length && <tr><td colSpan={5} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No messages in this period</td></tr>}
                 </tbody>
               </table>
+              )}</Paged>
             </TableCard>
 
             <ChartCard title="How the CRM Works" subtitle="From ride data to the right message">

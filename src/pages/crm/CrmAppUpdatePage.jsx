@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Smartphone, CheckCircle2, Clock, HelpCircle, Send } from "lucide-react";
 import { StatCard, TableCard } from "../../components/ui";
 import { crmPost } from "../../api/crm";
-import { CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, Hint, Section, Grid, COLORS, num, dt } from "./crmShared";
+import { CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, Hint, Section, Grid, Paged, COLORS, num, dt } from "./crmShared";
 import { ContactCell, DownloadButton, dim, soft } from "./crmMessageParts";
 
 const TABS = [["pending", "Pending"], ["updated", "Updated"], ["all", "All drivers"]];
@@ -102,11 +102,12 @@ export default function CrmAppUpdatePage() {
                 <button className="btn-outline btn-sm" type="submit">Search</button>
               </form>
             </div>
+            <Paged rows={r.list} resetKey={`${status}|${search}`}>{(pageRows) => (
             <table className="gm-table">
               <thead><tr><th>Driver</th><th>App version</th><th>Status</th><th>Last online</th><th>Rides (30d / total)</th><th>Reminders sent</th></tr></thead>
               <tbody>
                 {r.list.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", color: dim, padding: 24 }}>No drivers here</td></tr>}
-                {r.list.map((x) => (
+                {pageRows.map((x) => (
                   <tr key={x.userId}>
                     <td><ContactCell name={x.name} phone={x.phone} userId={x.userId} /></td>
                     <td>
@@ -125,6 +126,7 @@ export default function CrmAppUpdatePage() {
                 ))}
               </tbody>
             </table>
+            )}</Paged>
           </TableCard>
         </>
       )}

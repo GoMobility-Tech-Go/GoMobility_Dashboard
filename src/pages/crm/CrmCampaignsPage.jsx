@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, Megaphone, Hourglass, CheckCircle2, IndianRupee } from "lucide-react";
 import { StatCard, TableCard } from "../../components/ui";
-import { CrmPage, useCrm, useCrmMe, can, Loading, ErrorNote, StatusPill, CategoryPill, Hint, COLORS, CHANNEL, inr, num, dt } from "./crmShared";
+import { CrmPage, useCrm, useCrmMe, can, Loading, ErrorNote, StatusPill, CategoryPill, Hint, Paged, COLORS, CHANNEL, inr, num, dt } from "./crmShared";
 
 const STATUSES = [["", "All statuses"], ["draft", "Draft"], ["pending_approval", "Pending approval"], ["approved", "Approved"], ["sending", "Sending"], ["sent", "Sent"], ["paused", "Paused"], ["cancelled", "Cancelled"]];
 
@@ -47,10 +47,11 @@ export default function CrmCampaignsPage() {
         }
       >
         {all.loading && !all.data ? <Loading /> : (
+          <Paged rows={rows} resetKey={status}>{(pageRows) => (
           <table className="gm-table">
             <thead><tr><th>Campaign</th><th>Audience</th><th>Channel</th><th>Status</th><th>Recipients</th><th>Est. cost</th><th>Delivered</th><th>Scheduled</th><th>Created by</th></tr></thead>
             <tbody>
-              {rows.map((c) => (
+              {pageRows.map((c) => (
                 <tr key={c._id} style={{ cursor: "pointer" }} onClick={() => navigate(`/crm/campaigns/${c._id}`)}>
                   <td>{c.name || "Untitled"}</td>
                   <td><span style={{ textTransform: "capitalize" }}>{c.segment?.phones ? `${c.segment.phones.length} phone number${c.segment.phones.length === 1 ? "" : "s"}` : c.segment?.role || "—"}</span> {c.category === "transactional" && <CategoryPill category="transactional" />}</td>
@@ -66,6 +67,7 @@ export default function CrmCampaignsPage() {
               {all.data && !rows.length && <tr><td colSpan={9} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No campaigns found</td></tr>}
             </tbody>
           </table>
+          )}</Paged>
         )}
       </TableCard>
       <div style={{ marginTop: 12 }}>

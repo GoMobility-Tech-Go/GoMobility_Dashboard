@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { GitBranch, Power, Activity, Target } from "lucide-react";
 import { StatCard, TableCard, Toggle } from "../../components/ui";
-import { CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, CategoryPill, Hint, COLORS, num } from "./crmShared";
+import { CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, CategoryPill, Hint, Paged, COLORS, num } from "./crmShared";
 import { crmPost } from "../../api/crm";
 
 const triggerText = (t = {}) => (t.type === "event" ? t.event : t.type === "schedule" ? "Daily schedule" : t.type === "segment_entry" ? "Segment entry" : t.type || "—");
@@ -37,10 +37,11 @@ export default function CrmJourneysPage() {
   const table = (title, icon, list) => (
     <div style={{ marginBottom: 16 }}>
       <TableCard title={title} icon={icon}>
+        <Paged rows={list}>{(pageRows) => (
         <table className="gm-table">
           <thead><tr><th>Journey</th><th>Trigger</th><th>Type</th><th>Priority</th><th>Active</th><th>Goal met</th><th>Total runs</th><th>Status</th></tr></thead>
           <tbody>
-            {list.map((j) => {
+            {pageRows.map((j) => {
               const s = stats[j.key] || {};
               const total = Object.values(s).reduce((a, b) => a + b, 0);
               return (
@@ -62,6 +63,7 @@ export default function CrmJourneysPage() {
             })}
           </tbody>
         </table>
+        )}</Paged>
       </TableCard>
     </div>
   );

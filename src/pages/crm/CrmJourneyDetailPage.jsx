@@ -6,7 +6,7 @@ import { ArrowLeft, Send, Clock, GitBranch, LogOut, BellRing, Users, Target, Ind
 import { StatCard, TableCard, Modal } from "../../components/ui";
 import { crmGet, crmPost } from "../../api/crm";
 import {
-  CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, StatusPill, CategoryPill, Hint, ChartCard, ChartTooltip, Legend,
+  CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, StatusPill, CategoryPill, Hint, ChartCard, ChartTooltip, Legend, Paged,
   NoChartData, RangeButtons, COLORS, CHANNEL, axisTick, gridStroke, inr, num, pct, dt, statusLabel,
 } from "./crmShared";
 import { TimeCell, ContactCell, runAbout, dim, soft } from "./crmMessageParts";
@@ -212,10 +212,11 @@ export default function CrmJourneyDetailPage() {
 
           <div style={{ marginBottom: 16 }}>
             <TableCard title="Journey Flow" icon="🧭">
+              <Paged rows={d.nodes}>{(pageRows) => (
               <table className="gm-table">
                 <thead><tr><th>Step</th><th>Action</th><th>Details</th><th>Messages ({days}D)</th><th>{spendTitle}</th></tr></thead>
                 <tbody>
-                  {(d.nodes || []).map((n) => {
+                  {pageRows.map((n) => {
                     const Icon = ICON[n.type] || GitBranch;
                     const [what, raw] = describe(n);
                     const detail = tidy(raw);
@@ -232,15 +233,17 @@ export default function CrmJourneyDetailPage() {
                   })}
                 </tbody>
               </table>
+              )}</Paged>
             </TableCard>
           </div>
 
           <div style={{ marginBottom: 16 }}>
             <TableCard title="Version History" icon={<History size={14} />}>
+              <Paged rows={versions.data}>{(pageRows) => (
               <table className="gm-table">
                 <thead><tr><th>Version</th><th>Published by</th><th>When</th><th></th></tr></thead>
                 <tbody>
-                  {(versions.data || []).map((v) => (
+                  {pageRows.map((v) => (
                     <tr key={v.version}>
                       <td>v{v.version} {v.version === d.version && <Pill tone="green">Current</Pill>}</td>
                       <td style={{ fontSize: 12 }}>{v.createdBy === "seed" ? "Catalog (deploy)" : v.createdBy === "backfill" ? "Initial" : v.createdBy}</td>
@@ -254,6 +257,7 @@ export default function CrmJourneyDetailPage() {
                   {versions.data && !versions.data.length && <tr><td colSpan={4} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No history yet</td></tr>}
                 </tbody>
               </table>
+              )}</Paged>
             </TableCard>
           </div>
           <Modal open={!!viewing} onClose={() => setViewing(null)} title={viewing ? `Version ${viewing.version}` : ""} maxWidth={760}>
@@ -283,10 +287,11 @@ export default function CrmJourneyDetailPage() {
             footer={<span style={{ fontSize: 11.5, color: dim }}>Click a name to open that person's full history · most recently updated first</span>}
           >
             {runs.loading && !runs.data ? <Loading /> : (
+              <Paged rows={runs.data} resetKey={runState}>{(pageRows) => (
               <table className="gm-table">
                 <thead><tr><th>Person</th><th>Started</th><th>Status</th><th>Current step</th><th>Next action</th><th>About</th><th>Goal met</th></tr></thead>
                 <tbody>
-                  {(runs.data || []).map((r) => {
+                  {pageRows.map((r) => {
                     const node = (d.nodes || []).find((n) => n.id === r.currentNode);
                     const [what, detail] = node ? describe(node) : ["", ""];
                     return (
@@ -307,6 +312,7 @@ export default function CrmJourneyDetailPage() {
                   {runs.data && !runs.data.length && <tr><td colSpan={7} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No one {runState === "active" ? "is in this journey right now" : "in this state"}</td></tr>}
                 </tbody>
               </table>
+              )}</Paged>
             )}
           </TableCard>
           <div style={{ marginTop: 12 }}>

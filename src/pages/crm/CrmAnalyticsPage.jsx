@@ -7,7 +7,7 @@ import {
 import { Send, IndianRupee, Users, Target, AlertTriangle } from "lucide-react";
 import { StatCard, TableCard } from "../../components/ui";
 import {
-  CrmPage, useCrm, Loading, ErrorNote, ChartCard, ChartTooltip, Legend, NoChartData, RangeButtons, StatusPill, CategoryPill, Pill,
+  CrmPage, useCrm, Loading, ErrorNote, ChartCard, ChartTooltip, Legend, NoChartData, RangeButtons, StatusPill, CategoryPill, Pill, Paged,
   COLORS, CHANNEL, CHANNEL_COLOR, STATUS_COLOR, axisTick, gridStroke, inr, num, pct, day, statusLabel, shortKey,
 } from "./crmShared";
 
@@ -170,10 +170,11 @@ export default function CrmAnalyticsPage() {
 
           <div style={{ marginBottom: 16 }}>
             <TableCard title="Journey Breakdown" icon="🧭">
+              <Paged rows={a.journeys}>{(pageRows) => (
               <table className="gm-table">
                 <thead><tr><th>Journey</th><th>Audience</th><th>Type</th><th>Status</th><th>Entered</th><th>Active</th><th>Goals</th><th>Conversion</th><th>Messages</th><th>Spend</th><th>Cost / goal</th></tr></thead>
                 <tbody>
-                  {a.journeys.map((j) => (
+                  {pageRows.map((j) => (
                     <tr key={j.key} style={{ cursor: "pointer" }} onClick={() => navigate(`/crm/journeys/${encodeURIComponent(j.key)}`)}>
                       <td>{j.name}</td>
                       <td style={{ textTransform: "capitalize" }}>{j.role || "—"}</td>
@@ -190,14 +191,16 @@ export default function CrmAnalyticsPage() {
                   ))}
                 </tbody>
               </table>
+              )}</Paged>
             </TableCard>
           </div>
 
           <TableCard title={`Campaigns · last ${a.windowD} days`} icon="📣" actions={<Link to="/crm/campaigns" className="btn-outline btn-sm">All campaigns</Link>}>
+            <Paged rows={a.campaigns}>{(pageRows) => (
             <table className="gm-table">
               <thead><tr><th>Campaign</th><th>Status</th><th>Channel</th><th>Recipients</th><th>Sent</th><th>Failed</th><th>Delivery</th><th>Est. cost</th></tr></thead>
               <tbody>
-                {a.campaigns.map((c) => {
+                {pageRows.map((c) => {
                   const total = c.sent + c.failed + c.skipped;
                   return (
                     <tr key={c._id} style={{ cursor: "pointer" }} onClick={() => navigate(`/crm/campaigns/${c._id}`)}>
@@ -215,6 +218,7 @@ export default function CrmAnalyticsPage() {
                 {!a.campaigns.length && <tr><td colSpan={8} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No campaigns in this period</td></tr>}
               </tbody>
             </table>
+            )}</Paged>
           </TableCard>
         </>
       )}
