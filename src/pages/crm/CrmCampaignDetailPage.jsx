@@ -27,7 +27,7 @@ const FILTER_LABEL = {
   lifetimeSpendLte: "Spend ≤ ₹{}", cityIds: "Cities: {}", kycStatus: "KYC: {}", subscriptionTier: "Plan: {}", hasPushToken: "Push token: {}",
   states: "States: {}", vehicleTypes: "Vehicles: {}", rides90dGte: "Rides (90d) ≥ {}", rides90dLte: "Rides (90d) ≤ {}",
   avgFareGte: "Avg fare ≥ ₹{}", avgFareLte: "Avg fare ≤ ₹{}", onlineHours7dGte: "Online (7d) ≥ {} h", onlineHours7dLte: "Online (7d) ≤ {} h",
-  acceptanceRate7dGte: "Acceptance ≥ {}", acceptanceRate7dLte: "Acceptance ≤ {}", earningsTotalGte: "Earnings ≥ ₹{}", earningsTotalLte: "Earnings ≤ ₹{}", missedTodayGte: "Missed today ≥ {}", missed7dGte: "Missed in 7 days ≥ {}",
+  acceptanceRate7dGte: "Acceptance ≥ {}", acceptanceRate7dLte: "Acceptance ≤ {}", earningsTotalGte: "Earnings ≥ ₹{}", earningsTotalLte: "Earnings ≤ ₹{}", missedTodayGte: "Missed today ≥ {}", missed7dGte: "Missed in 7 days ≥ {}", appOutdated: "Old Go Captain version: {}",
 };
 const segmentText = (s = {}) => Object.entries(s).filter(([k]) => k !== "role")
   .map(([k, v]) => (FILTER_LABEL[k] || `${k}: {}`).replace("{}", Array.isArray(v) ? v.join(", ") : typeof v === "boolean" ? (v ? "yes" : "no") : k.startsWith("acceptanceRate") ? `${Math.round(v * 100)}%` : v)).join(" · ") || "Everyone";
@@ -96,7 +96,7 @@ export default function CrmCampaignDetailPage() {
           {ct.body && <Row k="Message">{ct.body}</Row>}
           {ct.templateName && <Row k="WhatsApp template">{ct.templateName}{ct.templateParams?.length ? ` (${ct.templateParams.join(", ")})` : ""}</Row>}
           {ct.smsTemplateId && <Row k="SMS template ID">{ct.smsTemplateId}</Row>}
-          {ct.card && <Row k="Picture card">{{ missed_week: "Missed rides — today + last 7 days", missed_last7: "Missed rides — last 7 days" }[ct.card] || "Missed rides — today"} (each driver's own numbers)</Row>}
+          {ct.card && <Row k="Picture card">{{ missed_week: "Missed rides — today + last 7 days", missed_last7: "Missed rides — last 7 days", app_update: "App update — your version → new version" }[ct.card] || "Missed rides — today"} (each driver's own numbers)</Row>}
           {d.consentMode === "opt_out" && <Row k="Who">Everyone except those who pressed Stop (company decision)</Row>}
           {d.liveInDryRun && <Row k="Dry run"><b style={{ color: "#F87171" }}>Sends for real even though dry run is ON</b></Row>}
           <Row k="Send at">{d.scheduledAt ? dt(d.scheduledAt) : "As soon as approved"}</Row>

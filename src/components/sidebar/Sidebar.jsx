@@ -56,6 +56,7 @@ const ADMIN_MENU = [
     { label:"Approvals",          to:"/crm/approvals",        icon:CheckCheck  },
     { label:"Contacts",           to:"/crm/contacts",         icon:UserSearch  },
     { label:"Messages",           to:"/crm/messages",         icon:Mail        },
+    { label:"App Update",         to:"/crm/app-update",       icon:Smartphone  },
     { label:"Ops Alerts",         to:"/crm/alerts",           icon:BellRing    },
     { label:"CRM Settings",       to:"/crm/settings",         icon:SlidersHorizontal },
   ]},

@@ -17,7 +17,7 @@ const LABEL = {
   mongo: "Database (MongoDB)", redis: "Queue (Redis)", replica: "Ride data (read-only replica)",
   api: "API", worker: "Worker", ingest: "Data ingest",
   contacts: "Contact sync", signups: "Sign-up events", rides: "Ride events", kyc: "KYC events", online: "Driver online events",
-  commerce: "Dues & subscription events", "journey-runner": "Journey runner", "journey-scheduler": "Journey scheduler", "event-requeue": "Event recovery",
+  commerce: "Dues & subscription events", missed: "Missed ride requests", appversions: "Driver app versions", "journey-runner": "Journey runner", "journey-scheduler": "Journey scheduler", "event-requeue": "Event recovery",
 };
 const get = (o, path) => path.split(".").reduce((x, k) => x?.[k], o);
 const nest = (flat) => {
@@ -63,7 +63,7 @@ export default function CrmSettingsPage() {
   const admin = can(me, "admin");
 
   useEffect(() => {
-    if (s.data) setForm(Object.fromEntries([...NUMS.map(([p]) => [p, String(get(s.data, p) ?? "")]), ["dryRun", !!s.data.dryRun], ["transactionalBypassesCaps", !!s.data.transactionalBypassesCaps]]));
+    if (s.data) setForm(Object.fromEntries([...NUMS.map(([p]) => [p, String(get(s.data, p) ?? "")]), ["dryRun", !!s.data.dryRun], ["transactionalBypassesCaps", !!s.data.transactionalBypassesCaps], ["driverAppLatestVersion", s.data.driverAppLatestVersion || ""]]));
   }, [s.data]);
 
   async function save() {
@@ -74,6 +74,9 @@ export default function CrmSettingsPage() {
       if (v !== get(s.data, p)) flat[p] = v;
     }
     for (const k of ["dryRun", "transactionalBypassesCaps"]) if (form[k] !== !!s.data[k]) flat[k] = form[k];
+    const ver = String(form.driverAppLatestVersion || "").trim();
+    if (ver && !/^\d{1,3}(\.\d{1,3}){0,2}$/.test(ver)) return window.alert("Latest Go Captain version should look like 1.3.6 (or leave it empty).");
+    if (ver !== (s.data.driverAppLatestVersion || "")) flat.driverAppLatestVersion = ver;
     if (!Object.keys(flat).length) return window.alert("No changes to save.");
     if (flat.dryRun === false && !window.confirm("Turn dry run OFF? Real messages will start going out and will incur costs.")) return;
     const r = await run("save", () => crmPatch("/settings", nest(flat)), "Settings saved — applied everywhere within 10 seconds");
@@ -94,6 +97,9 @@ export default function CrmSettingsPage() {
                 </FormGroup>
               ))}
             </div>
+            <FormGroup label="Latest Go Captain version" hint="Drivers below this count as 'pending' on the App Update page. Leave empty to use the newest version seen among drivers.">
+              <input className="gm-input" disabled={!admin} placeholder="automatic (e.g. 1.3.6)" value={form.driverAppLatestVersion} onChange={(e) => setForm((f) => ({ ...f, driverAppLatestVersion: e.target.value }))} />
+            </FormGroup>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, margin: "6px 0 16px" }}>
               <Toggle checked={form.dryRun} onChange={(v) => admin && setForm((f) => ({ ...f, dryRun: v }))} label="Dry run — log messages without sending them" />
               <Toggle checked={form.transactionalBypassesCaps} onChange={(v) => admin && setForm((f) => ({ ...f, transactionalBypassesCaps: v }))} label="Transactional messages bypass frequency caps (quiet hours still apply)" />

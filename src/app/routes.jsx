@@ -56,6 +56,7 @@ import CrmCampaignDetailPage from "../pages/crm/CrmCampaignDetailPage";
 import CrmApprovalsPage from "../pages/crm/CrmApprovalsPage";
 import CrmContactsPage from "../pages/crm/CrmContactsPage";
 import CrmMessagesPage from "../pages/crm/CrmMessagesPage";
+import CrmAppUpdatePage from "../pages/crm/CrmAppUpdatePage";
 import CrmAlertsPage from "../pages/crm/CrmAlertsPage";
 import CrmSettingsPage from "../pages/crm/CrmSettingsPage";
 
@@ -111,6 +112,7 @@ const routes = [
             { path:"approvals",          element:<CrmApprovalsPage/> },
             { path:"contacts",           element:<CrmContactsPage/> },
             { path:"messages",           element:<CrmMessagesPage/> },
+            { path:"app-update",         element:<CrmAppUpdatePage/> },
             { path:"alerts",             element:<CrmAlertsPage/> },
             { path:"settings",           element:<CrmSettingsPage/> },
           ]

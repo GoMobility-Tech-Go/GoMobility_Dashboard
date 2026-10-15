@@ -39,7 +39,7 @@ const EMPTY = {
   consentMode: "opt_in", liveInDryRun: false,
 };
 // Picture card: each driver's own numbers drawn as an image and attached to the message (push / WhatsApp only)
-const CARDS = [["", "No picture"], ["missed_today", "Missed rides — today"], ["missed_week", "Missed rides — today + last 7 days"], ["missed_last7", "Missed rides — last 7 days (one-off)"]];
+const CARDS = [["", "No picture"], ["missed_today", "Missed rides — today"], ["missed_week", "Missed rides — today + last 7 days"], ["missed_last7", "Missed rides — last 7 days (one-off)"], ["app_update", "App update — your version → new version"]];
 const usesSms = (f) => f.channel === "sms" || f.fallback === "sms";
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
