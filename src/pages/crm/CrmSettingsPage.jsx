@@ -12,6 +12,8 @@ const NUMS = [
   ["quietHours.endHour", "Quiet hours end (IST hour, 0–23)", "Messages resume at this hour"],
   ["campaignApprovalAboveInr", "Approval required above (₹)", "PRD recommendation: ₹500"],
   ["campaignThrottlePerHour", "Campaign messages per hour (max)", "No campaign sends faster than this"],
+  ["waDailyLimit", "WhatsApp: new people per 24 hours", "Meta limit is 250 today (TIER_250) — keep a little below. Raise it when Meta raises the tier."],
+  ["waTransactionalReserve", "WhatsApp: kept for transactional", "Marketing stops this many short of the limit, so documents / KYC / dues still go out"],
 ];
 const LABEL = {
   mongo: "Database (MongoDB)", redis: "Queue (Redis)", replica: "Ride data (read-only replica)",
