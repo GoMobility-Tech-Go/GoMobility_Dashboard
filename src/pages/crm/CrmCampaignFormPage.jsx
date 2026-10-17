@@ -316,7 +316,7 @@ export default function CrmCampaignFormPage() {
             {!needsSms && (
               <FormGroup label="Picture card (drivers)"
                 hint={f.card
-                  ? `Each driver gets a picture of their own numbers above the text. Drivers who missed no rides today are skipped.${needsWa ? " The WhatsApp template must have an Image header (e.g. driver_missed_rides_card_v1)." : ""}`
+                  ? `Each driver gets a picture of their own numbers above the text. Drivers who missed no rides today are skipped.${needsWa ? " The WhatsApp template must have an Image header (e.g. driver_missed_rides_card_v2)." : ""}`
                   : "Attach a picture of each driver's own missed-ride numbers"}>
                 <select className="gm-input" value={f.card} onChange={(e) => set("card", e.target.value)}>
                   {CARDS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
