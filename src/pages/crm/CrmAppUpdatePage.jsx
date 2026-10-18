@@ -3,31 +3,41 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Smartphone, CheckCircle2, Clock, HelpCircle, Send } from "lucide-react";
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { StatCard, TableCard } from "../../components/ui";
 import { crmPost } from "../../api/crm";
-import { CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, Hint, Section, Grid, Paged, COLORS, num, dt } from "./crmShared";
+import { CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, Hint, Section, Grid, Paged, COLORS, num, dt, Tile, AREAS, AreaButtons, ChartCard, ChartTooltip, Legend, RangeButtons, axisTick, gridStroke, dayKeyLabel, pctOf as pct } from "./crmShared";
 import { ContactCell, DownloadButton, dim, soft } from "./crmMessageParts";
 
 const TABS = [["pending", "Pending"], ["updated", "Updated"], ["all", "All drivers"]];
-const AREAS = [["ncr", "Delhi NCR"], ["all", "All India"]];
 // reminder result filter (API `rem`)
 const REMS = [["", "Any"], ["not_sent", "Not reminded yet"], ["reached", "WhatsApp delivered"], ["read", "WhatsApp read"], ["failed", "WhatsApp failed"], ["updated_after", "Updated after reminder"]];
-const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : "—");
 const WA_TONE = { read: "blue", delivered: "green", sent: "gold", queued: "gray", failed: "red" };
 const WA_LABEL = { read: "Read", delivered: "Delivered", sent: "Sent", queued: "Queued", failed: "Failed" };
 
-// Clickable number tile — sets the reminder filter on the table below
-function Tile({ label, value, sub, color = "#fff", active, onClick }) {
+// Day by day: drivers who reached the new version (bars), share on the new version (line), reminders sent (bars)
+function TrendChart({ area }) {
+  const [days, setDays] = useState(30);
+  const t = useCrm("/app-updates/trend", { params: { area, days }, refreshMs: 300000 });
+  const rows = (t.data?.daily || []).map((x) => ({ ...x, label: dayKeyLabel(x.day) }));
   return (
-    <button type="button" onClick={onClick} style={{
-      textAlign: "left", cursor: onClick ? "pointer" : "default", padding: "12px 14px", borderRadius: 12,
-      background: active ? "rgba(212,175,55,0.08)" : "rgba(255,255,255,0.03)",
-      border: `1px solid ${active ? "rgba(212,175,55,0.45)" : "rgba(255,255,255,0.08)"}`, color: "inherit", fontFamily: "Outfit,sans-serif",
-    }}>
-      <div style={{ fontSize: 10, color: dim, textTransform: "uppercase", letterSpacing: "0.7px", marginBottom: 5 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: soft, marginTop: 3 }}>{sub}</div>}
-    </button>
+    <ChartCard title="Updates day by day" subtitle="Drivers seen on the new version each day (at login) · % of all drivers on it · drivers reminded that day"
+      right={<RangeButtons value={days} onChange={setDays} options={[14, 30, 60]} />} style={{ marginBottom: 16 }}>
+      <ErrorNote error={t.error} />
+      <ResponsiveContainer width="100%" height={230}>
+        <ComposedChart data={rows}>
+          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+          <XAxis dataKey="label" tick={axisTick} interval="preserveStartEnd" />
+          <YAxis yAxisId="n" tick={axisTick} allowDecimals={false} />
+          <YAxis yAxisId="p" orientation="right" tick={axisTick} unit="%" domain={[0, 100]} />
+          <Tooltip content={<ChartTooltip valueFormatter={(v, p) => (p.dataKey === "pct" ? `${v}%` : num(v))} />} />
+          <Bar yAxisId="n" dataKey="reminded" name="Reminded" fill={COLORS.gold} opacity={0.35} radius={[3, 3, 0, 0]} />
+          <Bar yAxisId="n" dataKey="updated" name="Updated that day" fill={COLORS.green} radius={[3, 3, 0, 0]} />
+          <Line yAxisId="p" dataKey="pct" name="On new version" stroke={COLORS.blue} strokeWidth={2} dot={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <Legend items={[{ name: "Updated that day", color: COLORS.green }, { name: "Reminded", color: COLORS.gold }, { name: "% on new version", color: COLORS.blue }]} />
+    </ChartCard>
   );
 }
 
@@ -80,11 +90,7 @@ export default function CrmAppUpdatePage() {
       }
     >
       <ErrorNote error={d.error} />
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        {AREAS.map(([k, label]) => (
-          <button key={k} className={area === k ? "btn-gold btn-sm" : "btn-outline btn-sm"} onClick={() => setArea(k)}>{label}</button>
-        ))}
-      </div>
+      <div style={{ marginBottom: 14 }}><AreaButtons value={area} onChange={setArea} /></div>
       {d.loading && !r && <Loading />}
       {r && (
         <>
@@ -124,6 +130,8 @@ export default function CrmAppUpdatePage() {
               </Section>
             );
           })()}
+
+          <TrendChart area={area} />
 
           <Section title="Drivers by version">
             <div style={{ display: "grid", gap: 6 }}>

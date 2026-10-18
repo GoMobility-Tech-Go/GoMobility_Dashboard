@@ -225,6 +225,41 @@ export const Grid = ({ min = 320, gap = 16, children, style }) => (
   <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit,minmax(${min}px,1fr))`, gap, marginBottom: 16, ...style }}>{children}</div>
 );
 
+// "20261017" (CRM IST day key) → "17 Oct"
+export const dayKeyLabel = (k) => (k ? day(`${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)}`) : "");
+export const pctOf = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : "—");
+
+// Number tile — clickable ones set a filter on the table below the tiles
+export function Tile({ label, value, sub, color = "#fff", active, onClick }) {
+  return (
+    <button type="button" onClick={onClick} disabled={!onClick} style={{
+      textAlign: "left", cursor: onClick ? "pointer" : "default", padding: "12px 14px", borderRadius: 12,
+      background: active ? "rgba(212,175,55,0.08)" : "rgba(255,255,255,0.03)",
+      border: `1px solid ${active ? "rgba(212,175,55,0.45)" : "rgba(255,255,255,0.08)"}`, color: "inherit", fontFamily: "Outfit,sans-serif",
+    }}>
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.7px", marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 3 }}>{sub}</div>}
+    </button>
+  );
+}
+export const Tiles = ({ children, min = 160 }) => (
+  <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill,minmax(${min}px,1fr))`, gap: 10 }}>{children}</div>
+);
+
+// Delhi NCR / All India switch (CRM API `area=ncr|all`)
+export const AREAS = [["ncr", "Delhi NCR"], ["all", "All India"]];
+export function Chips({ items, value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {items.map(([k, label]) => (
+        <button key={k} className={value === k ? "btn-gold btn-sm" : "btn-outline btn-sm"} onClick={() => onChange(k)}>{label}</button>
+      ))}
+    </div>
+  );
+}
+export const AreaButtons = ({ value, onChange }) => <Chips items={AREAS} value={value} onChange={onChange} />;
+
 // ── Status bar (top of every CRM page) ───────────────────────────────────────
 function StatusBar() {
   const toast = useToast();

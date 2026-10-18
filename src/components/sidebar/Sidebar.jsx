@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, Menu, X, Crown, Megaphone, AlertTriangle,
   Smartphone, Trophy, MessageCircle, Activity, Target, UserCog, Lock,
   BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText, Banknote, Building2, Radio,
-  GitBranch, Mail, BellRing, UserSearch
+  GitBranch, Mail, BellRing, UserSearch, CarFront, PhoneOff
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -57,6 +57,9 @@ const ADMIN_MENU = [
     { label:"Contacts",           to:"/crm/contacts",         icon:UserSearch  },
     { label:"Messages",           to:"/crm/messages",         icon:Mail        },
     { label:"App Update",         to:"/crm/app-update",       icon:Smartphone  },
+    { label:"Ride Misses",        to:"/crm/missed-rides",     icon:CarFront    },
+    { label:"WhatsApp",           to:"/crm/whatsapp",         icon:MessageCircle },
+    { label:"Not Reachable",      to:"/crm/reach",            icon:PhoneOff    },
     { label:"Ops Alerts",         to:"/crm/alerts",           icon:BellRing    },
     { label:"CRM Settings",       to:"/crm/settings",         icon:SlidersHorizontal },
   ]},

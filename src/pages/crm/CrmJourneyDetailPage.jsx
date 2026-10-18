@@ -41,6 +41,42 @@ function describe(n) {
 
 const ICON = { send: Send, wait: Clock, check: GitBranch, branch: GitBranch, exit: LogOut, notify_ops: BellRing };
 
+// Why messages of this journey did not go: each send step's last result per person (sent / not sent + reason /
+// still waiting + reason), and messages that went out but the provider failed (Meta limit, app removed …)
+function WhyNotSent({ path, days }) {
+  const s = useCrm(`${path}/skips`, { params: { days }, refreshMs: 120000 });
+  const r = s.data;
+  if (!r) return <ErrorNote error={s.error} />;
+  const notSent = r.notSent.reduce((a, x) => a + x.n, 0), waiting = r.waiting.reduce((a, x) => a + x.n, 0), prov = r.providerFailed.reduce((a, x) => a + x.n, 0);
+  const Rows = ({ items, color }) => items.map((x) => (
+    <div key={`${x.label}|${x.channel || ""}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12.5, padding: "6px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      <span style={{ color: soft }}>{x.label}{x.channel && <span style={{ color: dim }}> · {CHANNEL[x.channel] || x.channel}</span>}</span><b style={{ color }}>{num(x.n)}</b>
+    </div>
+  ));
+  return (
+    <ChartCard title="Why not sent" subtitle={`Last ${days} days · ${num(r.runs)} people entered · ${num(r.steps)} message steps`} style={{ marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 18 }}>
+        <div>
+          <div style={{ fontSize: 11, color: dim, textTransform: "uppercase", letterSpacing: ".6px" }}>Sent</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: COLORS.gold }}>{num(r.sent)} <span style={{ fontSize: 12, color: dim }}>{r.steps ? pct(r.sent / r.steps) : ""}</span></div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: dim, textTransform: "uppercase", letterSpacing: ".6px" }}>Not sent · {num(notSent)}</div>
+          {r.notSent.length ? <Rows items={r.notSent} color={COLORS.red} /> : <div style={{ fontSize: 12, color: dim, marginTop: 6 }}>Nothing</div>}
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: dim, textTransform: "uppercase", letterSpacing: ".6px" }}>Waiting now · {num(waiting)}</div>
+          {r.waiting.length ? <Rows items={r.waiting} color={COLORS.orange} /> : <div style={{ fontSize: 12, color: dim, marginTop: 6 }}>Nobody</div>}
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: dim, textTransform: "uppercase", letterSpacing: ".6px" }}>Sent but failed · {num(prov)}</div>
+          {r.providerFailed.length ? <Rows items={r.providerFailed} color={COLORS.red} /> : <div style={{ fontSize: 12, color: dim, marginTop: 6 }}>None</div>}
+        </div>
+      </div>
+    </ChartCard>
+  );
+}
+
 export default function CrmJourneyDetailPage() {
   const { key } = useParams();
   const me = useCrmMe();
@@ -209,6 +245,8 @@ export default function CrmJourneyDetailPage() {
               </ChartCard>
             </div>
           )}
+
+          <WhyNotSent path={path} days={days} />
 
           <div style={{ marginBottom: 16 }}>
             <TableCard title="Journey Flow" icon="🧭">

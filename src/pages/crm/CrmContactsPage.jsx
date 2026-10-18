@@ -6,7 +6,7 @@ import { StatCard, TableCard, Card } from "../../components/ui";
 import { crmGet, crmPost, crmErrorText } from "../../api/crm";
 import {
   CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, StatusPill, CategoryPill, Section, Empty, Grid, Paged,
-  CHANNEL, CHANNEL_COLOR, COLORS, inr, num, dt, shortKey,
+  CHANNEL, CHANNEL_COLOR, COLORS, inr, num, dt, shortKey, Chips,
 } from "./crmShared";
 import { TimeCell, MessageContent, MessageDetails, DownloadButton, runAbout, dim, soft, bright } from "./crmMessageParts";
 
@@ -16,6 +16,69 @@ const Fact = ({ label, value }) => (
     <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.9)", fontFamily: "Outfit,sans-serif" }}>{value}</div>
   </Card>
 );
+
+// Timeline — everything about this person in one line, newest first: what they did (ride backend events), days they
+// missed ride requests, the app version we saw, journeys they entered and every message (with its status).
+const EVENT = {
+  "driver.went_online": ["Came online", COLORS.green], "driver.ride_completed": ["Completed a ride", COLORS.green],
+  "driver.signed_up": ["Signed up as a driver", COLORS.blue], "driver.kyc_submitted": ["Submitted KYC documents", COLORS.blue],
+  "driver.kyc_all_verified": ["KYC approved", COLORS.green], "driver.kyc_verified": ["A document was verified", COLORS.green],
+  "driver.kyc_rejected": ["A document was rejected", COLORS.red], "driver.kyc_stuck": ["KYC stuck in review", COLORS.orange],
+  "driver.doc_expiring": ["A document is expiring", COLORS.orange], "driver.doc_renewed": ["Renewed a document", COLORS.green],
+  "passenger.signed_up": ["Signed up", COLORS.blue], "ride.requested": ["Requested a ride", COLORS.blue], "ride.completed": ["Ride completed", COLORS.green],
+  "ride.cancelled_no_driver": ["No driver found", COLORS.red], "passenger.dues_outstanding": ["Has pending dues", COLORS.orange],
+  "passenger.dues_cleared": ["Cleared dues", COLORS.green], "subscription.purchased": ["Bought a subscription", COLORS.gold],
+  "subscription.expiring": ["Subscription expiring", COLORS.orange], "subscription.renewed": ["Renewed subscription", COLORS.gold],
+  "subscription.lapsed": ["Subscription ended", COLORS.red],
+};
+const TL_FILTER = [["all", "Everything"], ["activity", "What they did"], ["misses", "Missed rides"], ["messages", "Messages"]];
+const MSG_TONE = { read: COLORS.blue, delivered: COLORS.green, sent: COLORS.gold, failed: COLORS.red, skipped: COLORS.orange, dry_run: COLORS.purple, queued: COLORS.gray };
+
+function Timeline({ d, journeyNames }) {
+  const [f, setF] = useState("all");
+  const items = useMemo(() => {
+    const out = [];
+    for (const e of d.events || []) {
+      if (e.name === "ops.notify") continue;
+      const [text, color] = EVENT[e.name] || [e.name, COLORS.gray];
+      out.push({ at: e.occurredAt || e.createdAt, kind: "activity", color, text, sub: e.payload?.docType || e.payload?.planName || "" });
+    }
+    for (const m of d.missedDays || []) {
+      if (!m.missed) continue;
+      out.push({ at: `${m.day.slice(0, 4)}-${m.day.slice(4, 6)}-${m.day.slice(6, 8)}T23:59:00+05:30`, dayOnly: true, kind: "misses", color: COLORS.orange,
+        text: `Missed ${num(m.missed)} ride request${m.missed > 1 ? "s" : ""} (${inr(m.missedFare)})`, sub: [m.accepted ? `accepted ${m.accepted}` : "", m.topRoute, m.topTime].filter(Boolean).join(" · ") });
+    }
+    const p = d.contact.profile || {};
+    if (p.appVersionAt && p.appVersion) out.push({ at: p.appVersionAt, kind: "activity", color: p.appOutdated ? COLORS.orange : COLORS.green, text: `Logged in with Go Captain v${p.appVersion}`, sub: p.appOutdated ? `old — latest is v${p.appLatest || "?"}` : "latest version" });
+    for (const r of d.runs || []) out.push({ at: r.enteredAt, kind: "messages", color: COLORS.purple, text: `Entered ${shortKey(r.journeyKey)} · ${journeyNames[r.journeyKey] || r.journeyKey}`, sub: r.state });
+    for (const m of d.messages || []) {
+      out.push({ at: m.createdAt, kind: "messages", color: MSG_TONE[m.status] || COLORS.gray,
+        text: `${CHANNEL[m.channel] || m.channel} — ${m.status}`, sub: [m.source?.ref ? shortKey(m.source.ref) : m.source?.kind, m.payload?.templateName || m.payload?.title, m.error].filter(Boolean).join(" · ") });
+    }
+    return out.filter((x) => x.at).sort((a, b) => new Date(b.at) - new Date(a.at));
+  }, [d, journeyNames]);
+  const rows = items.filter((x) => f === "all" || x.kind === f);
+  return (
+    <TableCard title={`Timeline (${num(rows.length)})`} icon="🕒" footer={<span style={{ fontSize: 11.5, color: dim }}>Last 60 days of activity · latest 100 messages</span>}>
+      <div style={{ padding: "4px 0 12px" }}><Chips items={TL_FILTER} value={f} onChange={setF} /></div>
+      <Paged rows={rows} size={15} resetKey={f}>{(pageRows) => (
+        <div style={{ display: "grid" }}>
+          {!rows.length && <Empty>Nothing yet</Empty>}
+          {pageRows.map((x, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "120px 14px 1fr", gap: 10, padding: "8px 0", borderTop: i ? "1px solid rgba(255,255,255,0.05)" : "none", alignItems: "start" }}>
+              <div style={{ fontSize: 11.5, color: soft }}>{x.dayOnly ? new Date(x.at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : dt(x.at)}</div>
+              <span style={{ width: 10, height: 10, borderRadius: "50%", background: x.color, marginTop: 3 }} />
+              <div>
+                <div style={{ fontSize: 12.5, color: bright }}>{x.text}</div>
+                {x.sub && <div style={{ fontSize: 11, color: dim }}>{x.sub}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}</Paged>
+    </TableCard>
+  );
+}
 
 function Detail({ userId, journeyNames, onChanged }) {
   const me = useCrmMe();
@@ -96,6 +159,8 @@ function Detail({ userId, journeyNames, onChanged }) {
           {!c.consent?.marketing && !c.suppressed?.is && can(me, "admin") && <button className="btn-outline" disabled={!!busy} onClick={optIn}>Record marketing opt-in</button>}
         </div>
       </Section>
+
+      <div style={{ marginBottom: 16 }}><Timeline d={d} journeyNames={journeyNames} /></div>
 
       <div style={{ marginBottom: 16 }}>
         <TableCard title={`Journeys (${d.runs.length})`} icon="🧭">

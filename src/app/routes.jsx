@@ -57,6 +57,9 @@ import CrmApprovalsPage from "../pages/crm/CrmApprovalsPage";
 import CrmContactsPage from "../pages/crm/CrmContactsPage";
 import CrmMessagesPage from "../pages/crm/CrmMessagesPage";
 import CrmAppUpdatePage from "../pages/crm/CrmAppUpdatePage";
+import CrmMissedRidesPage from "../pages/crm/CrmMissedRidesPage";
+import CrmWhatsAppPage from "../pages/crm/CrmWhatsAppPage";
+import CrmReachPage from "../pages/crm/CrmReachPage";
 import CrmAlertsPage from "../pages/crm/CrmAlertsPage";
 import CrmSettingsPage from "../pages/crm/CrmSettingsPage";
 
@@ -113,6 +116,9 @@ const routes = [
             { path:"contacts",           element:<CrmContactsPage/> },
             { path:"messages",           element:<CrmMessagesPage/> },
             { path:"app-update",         element:<CrmAppUpdatePage/> },
+            { path:"missed-rides",       element:<CrmMissedRidesPage/> },
+            { path:"whatsapp",           element:<CrmWhatsAppPage/> },
+            { path:"reach",              element:<CrmReachPage/> },
             { path:"alerts",             element:<CrmAlertsPage/> },
             { path:"settings",           element:<CrmSettingsPage/> },
           ]
