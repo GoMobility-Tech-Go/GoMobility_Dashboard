@@ -13,12 +13,12 @@ import { ContactCell, DownloadButton, dim, soft } from "./crmMessageParts";
 
 const WA_TONE = { read: "blue", delivered: "green", sent: "gold", queued: "gray", failed: "red", skipped: "gray" };
 const CH_LABEL = { read: "Read", delivered: "Delivered", sent: "Sent", queued: "Queued", failed: "Failed", skipped: "Skipped" };
-const SHOW = [["all", "All"], ["reached", "Got the message"], ["read", "Read it"], ["not_sent", "Did not get it"], ["tonight", "Goes at 8 pm"], ["came_back", "Online after message"]];
+const SHOW = [["all", "All"], ["reached", "Got the message"], ["read", "Read it"], ["not_sent", "Did not get it"], ["tonight", "Still to go"], ["came_back", "Online after message"]];
 const show = (k, x) => (k === "all" ? true : k === "reached" ? x.reached : k === "read" ? x.waRead : k === "not_sent" ? !x.reached && !x.pendingTonight
   : k === "tonight" ? x.pendingTonight : !!x.onlineAfter);
 
 function ChannelCell({ x }) {
-  if (x.pendingTonight) return <Pill tone="gold">Goes at 8 pm</Pill>;
+  if (x.pending && !x.wa && !x.push) return <Pill tone="gold">{x.pending}</Pill>;
   if (!x.entered) return <span style={{ color: dim, fontSize: 12 }}>Not sent</span>;
   return (
     <div style={{ fontSize: 12, display: "grid", gap: 4 }}>
@@ -128,7 +128,7 @@ export default function CrmMissedRidesPage() {
                       </td>
                       <td style={{ fontSize: 12 }}>{x.topRoute || "—"}{x.topTime && <div style={{ fontSize: 10.5, color: dim }}>{x.topTime}</div>}</td>
                       <td><ChannelCell x={x} /></td>
-                      <td style={{ fontSize: 11.5, color: x.why ? COLORS.red : dim, maxWidth: 220 }}>{x.why?.label || (x.pendingTonight ? "—" : "")}</td>
+                      <td style={{ fontSize: 11.5, color: x.why ? COLORS.red : dim, maxWidth: 220 }}>{x.why?.label || (x.pending ? x.pending : "")}</td>
                       <td style={{ fontSize: 11.5 }}>
                         {x.onlineAfter && <div style={{ color: COLORS.green }}>Online {dt(x.onlineAfter)}</div>}
                         {x.rideAfter && <div style={{ color: COLORS.green }}>Ride {dt(x.rideAfter)}</div>}

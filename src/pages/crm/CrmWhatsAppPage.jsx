@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { TableCard } from "../../components/ui";
+import { crmGet } from "../../api/crm";
 import {
   CrmPage, useCrm, Loading, ErrorNote, Pill, Hint, Section, Grid, Paged, COLORS, num, inr, dt, Tile, Tiles, Chips,
   ChartCard, ChartTooltip, Legend, axisTick, gridStroke, dayKeyLabel, pctOf, Empty, shortKey,
@@ -36,10 +37,17 @@ function Meter({ used, limit, reserve, marketing, transactional }) {
 }
 
 export default function CrmWhatsAppPage() {
-  const [refresh, setRefresh] = useState(0);
   const [tf, setTf] = useState("all");
-  const s = useCrm("/whatsapp/status", { params: refresh ? { refresh: 1, n: refresh } : {}, refreshMs: 60000 });
-  const t = useCrm("/whatsapp/templates", { params: refresh ? { refresh: 1, n: refresh } : {}, refreshMs: 600000 });
+  const [refreshing, setRefreshing] = useState(false);
+  const s = useCrm("/whatsapp/status", { refreshMs: 60000 });
+  const t = useCrm("/whatsapp/templates", { refreshMs: 600000 });
+  // Meta data is cached 10 min on the CRM; this asks Meta once, then the page reloads normally
+  const refreshMeta = async () => {
+    setRefreshing(true);
+    try { await Promise.all([crmGet("/whatsapp/status", { refresh: 1 }), crmGet("/whatsapp/templates", { refresh: 1 })]); } catch { /* the reload shows the error */ }
+    await Promise.all([s.reload(), t.reload()]);
+    setRefreshing(false);
+  };
   const r = s.data, tp = t.data;
   const n = r?.number || {};
   const [qTone, qText] = QUALITY[n.quality_rating] || QUALITY.UNKNOWN;
@@ -50,7 +58,7 @@ export default function CrmWhatsAppPage() {
     <CrmPage
       title="WhatsApp"
       subtitle="Today's sending limit, the number's health on Meta, cost, failures and every template"
-      actions={<button className="btn-outline" onClick={() => setRefresh(Date.now())}><RefreshCw size={14} /> Refresh from Meta</button>}
+      actions={<button className="btn-outline" disabled={refreshing} onClick={refreshMeta}><RefreshCw size={14} /> {refreshing ? "Asking Meta…" : "Refresh from Meta"}</button>}
     >
       <ErrorNote error={s.error} />
       {s.loading && !r && <Loading />}
