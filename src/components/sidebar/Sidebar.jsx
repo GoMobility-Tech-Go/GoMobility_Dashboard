@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, Menu, X, Crown, Megaphone, AlertTriangle,
   Smartphone, Trophy, MessageCircle, Activity, Target, UserCog, Lock,
   BarChart2, Receipt, Map, CheckCheck, Hexagon, LandPlot, PieChart, FileText, Banknote, Building2, Radio,
-  GitBranch, Mail, BellRing, UserSearch, CarFront, PhoneOff, LineChart, MapPinned, UsersRound
+  GitBranch, Mail, BellRing, UserSearch, CarFront, PhoneOff, LineChart, MapPinned, UsersRound, ClipboardList
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -49,6 +49,7 @@ const ADMIN_MENU = [
     { label:"Push Notifications", to:"/notifications",        icon:Bell        },
   ]},
   { label:"CRM", items:[
+    { label:"Daily Summary",      to:"/crm/summary",          icon:ClipboardList },
     { label:"CRM Overview",       to:"/crm",                  icon:Target, end:true },
     { label:"CRM Analytics",      to:"/crm/analytics",        icon:BarChart3   },
     { label:"Message Results",    to:"/crm/results",          icon:LineChart   },

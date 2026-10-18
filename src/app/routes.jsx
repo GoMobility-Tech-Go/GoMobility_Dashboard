@@ -63,6 +63,7 @@ import CrmReachPage from "../pages/crm/CrmReachPage";
 import CrmResultsPage from "../pages/crm/CrmResultsPage";
 import CrmDemandPage from "../pages/crm/CrmDemandPage";
 import CrmDriverGroupsPage from "../pages/crm/CrmDriverGroupsPage";
+import CrmSummaryPage from "../pages/crm/CrmSummaryPage";
 import CrmAlertsPage from "../pages/crm/CrmAlertsPage";
 import CrmSettingsPage from "../pages/crm/CrmSettingsPage";
 
@@ -125,6 +126,7 @@ const routes = [
             { path:"results",            element:<CrmResultsPage/> },
             { path:"demand",             element:<CrmDemandPage/> },
             { path:"driver-groups",      element:<CrmDriverGroupsPage/> },
+            { path:"summary",            element:<CrmSummaryPage/> },
             { path:"alerts",             element:<CrmAlertsPage/> },
             { path:"settings",           element:<CrmSettingsPage/> },
           ]

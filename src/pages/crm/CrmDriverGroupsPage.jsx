@@ -3,7 +3,7 @@
 // group (one click → draft → approve). The campaign targets the group itself, counted again when it sends.
 // Data: CRM /driver-groups (daily copy in DailyStat, every 10 min).
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Send } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { TableCard } from "../../components/ui";
@@ -29,7 +29,8 @@ export default function CrmDriverGroupsPage() {
   const navigate = useNavigate();
   const me = useCrmMe();
   const [area, setArea] = useState("ncr");
-  const [group, setGroup] = useState("slowing");
+  const [sp] = useSearchParams();   // Daily Summary links here with ?group=slowing
+  const [group, setGroup] = useState(sp.get("group") || "slowing");
   const [view, setView] = useState("daily");
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
