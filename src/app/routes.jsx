@@ -60,6 +60,9 @@ import CrmAppUpdatePage from "../pages/crm/CrmAppUpdatePage";
 import CrmMissedRidesPage from "../pages/crm/CrmMissedRidesPage";
 import CrmWhatsAppPage from "../pages/crm/CrmWhatsAppPage";
 import CrmReachPage from "../pages/crm/CrmReachPage";
+import CrmResultsPage from "../pages/crm/CrmResultsPage";
+import CrmDemandPage from "../pages/crm/CrmDemandPage";
+import CrmDriverGroupsPage from "../pages/crm/CrmDriverGroupsPage";
 import CrmAlertsPage from "../pages/crm/CrmAlertsPage";
 import CrmSettingsPage from "../pages/crm/CrmSettingsPage";
 
@@ -119,6 +122,9 @@ const routes = [
             { path:"missed-rides",       element:<CrmMissedRidesPage/> },
             { path:"whatsapp",           element:<CrmWhatsAppPage/> },
             { path:"reach",              element:<CrmReachPage/> },
+            { path:"results",            element:<CrmResultsPage/> },
+            { path:"demand",             element:<CrmDemandPage/> },
+            { path:"driver-groups",      element:<CrmDriverGroupsPage/> },
             { path:"alerts",             element:<CrmAlertsPage/> },
             { path:"settings",           element:<CrmSettingsPage/> },
           ]
