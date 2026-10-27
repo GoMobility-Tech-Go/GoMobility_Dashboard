@@ -24,6 +24,7 @@ const ADMIN_MENU = [
     { label:"Delhi NCR Drivers",    to:"/ncr-drivers",           icon:Building2   },
     { label:"Delhi NCR Passengers", to:"/ncr-passengers",        icon:MapPin      },
     { label:"Chandigarh Drivers",   to:"/chd-drivers",           icon:MapPin      },
+    { label:"Chandigarh Passengers", to:"/chd-passengers",       icon:MapPin      },
     { label:"Passenger Onboarding", to:"/passenger-onboarding",  icon:Users       },
     { label:"Ride Monitoring",    to:"/ride-monitoring",      icon:MapPin      },
     { label:"Live Map",           to:"/live-map",             icon:Radio       },

@@ -220,6 +220,9 @@ export const getChdDriverStats = () => api.get('/admin/drivers/chd-stats');
 export const getChdDriverDateStats = (from, to) =>
   api.get('/admin/drivers/chd-date-stats', { params: { from, to } });
 
+// ── CHD (Chandigarh Tricity) Passenger Stats ──────────────────────────────────
+export const getChdPassengerStats = () => api.get('/admin/passengers/chd-stats');
+
 // ── Passenger KYC Detail (admin) ──────────────────────────────────────────────
 export const getPassengerKycDetail = (userId) => api.get(`/kyc/passenger/admin/${userId}`);
 

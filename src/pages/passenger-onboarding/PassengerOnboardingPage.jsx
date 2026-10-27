@@ -6,7 +6,7 @@ import {
   Shield, RefreshCw, Calendar, Activity, Eye, EyeOff,
   Filter as FilterIcon, MapPin, Download,
 } from 'lucide-react';
-import { getUsers, getUserById, updateUserStatus, getPassengerStats, getNcrPassengerStats, getPassengerKycDetail } from '../../api/admin';
+import { getUsers, getUserById, updateUserStatus, getPassengerStats, getNcrPassengerStats, getChdPassengerStats, getPassengerKycDetail } from '../../api/admin';
 import {
   FilterHead, FilterChip, buildFilterParams, isFilterActive, OP_LABELS, formatChipValue,
 } from '../../components/filters/index.jsx';
@@ -316,7 +316,7 @@ const pagBtn = (disabled) => ({
 // ─── Main component ───────────────────────────────────────────────────────────
 const LIMIT = 10;
 
-export default function PassengerOnboardingPage({ ncrMode = false }) {
+export default function PassengerOnboardingPage({ ncrMode = false, chdMode = false }) {
   const navigate = useNavigate();
 
   // ── Period state (controls BOTH cards AND table) ──────────────────────
@@ -347,8 +347,8 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
     setStatsLoading(true);
     setStatsError(null);
     try {
-      if (ncrMode) {
-        const res = await getNcrPassengerStats();
+      if (ncrMode || chdMode) {
+        const res = ncrMode ? await getNcrPassengerStats() : await getChdPassengerStats();
         const d = res.data?.data ?? res.data ?? {};
         setStats({
           signups:  d.total  ?? 0,
@@ -374,7 +374,7 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
       setStatsError(e?.response?.status === 404 ? 'Stats endpoint not found (404) — backend may need restart' : `Failed to load stats: ${e?.response?.status || 'Network error'}`);
     }
     setStatsLoading(false);
-  }, [ncrMode, periodDates]);
+  }, [ncrMode, chdMode, periodDates]);
 
   const statsIntervalRef = useRef(null);
   useEffect(() => {
@@ -428,6 +428,8 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
       // NCR mode — filter to passengers who have a completed ride in an NCR city
       if (ncrMode) params.ncr_passenger = 'true';
+      // CHD mode — filter to passengers who have a completed ride in Chandigarh Tricity
+      if (chdMode) params.chd_passenger = 'true';
       // Extra filters
       if (cityFilter.trim())              params.city           = cityFilter.trim();
       if (isSubscribed !== '')            params.is_subscribed  = isSubscribed;
@@ -440,7 +442,7 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
       setPagination(res.data?.data?.pagination ?? null);
     } catch (e) { console.error('[PassengerTable]', e); }
     setTableLoading(false);
-  }, [offset, filters, periodDates, includeInactive, includeUnverified, cityFilter, isSubscribed, ridesMin, ridesMax, passengerAccountStatus]);
+  }, [ncrMode, chdMode, offset, filters, periodDates, includeInactive, includeUnverified, cityFilter, isSubscribed, ridesMin, ridesMax, passengerAccountStatus]);
 
   useEffect(() => { loadPassengers(); }, [loadPassengers]);
 
@@ -453,6 +455,7 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
       if (!filters.joined && periodDates.from) params.joined_from = periodDates.from;
       if (!filters.joined && periodDates.to)   params.joined_to   = periodDates.to;
       if (ncrMode) params.ncr_passenger = 'true';
+      if (chdMode) params.chd_passenger = 'true';
       if (cityFilter.trim())              params.city           = cityFilter.trim();
       if (isSubscribed !== '')            params.is_subscribed  = isSubscribed;
       if (ridesMin !== '')                params.rides_min      = ridesMin;
@@ -481,7 +484,7 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
         "Registered On":    xlsDate(u.created_at),
       }));
 
-      exportToExcel(data, `go-mobility-${ncrMode ? 'ncr-' : ''}passengers-${today}`, ncrMode ? 'NCR Passengers' : 'Passengers');
+      exportToExcel(data, `go-mobility-${ncrMode ? 'ncr-' : chdMode ? 'chd-' : ''}passengers-${today}`, ncrMode ? 'NCR Passengers' : chdMode ? 'CHD Passengers' : 'Passengers');
     } catch (e) { console.error('[Export] Failed:', e); }
     finally { setExporting(false); }
   };
@@ -541,11 +544,13 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontFamily: FONT_SER, fontWeight: 700, color: TEXT_BRI, letterSpacing: '0.5px' }}>
-            {ncrMode ? 'Delhi NCR Passengers' : 'Passenger Onboarding'}
+            {ncrMode ? 'Delhi NCR Passengers' : chdMode ? 'Chandigarh Tricity Passengers' : 'Passenger Onboarding'}
           </h1>
           <p style={{ margin: 0, fontSize: 12.5, color: TEXT_DIM, marginTop: 2 }}>
             {ncrMode
               ? 'Passengers with rides in Delhi · Noida · Gurgaon · Ghaziabad · Faridabad · Greater Noida'
+              : chdMode
+              ? 'Passengers with rides in Chandigarh · Mohali (SAS Nagar) · Panchkula'
               : 'Monitor passenger signups, activity, and engagement'}
           </p>
         </div>
@@ -694,6 +699,12 @@ export default function PassengerOnboardingPage({ ncrMode = false }) {
             <StatCard icon={Users}     label="Total NCR Passengers" value={stats.signups}  color={GOLD}      loading={statsLoading} sub="Registered in Delhi, Noida, Gurgaon & more" />
             <StatCard icon={UserCheck} label="Active"               value={stats.active}   color="#22c55e"   loading={statsLoading} sub="Active NCR passengers" />
             <StatCard icon={UserX}     label="Inactive"             value={stats.inactive} color="#ef4444"   loading={statsLoading} sub="Inactive NCR passengers" />
+          </>
+        ) : chdMode ? (
+          <>
+            <StatCard icon={Users}     label="Total CHD Passengers" value={stats.signups}  color={GOLD}      loading={statsLoading} sub="Chandigarh, Mohali & Panchkula" />
+            <StatCard icon={UserCheck} label="Active"               value={stats.active}   color="#22c55e"   loading={statsLoading} sub="Active CHD passengers" />
+            <StatCard icon={UserX}     label="Inactive"             value={stats.inactive} color="#ef4444"   loading={statsLoading} sub="Inactive CHD passengers" />
           </>
         ) : (
           <>
