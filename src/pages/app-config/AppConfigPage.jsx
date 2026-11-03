@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Settings, Edit2, Save, X, RefreshCw, RotateCcw } from "lucide-react";
-import { getPricingSettings, updatePricingSetting, reloadPricingCache } from "../../api/admin";
+import { getPricingSettings, updatePricingSetting, reloadPricingCache, toSettingRow } from "../../api/admin";
 
 const Toast = ({ msg, type, onClose }) => (
   <div style={{ position:"fixed", bottom:28, right:28, zIndex:9999, background:type==="error"?"#7f1d1d":"#14532d", border:`1px solid ${type==="error"?"#ef4444":"#22c55e"}`, borderRadius:12, padding:"12px 20px", color:"#fff", fontSize:13, fontFamily:"Outfit,sans-serif", display:"flex", alignItems:"center", gap:12, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", maxWidth:400 }}>
@@ -66,7 +66,7 @@ export default function AppConfigPage() {
     getPricingSettings()
       .then((res) => {
         const d = res.data?.data || res.data || [];
-        setSettings(Array.isArray(d) ? d : []);
+        setSettings(Array.isArray(d) ? d.map(toSettingRow) : []);
       })
       .catch(() => showToast("Failed to load pricing settings.", "error"))
       .finally(() => setLoading(false));
@@ -84,7 +84,7 @@ export default function AppConfigPage() {
   const handleSave = async (s) => {
     setSaving(true);
     try {
-      await updatePricingSetting(s.key, editVal, s.value_type || "float");
+      await updatePricingSetting(s.key, editVal, s.value_type);
       setSettings((prev) => prev.map((x) => x.key === s.key ? { ...x, value: editVal } : x));
       showToast(`"${s.key}" updated successfully.`);
       cancelEdit();

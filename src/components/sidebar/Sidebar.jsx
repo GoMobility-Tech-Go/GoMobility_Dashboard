@@ -38,6 +38,7 @@ const ADMIN_MENU = [
   ]},
   { label:"Configuration", items:[
     { label:"Pricing Engine",     to:"/pricing-engine",       icon:TrendingUp  },
+    { label:"First Ride Free",    to:"/first-ride-free",      icon:Gift        },
     { label:"Subscriptions",      to:"/subscriptions",        icon:Ticket      },
     { label:"City Management",    to:"/city-management",      icon:Map         },
   ]},

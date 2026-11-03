@@ -6,6 +6,7 @@ import LoginPage from "../pages/auth/LoginPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import CityManagementPage from "../pages/city-management/CityManagementPage";
 import PricingEnginePage from "../pages/pricing-engine/PricingEnginePage";
+import FirstRideFreePage from "../pages/first-ride-free/FirstRideFreePage";
 import DriverOnboardingPage from "../pages/driver-onboarding/DriverOnboardingPage";
 import DriverDetailPage from "../pages/driver-onboarding/DriverDetailPage";
 import PassengerOnboardingPage from "../pages/passenger-onboarding/PassengerOnboardingPage";
@@ -95,6 +96,7 @@ const routes = [
         { path:"settlements", element:<SettlementsPage/> },
         { path:"city-management", element:<CityManagementPage/> },
         { path:"pricing-engine", element:<PricingEnginePage/> },
+        { path:"first-ride-free", element:<FirstRideFreePage/> },
         { path:"subscriptions", element:<SubscriptionsPage/> },
         { path:"driver-incentives", element:<DriverIncentivesPage/> },
         { path:"reviews", element:<ReviewsPage/> },

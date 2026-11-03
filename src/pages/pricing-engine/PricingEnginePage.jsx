@@ -5,7 +5,7 @@ import {
   getPricingGst, updatePricingGst,
   getPricingTiers, updatePricingTier,
   getPricingPenalties, upsertPricingPenalty, deletePricingPenalty,
-  getPricingSettings, updatePricingSetting,
+  getPricingSettings, updatePricingSetting, toSettingRow,
 } from "../../api/admin";
 
 const VEHICLES = ["bike", "auto", "car", "xl", "premium", "luxury"];
@@ -130,7 +130,8 @@ export default function PricingEnginePage() {
     getPricingSettings()
       .then((res) => {
         const arr = res.data?.data || res.data || [];
-        const list = Array.isArray(arr) ? arr : Object.entries(arr).map(([key, val]) => ({ key, value: val }));
+        // Backend setting_key / setting_value bhejta hai — pehle yahan s.key padhte the to har row khali aati thi
+        const list = Array.isArray(arr) ? arr.map(toSettingRow) : Object.entries(arr).map(([key, val]) => ({ key, value: val }));
         setSettings(list);
         const map = {};
         list.forEach(s => { map[s.key] = s.value; });
@@ -523,16 +524,26 @@ export default function PricingEnginePage() {
                 <tbody>
                   {settings.map((s, idx) => {
                     const isSav = settingSaving === s.key;
-                    const valType = s.value_type || (s.value === "true" || s.value === "false" ? "boolean" : "float");
+                    const valType = s.value_type || (s.value === "true" || s.value === "false" ? "boolean" : "number");
+                    const options = s.meta?.options;
                     return (
                       <tr key={s.key} style={{ background:idx%2===0?"rgba(255,255,255,0.01)":"transparent" }}>
-                        <td style={{ padding:"12px 16px", borderBottom:"1px solid rgba(255,255,255,0.04)", fontFamily:"monospace", color:"rgba(212,175,55,0.8)", fontSize:12, whiteSpace:"nowrap" }}>{s.key}</td>
+                        <td style={{ padding:"12px 16px", borderBottom:"1px solid rgba(255,255,255,0.04)" }} title={s.meta?.help || ""}>
+                          {s.meta?.label && <div style={{ color:"#fff", fontSize:13, marginBottom:2 }}>{s.meta.label}{s.meta.unit ? <span style={{ color:"rgba(255,255,255,0.35)" }}> ({s.meta.unit})</span> : null}</div>}
+                          <div style={{ fontFamily:"monospace", color:"rgba(212,175,55,0.8)", fontSize:12, whiteSpace:"nowrap" }}>{s.key}</div>
+                        </td>
                         <td style={{ padding:"12px 16px", borderBottom:"1px solid rgba(255,255,255,0.04)", minWidth:160 }}>
                           {valType === "boolean" ? (
                             <select value={settingEdits[s.key] ?? s.value} onChange={e=>setSettingEdits(p=>({...p,[s.key]:e.target.value}))} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"6px 10px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif" }}>
                               <option value="true">true</option>
                               <option value="false">false</option>
                             </select>
+                          ) : options ? (
+                            <select value={settingEdits[s.key] ?? s.value} onChange={e=>setSettingEdits(p=>({...p,[s.key]:e.target.value}))} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"6px 10px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif" }}>
+                              {options.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          ) : valType === "string" || valType === "json" ? (
+                            <input type="text" value={settingEdits[s.key] ?? s.value} onChange={e=>setSettingEdits(p=>({...p,[s.key]:e.target.value}))} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"6px 10px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", width:180 }} />
                           ) : (
                             <input type="number" step="any" value={settingEdits[s.key] ?? s.value} onChange={e=>setSettingEdits(p=>({...p,[s.key]:e.target.value}))} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(212,175,55,0.15)", borderRadius:8, padding:"6px 10px", color:"#fff", fontSize:13, outline:"none", fontFamily:"Outfit,sans-serif", width:120 }} />
                           )}

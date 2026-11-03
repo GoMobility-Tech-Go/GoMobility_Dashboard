@@ -46,9 +46,33 @@ export const getPricingVehicles = () => api.get('/admin/pricing/vehicles');
 export const updateVehiclePricing = (vehicleType, data) =>
   api.patch(`/admin/pricing/vehicles/${vehicleType}`, data);
 export const getPricingSettings = () => api.get('/admin/pricing/settings');
-export const updatePricingSetting = (key, value, value_type = 'float') =>
-  api.patch(`/admin/pricing/settings/${key}`, { value, value_type });
+// Backend sirf number | boolean | string | json maanta hai. Pehle default 'float'
+// jaata tha → har save 400. Type na pata ho to mat bhejo — backend field
+// catalog (meta) se khud tay karta hai.
+const SETTING_TYPES = new Set(['number', 'boolean', 'string', 'json']);
+const normalizeSettingType = (t) =>
+  (t === 'float' || t === 'integer') ? 'number' : (SETTING_TYPES.has(t) ? t : undefined);
+export const updatePricingSetting = (key, value, value_type) => {
+  const type = normalizeSettingType(value_type);
+  return api.patch(`/admin/pricing/settings/${key}`, type ? { value, value_type: type } : { value });
+};
+// Backend rows { setting_key, setting_value, value_type, meta } → dashboard { key, value, value_type, meta }
+export const toSettingRow = (s) => ({
+  ...s,
+  key:        s.key ?? s.setting_key,
+  value:      s.value ?? s.setting_value,
+  value_type: s.meta?.type || s.value_type,
+});
 export const reloadPricingCache = () => api.post('/admin/pricing/cache/reload');
+
+// ── First Ride Free + Refer & Earn (backend mig 144) ─────────────────────────
+// Switch, caps, limits = pricing settings (group 'first_ride_free').
+export const getFirstRideFreeStats  = () => api.get('/admin/pricing/first-ride-free/stats');
+export const getFirstRideFreeReview = () => api.get('/admin/pricing/first-ride-free/review');
+export const approveFirstRideReferral = (referralId) =>
+  api.post(`/admin/pricing/first-ride-free/referrals/${referralId}/approve`);
+export const rejectFirstRideReferral = (referralId, reason) =>
+  api.post(`/admin/pricing/first-ride-free/referrals/${referralId}/reject`, { reason });
 export const getPricingGst = () => api.get('/admin/pricing/gst');
 export const updatePricingGst = (data) => api.patch('/admin/pricing/gst', data);
 
