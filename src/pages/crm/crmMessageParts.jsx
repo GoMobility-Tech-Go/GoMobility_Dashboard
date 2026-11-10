@@ -34,15 +34,28 @@ export const ContactCell = ({ name, phone, userId, role, stop }) => (
   </div>
 );
 
+// CRM email templates (src/email/templates.js in the CRM backend)
+export const EMAIL_KINDS = {
+  welcome: "Welcome (passenger, English)", first_ride_free: "First Ride Free (passenger, English)",
+  weekly_earnings: "Weekly report card (driver, Hinglish)", missed_today: "Missed rides today (driver, Hinglish)",
+  missed_late: "Missed rides last night (driver, Hinglish)",
+};
+export const emailLabel = (kind) => EMAIL_KINDS[kind] || kind;
+
 // One-line summary of what the message says
-export const MessageContent = ({ m }) => (
+export const MessageContent = ({ m }) => (m.payload?.emailKind ? (
+  <>
+    <b style={{ color: "rgba(255,255,255,0.85)" }}>Email: </b>{m.payload.subject || emailLabel(m.payload.emailKind)}
+    {m.payload.subject && <div style={{ color: soft, marginTop: 2 }}>{emailLabel(m.payload.emailKind)}</div>}
+  </>
+) : (
   <>
     {m.payload?.title ? <b style={{ color: "rgba(255,255,255,0.85)" }}>{m.payload.title} </b> : null}
     {m.payload?.body || m.payload?.text?.body || (m.payload?.templateName ? `Template: ${m.payload.templateName}` : "")}
     {m.payload?.templateName && m.payload?.params?.length > 0 && <div style={{ color: soft, marginTop: 2 }}>Values: {m.payload.params.join(" · ")}</div>}
     {m.payload?.imageUrl && <div style={{ color: COLORS.gold, marginTop: 2, fontSize: 11 }}>+ picture card</div>}
   </>
-);
+));
 
 // One labelled value in a details block
 export const Field = ({ label, children }) => (children == null || children === "" || children === false ? null : (
@@ -94,6 +107,8 @@ export function MessageDetails({ m, journeyName, contact = true }) {
         </Field>
         <Field label="Title">{p.title}</Field>
         <Field label={m.channel === "sms" ? "SMS text" : "Body"}>{p.body || p.text?.body}</Field>
+        <Field label="Email subject">{p.subject}</Field>
+        <Field label="Email template">{p.emailKind && emailLabel(p.emailKind)}</Field>
         <Field label="WhatsApp template">{p.templateName}</Field>
         {p.params?.length > 0 && (
           <Field label="Template values">
@@ -109,7 +124,8 @@ export function MessageDetails({ m, journeyName, contact = true }) {
         <Field label="Created">{dt(m.createdAt)}</Field>
         <Field label="Sent">{m.statusAt?.sent && dt(m.statusAt.sent)}</Field>
         <Field label="Delivered">{m.statusAt?.delivered && dt(m.statusAt.delivered)}</Field>
-        <Field label="Read">{m.statusAt?.read && dt(m.statusAt.read)}</Field>
+        <Field label={m.channel === "email" ? "Opened" : "Read"}>{m.statusAt?.read && dt(m.statusAt.read)}</Field>
+        <Field label="Link clicked">{m.statusAt?.clicked && dt(m.statusAt.clicked)}</Field>
         <Field label="Failed">{m.statusAt?.failed && dt(m.statusAt.failed)}</Field>
         <Field label={m.status === "dry_run" ? "Cost if sent" : "Cost"}>{m.costInr ? inr(m.costInr) : "Free"}</Field>
         <Field label="Provider ID">{m.providerMessageId && <span style={{ fontSize: 11, color: soft }}>{m.providerMessageId}</span>}</Field>

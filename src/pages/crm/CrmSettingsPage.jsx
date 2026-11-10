@@ -14,12 +14,14 @@ const NUMS = [
   ["campaignThrottlePerHour", "Campaign messages per hour (max)", "No campaign sends faster than this"],
   ["waDailyLimit", "WhatsApp: new people per 24 hours", "Meta limit is 250 today (TIER_250) — keep a little below. Raise it when Meta raises the tier."],
   ["waTransactionalReserve", "WhatsApp: kept for transactional", "Marketing stops this many short of the limit, so documents / KYC / dues still go out"],
+  ["emailDailyLimit", "Email: max emails per 24 hours", "Warm-up for a new sender: 200 in week 1, then 500, then 1,000+. Too fast and Gmail sends us to spam."],
 ];
+const TOGGLES = ["dryRun", "transactionalBypassesCaps", "emailEnabled"];
 const LABEL = {
   mongo: "Database (MongoDB)", redis: "Queue (Redis)", replica: "Ride data (read-only replica)",
   api: "API", worker: "Worker", ingest: "Data ingest",
   contacts: "Contact sync", signups: "Sign-up events", rides: "Ride events", kyc: "KYC events", online: "Driver online events",
-  commerce: "Dues & subscription events", missed: "Missed ride requests", appversions: "Driver app versions", "journey-runner": "Journey runner", "journey-scheduler": "Journey scheduler", "event-requeue": "Event recovery",
+  commerce: "Dues & subscription events", missed: "Missed ride requests", appversions: "Driver app versions", groups: "Driver groups", areas: "Where rides were missed", firstride: "First Ride Free offers", driverweek: "Driver weekly earnings", demand: "Ride demand near drivers", "journey-runner": "Journey runner", "journey-scheduler": "Journey scheduler", "event-requeue": "Event recovery",
 };
 const get = (o, path) => path.split(".").reduce((x, k) => x?.[k], o);
 const nest = (flat) => {
@@ -67,7 +69,7 @@ export default function CrmSettingsPage() {
   const admin = can(me, "admin");
 
   useEffect(() => {
-    if (s.data) setForm(Object.fromEntries([...NUMS.map(([p]) => [p, String(get(s.data, p) ?? "")]), ["dryRun", !!s.data.dryRun], ["transactionalBypassesCaps", !!s.data.transactionalBypassesCaps], ["driverAppLatestVersion", s.data.driverAppLatestVersion || ""]]));
+    if (s.data) setForm(Object.fromEntries([...NUMS.map(([p]) => [p, String(get(s.data, p) ?? "")]), ...TOGGLES.map((k) => [k, !!s.data[k]]), ["driverAppLatestVersion", s.data.driverAppLatestVersion || ""]]));
   }, [s.data]);
 
   async function save() {
@@ -77,12 +79,13 @@ export default function CrmSettingsPage() {
       if (form[p] === "" || !Number.isInteger(v) || v < 0) return window.alert(`Please enter a whole number for "${label}".`);
       if (v !== get(s.data, p)) flat[p] = v;
     }
-    for (const k of ["dryRun", "transactionalBypassesCaps"]) if (form[k] !== !!s.data[k]) flat[k] = form[k];
+    for (const k of TOGGLES) if (form[k] !== !!s.data[k]) flat[k] = form[k];
     const ver = String(form.driverAppLatestVersion || "").trim();
     if (ver && !/^\d{1,3}(\.\d{1,3}){0,2}$/.test(ver)) return window.alert("Latest Go Captain version should look like 1.3.6 (or leave it empty).");
     if (ver !== (s.data.driverAppLatestVersion || "")) flat.driverAppLatestVersion = ver;
     if (!Object.keys(flat).length) return window.alert("No changes to save.");
     if (flat.dryRun === false && !window.confirm("Turn dry run OFF? Real messages will start going out and will incur costs.")) return;
+    if (flat.emailEnabled === true && !window.confirm("Turn emails ON? Journeys with an email step (Welcome, First Ride Free, Weekly earnings, Missed rides) will start sending emails via AWS SES.")) return;
     const r = await run("save", () => crmPatch("/settings", nest(flat)), "Settings saved — applied everywhere within 10 seconds");
     if (r) s.reload();
   }
@@ -107,6 +110,7 @@ export default function CrmSettingsPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12, margin: "6px 0 16px" }}>
               <Toggle checked={form.dryRun} onChange={(v) => admin && setForm((f) => ({ ...f, dryRun: v }))} label="Dry run — log messages without sending them" />
               <Toggle checked={form.transactionalBypassesCaps} onChange={(v) => admin && setForm((f) => ({ ...f, transactionalBypassesCaps: v }))} label="Transactional messages bypass frequency caps (quiet hours still apply)" />
+              <Toggle checked={form.emailEnabled} onChange={(v) => admin && setForm((f) => ({ ...f, emailEnabled: v }))} label="Emails ON — journeys send their email step (AWS SES). OFF = the email step is skipped; push and WhatsApp still go." />
             </div>
             {admin && <button className="btn-gold" disabled={!!busy} onClick={save}><Save size={14} /> {busy ? "Saving…" : "Save changes"}</button>}
           </Section>

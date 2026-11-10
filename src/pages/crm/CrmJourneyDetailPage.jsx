@@ -9,7 +9,7 @@ import {
   CrmPage, useCrm, useCrmMe, useAction, can, Loading, ErrorNote, Pill, StatusPill, CategoryPill, Hint, ChartCard, ChartTooltip, Legend, Paged,
   NoChartData, RangeButtons, COLORS, CHANNEL, axisTick, gridStroke, inr, num, pct, dt, statusLabel,
 } from "./crmShared";
-import { TimeCell, ContactCell, runAbout, dim, soft } from "./crmMessageParts";
+import { TimeCell, ContactCell, runAbout, dim, soft, emailLabel } from "./crmMessageParts";
 
 const STATE_COLOR = { active: COLORS.blue, goal_met: COLORS.green, completed: COLORS.gray, exited: "rgba(255,255,255,0.2)", expired: COLORS.orange, failed: COLORS.red };
 const dur = (n) => [n.days && `${n.days} day${n.days > 1 ? "s" : ""}`, n.hours && `${n.hours} h`, n.minutes && `${n.minutes} min`].filter(Boolean).join(" ");
@@ -28,7 +28,7 @@ const tidy = (t) => String(t || "").replace(/\{\{\s*(?:ctx|profile|contact|org)\
 function describe(n) {
   if (n.type === "send") {
     return [`Send · ${CHANNEL[n.channel] || n.channel}${n.fallback ? ` → ${CHANNEL[n.fallback] || n.fallback}` : ""}`,
-      n.content?.title ? `${n.content.title} — ${n.content.body || ""}` : n.content?.templateName ? `Template: ${n.content.templateName}` : n.content?.body || ""];
+      n.content?.emailKind ? `Email: ${emailLabel(n.content.emailKind)} — goes only while Emails are ON in CRM Settings` : n.content?.title ? `${n.content.title} — ${n.content.body || ""}` : n.content?.templateName ? `Template: ${n.content.templateName}` : n.content?.body || ""];
   }
   if (n.type === "wait") {
     return ["Wait", n.untilCtx ? `Until ${Math.abs(n.offsetDays || 0)} days ${n.offsetDays < 0 ? "before" : "after"} ${n.untilCtx}` : n.untilIstHour != null ? `Until ${n.untilIstHour}:00 IST` : dur(n)];
