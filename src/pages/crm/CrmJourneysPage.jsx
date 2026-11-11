@@ -83,8 +83,9 @@ export default function CrmJourneysPage() {
           {table("Driver Journeys", "🚗", journeys.filter((j) => j.audience?.roles?.includes("driver")))}
           {table("Passenger Journeys", "🧍", journeys.filter((j) => !j.audience?.roles?.includes("driver")))}
           <Hint>
-            <b>Marketing</b> journeys only reach contacts with marketing consent. The ride platform does not record marketing consent yet, so these
-            journeys currently reach no one. <b>Transactional</b> journeys (KYC, documents, dues, receipts) do not need consent but still respect quiet hours.
+            <b>Marketing</b> journeys marked "Sends to all except Stop" reach everyone who has not pressed Stop (WhatsApp / SMS) or turned marketing off in the app.
+            <b>Entered 0</b> usually means nobody matched the journey's condition yet (for example no rides, or the First Ride Free offer is off) — open the journey and check "Why not sent".
+            <b>Transactional</b> journeys (KYC, documents, dues, receipts) do not need consent but still respect quiet hours.
             J-11 is off by default because the ride platform already sends its own subscription expiry reminders. Only CRM admins can turn journeys on or off.
           </Hint>
         </>

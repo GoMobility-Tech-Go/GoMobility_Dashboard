@@ -135,15 +135,18 @@ export default function CrmOverviewPage() {
             <TableCard title="Channels" icon="📡">
               <Paged rows={Object.entries(d.messages.channels)}>{(pageRows) => (
               <table className="gm-table">
-                <thead><tr><th>Channel</th><th>{dry ? "Would send" : "Sent"}</th><th>Failed</th><th>Skipped</th><th>{dry ? "Cost if sent" : "Spend"}</th></tr></thead>
+                <thead><tr><th>Channel</th><th>{dry ? "Would send" : "Sent"}</th><th title="Really failed (wrong template, provider error)">Failed</th><th title="Meta stopped it because the person got too many marketing messages (131049). Not billed.">Meta limit (free)</th><th title="SMS template not set up in MSG91 yet">Not set up</th><th title="Not possible for this person: no push token, not on WhatsApp, daily limit">Skipped</th><th>{dry ? "Cost if sent" : "Spend"}</th></tr></thead>
                 <tbody>
                   {pageRows.map(([ch, x]) => (
-                    <tr key={ch}><td>{CHANNEL[ch] || ch}</td><td>{num(x.sent)}</td><td>{num(x.failed)}</td><td>{num(x.skipped)}</td><td>{inr(x.costInr)}</td></tr>
+                    <tr key={ch}><td>{CHANNEL[ch] || ch}</td><td>{num(x.sent)}</td><td>{num(x.failed)}</td><td>{num(x.metaLimited || 0)}</td><td>{num(x.notSetUp || 0)}</td><td>{num(x.skipped)}</td><td>{inr(x.costInr)}</td></tr>
                   ))}
-                  {!Object.keys(d.messages.channels).length && <tr><td colSpan={5} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No messages in this period</td></tr>}
+                  {!Object.keys(d.messages.channels).length && <tr><td colSpan={7} style={{ textAlign: "center", color: "rgba(255,255,255,0.35)" }}>No messages in this period</td></tr>}
                 </tbody>
               </table>
               )}</Paged>
+              <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)", padding: "10px 4px 0", lineHeight: 1.5 }}>
+                <b>Meta limit (free)</b>: Meta did not deliver because the person already got many marketing messages — no charge. After 2 such blocks in 30 days the CRM sends that person push instead of WhatsApp for 30 days. <b>Skipped</b>: the channel was not possible (no push token / not on WhatsApp / daily limit), so the next channel was tried.
+              </div>
             </TableCard>
 
             <ChartCard title="How the CRM Works" subtitle="From ride data to the right message">
