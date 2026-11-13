@@ -39,6 +39,8 @@ export const EMAIL_KINDS = {
   welcome: "Welcome (passenger, English)", first_ride_free: "First Ride Free (passenger, English)", frf_winback: "Free ride still waiting (passenger, English)",
   weekly_earnings: "Weekly report card (driver, Hinglish)", missed_today: "Missed rides today (driver, Hinglish)",
   missed_late: "Missed rides last night (driver, Hinglish)",
+  driver_back_7: "Offline 8–14 days: seat khaali hai (driver, Hinglish)", driver_back_14: "Offline 15–30 days: aapki kami hai (driver, Hinglish)",
+  driver_back_30: "Offline 30+ days: nayi shuruaat (driver, Hinglish)",
 };
 export const emailLabel = (kind) => EMAIL_KINDS[kind] || kind;
 
