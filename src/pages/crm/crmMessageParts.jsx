@@ -36,7 +36,7 @@ export const ContactCell = ({ name, phone, userId, role, stop }) => (
 
 // CRM email templates (src/email/templates.js in the CRM backend)
 export const EMAIL_KINDS = {
-  welcome: "Welcome (passenger, English)", first_ride_free: "First Ride Free (passenger, English)",
+  welcome: "Welcome (passenger, English)", first_ride_free: "First Ride Free (passenger, English)", frf_winback: "Free ride still waiting (passenger, English)",
   weekly_earnings: "Weekly report card (driver, Hinglish)", missed_today: "Missed rides today (driver, Hinglish)",
   missed_late: "Missed rides last night (driver, Hinglish)",
 };
