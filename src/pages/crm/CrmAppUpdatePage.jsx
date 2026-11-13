@@ -48,11 +48,12 @@ const reminderSpec = () => ({
   segment: { role: "driver", appOutdated: true },
   channel: "whatsapp_utility", fallback: "push",
   content: {
-    templateName: "driver_app_update_v1", language: "en",
-    templateParams: ["{{name}}", "{{profile.appVersionText}}", "{{profile.appLatest}}"],
-    title: "Go Captain update karein — tabhi rides milengi",
-    body: "Aapka app {{profile.appVersionText}} hai, naya {{profile.appLatest}} hai. Play Store kholkar Go Captain update karein.",
-    card: "app_update",
+    // no version numbers — the same template and banner keep working when a newer app comes out
+    templateName: "driver_app_update_v2", language: "en",
+    templateParams: ["{{name}}"],
+    title: "Go Captain ka naya update aa gaya 🚀",
+    body: "Naya app update karein, online aaiye aur aaj se phir kamaiye. Play Store kholkar Go Captain update karein.",
+    card: "app_update_v2",
   },
 });
 
