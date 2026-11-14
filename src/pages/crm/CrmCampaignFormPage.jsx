@@ -39,7 +39,9 @@ const EMPTY = {
   consentMode: "opt_in", liveInDryRun: false,
 };
 // Picture card: each driver's own numbers drawn as an image and attached to the message (push / WhatsApp only)
-const CARDS = [["", "No picture"], ["missed_today", "Missed rides — today"], ["missed_week", "Missed rides — today + last 7 days"], ["missed_last7", "Missed rides — last 7 days (one-off)"], ["app_update", "App update — your version → new version"], ["app_update_v2", "App update — new app banner (no version)"]];
+// same banner for everyone (not per-driver numbers)
+const SAME_FOR_ALL = ["app_update_v2", "chhath_puja"];
+const CARDS = [["", "No picture"], ["missed_today", "Missed rides — today"], ["missed_week", "Missed rides — today + last 7 days"], ["missed_last7", "Missed rides — last 7 days (one-off)"], ["app_update", "App update — your version → new version"], ["app_update_v2", "App update — new app banner (no version)"], ["chhath_puja", "Festival — Chhath Puja greeting"]];
 const usesSms = (f) => f.channel === "sms" || f.fallback === "sms";
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
@@ -314,10 +316,12 @@ export default function CrmCampaignFormPage() {
               </>
             )}
             {!needsSms && (
-              <FormGroup label="Picture card (drivers)"
-                hint={f.card
-                  ? `Each driver gets a picture of their own numbers above the text. Drivers who missed no rides today are skipped.${needsWa ? " The WhatsApp template must have an Image header (e.g. driver_missed_rides_card_v2)." : ""}`
-                  : "Attach a picture of each driver's own missed-ride numbers"}>
+              <FormGroup label="Picture"
+                hint={!f.card
+                  ? "Attach a picture to the push / WhatsApp: a festival or app banner, or each driver's own missed-ride numbers"
+                  : SAME_FOR_ALL.includes(f.card)
+                    ? `Everyone gets the same banner above the text.${needsWa ? " The WhatsApp template must have an Image header." : ""}`
+                    : `Each driver gets a picture of their own numbers above the text. Drivers who missed no rides today are skipped.${needsWa ? " The WhatsApp template must have an Image header (e.g. driver_missed_rides_card_v2)." : ""}`}>
                 <select className="gm-input" value={f.card} onChange={(e) => set("card", e.target.value)}>
                   {CARDS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                 </select>
