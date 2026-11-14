@@ -40,8 +40,8 @@ const EMPTY = {
 };
 // Picture card: each driver's own numbers drawn as an image and attached to the message (push / WhatsApp only)
 // same banner for everyone (not per-driver numbers)
-const SAME_FOR_ALL = ["app_update_v2", "chhath_puja"];
-const CARDS = [["", "No picture"], ["missed_today", "Missed rides — today"], ["missed_week", "Missed rides — today + last 7 days"], ["missed_last7", "Missed rides — last 7 days (one-off)"], ["app_update", "App update — your version → new version"], ["app_update_v2", "App update — new app banner (no version)"], ["chhath_puja", "Festival — Chhath Puja greeting"]];
+const SAME_FOR_ALL = ["app_update_v2", "chhath_puja", "chhath_whatsapp"];
+const CARDS = [["", "No picture"], ["missed_today", "Missed rides — today"], ["missed_week", "Missed rides — today + last 7 days"], ["missed_last7", "Missed rides — last 7 days (one-off)"], ["app_update", "App update — your version → new version"], ["app_update_v2", "App update — new app banner (no version)"], ["chhath_puja", "Festival — Chhath Puja greeting (push)"], ["chhath_whatsapp", "Festival — Chhath Mahaparv (WhatsApp)"]];
 const usesSms = (f) => f.channel === "sms" || f.fallback === "sms";
 const csv = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 
@@ -282,11 +282,11 @@ export default function CrmCampaignFormPage() {
             </div>
             {f.category === "marketing" && can(me, "admin") && (
               <div style={{ display: "grid", gap: 8, margin: "4px 0 12px" }}>
-                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
+                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer", color: "rgba(255,255,255,0.85)" }}>
                   <input type="checkbox" checked={f.consentMode === "opt_out"} onChange={(e) => set("consentMode", e.target.checked ? "opt_out" : "opt_in")} style={{ marginTop: 2 }} />
                   <span><b>Send to everyone except those who pressed Stop</b><br /><span style={{ opacity: 0.6 }}>Company decision — otherwise marketing goes only to contacts who said yes.</span></span>
                 </label>
-                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer" }}>
+                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, cursor: "pointer", color: "rgba(255,255,255,0.85)" }}>
                   <input type="checkbox" checked={!!f.liveInDryRun} onChange={(e) => set("liveInDryRun", e.target.checked)} style={{ marginTop: 2 }} />
                   <span><b>Send for real even though dry run is ON</b><br /><span style={{ opacity: 0.6 }}>Only this campaign goes out — every journey stays in dry run.</span></span>
                 </label>
